@@ -10,6 +10,9 @@ interface FileTabsProps {
   disabled: boolean;
   showCompleted: boolean;
   onToggleShowCompleted: () => void;
+  vimMode: boolean;
+  onToggleVimMode: () => void;
+  vimStatus: string | null;
 }
 
 export function FileTabs({
@@ -20,6 +23,9 @@ export function FileTabs({
   disabled,
   showCompleted,
   onToggleShowCompleted,
+  vimMode,
+  onToggleVimMode,
+  vimStatus,
 }: FileTabsProps) {
   return (
     <div className="file-tabs">
@@ -46,13 +52,23 @@ export function FileTabs({
           +
         </button>
       </div>
-      <button
-        type="button"
-        className={"show-completed-toggle" + (showCompleted ? " is-active" : "")}
-        onClick={onToggleShowCompleted}
-      >
-        完了タスクを表示
-      </button>
+      <div className="file-tabs-actions">
+        {vimStatus && <span className="vim-status">{vimStatus.toUpperCase()}</span>}
+        <button
+          type="button"
+          className={"show-completed-toggle" + (vimMode ? " is-active" : "")}
+          onClick={onToggleVimMode}
+        >
+          Vim
+        </button>
+        <button
+          type="button"
+          className={"show-completed-toggle" + (showCompleted ? " is-active" : "")}
+          onClick={onToggleShowCompleted}
+        >
+          完了タスクを表示
+        </button>
+      </div>
     </div>
   );
 }

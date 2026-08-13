@@ -1,8 +1,10 @@
 import type { Extension } from "@codemirror/state";
+import { Compartment } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import { EditorView, keymap } from "@codemirror/view";
 import { indentWithTab } from "@codemirror/commands";
 import { basicSetup } from "codemirror";
+import { vim } from "@replit/codemirror-vim";
 import { activeLineField, taskDecorationsField } from "./taskDecorations";
 import { type EditorUiState, uiStateField } from "./uiState";
 import { editorTheme } from "./theme";
@@ -10,10 +12,15 @@ import { editorTheme } from "./theme";
 export interface CreateMonuraExtensionsOptions {
   onDocChange?: (text: string) => void;
   onUiStateChange?: (state: EditorUiState) => void;
+  vimMode?: boolean;
 }
+
+export const vimModeCompartment = new Compartment();
 
 export function createMonuraExtensions(options: CreateMonuraExtensionsOptions = {}): Extension[] {
   return [
+    // vimはbasicSetup由来のキーマップより先に効かせる必要がある
+    vimModeCompartment.of(options.vimMode ? [vim()] : []),
     basicSetup,
     keymap.of([indentWithTab]),
     markdown(),

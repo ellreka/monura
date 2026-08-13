@@ -1,7 +1,14 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { EditorState, MapMode } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { createMonuraExtensions, setUiStateEffect, uiStateField, type EditorUiState } from "../editor";
+import { getCM, vim } from "@replit/codemirror-vim";
+import {
+  createMonuraExtensions,
+  setUiStateEffect,
+  uiStateField,
+  vimModeCompartment,
+  type EditorUiState,
+} from "../editor";
 import { addSpentToLine, computeTaskMeta } from "../parser";
 
 export interface CursorLineInfo {
@@ -21,27 +28,42 @@ export interface EditorHandle {
   updateDelta(label: string | null): void;
   stopTracking(elapsedMinutes: number): StopTrackingResult;
   setShowCompleted(show: boolean): void;
+  setVimMode(enabled: boolean): void;
 }
 
 interface EditorProps {
   initialContent: string;
   onChange: (text: string) => void;
   onShowCompletedChange?: (show: boolean) => void;
+  vimMode?: boolean;
+  onVimStatusChange?: (status: string | null) => void;
 }
 
 export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
-  { initialContent, onChange, onShowCompletedChange },
+  { initialContent, onChange, onShowCompletedChange, vimMode = false, onVimStatusChange },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
   const trackedAnchorRef = useRef<number | null>(null);
   const trackedSnapshotRef = useRef<{ text: string; projects: string[] } | null>(null);
+  const vimListenerCleanupRef = useRef<(() => void) | null>(null);
 
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
   const onShowCompletedChangeRef = useRef(onShowCompletedChange);
   onShowCompletedChangeRef.current = onShowCompletedChange;
+  const onVimStatusChangeRef = useRef(onVimStatusChange);
+  onVimStatusChangeRef.current = onVimStatusChange;
+
+  function subscribeVimMode(view: EditorView): (() => void) | null {
+    const cm = getCM(view);
+    if (!cm) return null;
+    const handler = (e: { mode: string }) => onVimStatusChangeRef.current?.(e.mode);
+    cm.on("vim-mode-change", handler);
+    onVimStatusChangeRef.current?.(cm.state.vim?.mode ?? "normal");
+    return () => cm.off("vim-mode-change", handler);
+  }
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -53,6 +75,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
           createMonuraExtensions({
             onDocChange: (text) => onChangeRef.current(text),
             onUiStateChange: (state: EditorUiState) => onShowCompletedChangeRef.current?.(state.showCompleted),
+            vimMode,
           }),
           // 計測中の行を、編集による位置ずれに追従させる（メモリ内のみの追跡。永続化しない）
           EditorView.updateListener.of((update) => {
@@ -70,8 +93,13 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       parent: containerRef.current,
     });
     viewRef.current = view;
+    if (vimMode) {
+      vimListenerCleanupRef.current = subscribeVimMode(view);
+    }
 
     return () => {
+      vimListenerCleanupRef.current?.();
+      vimListenerCleanupRef.current = null;
       view.destroy();
       viewRef.current = null;
     };
@@ -126,6 +154,19 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 
       setShowCompleted(show) {
         viewRef.current?.dispatch({ effects: setUiStateEffect.of({ showCompleted: show }) });
+      },
+
+      setVimMode(enabled) {
+        const view = viewRef.current;
+        if (!view) return;
+        vimListenerCleanupRef.current?.();
+        vimListenerCleanupRef.current = null;
+        view.dispatch({ effects: vimModeCompartment.reconfigure(enabled ? [vim()] : []) });
+        if (enabled) {
+          vimListenerCleanupRef.current = subscribeVimMode(view);
+        } else {
+          onVimStatusChangeRef.current?.(null);
+        }
       },
     }),
     [],

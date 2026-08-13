@@ -19,6 +19,8 @@ function App() {
   const [files, setFiles] = useState<SampleFile[]>(SAMPLE_FILES);
   const [activeIndex, setActiveIndex] = useState(0);
   const [showCompleted, setShowCompleted] = useState(false);
+  const [vimMode, setVimMode] = useState(false);
+  const [vimStatus, setVimStatus] = useState<string | null>(null);
   const [presetMinutes, setPresetMinutes] = useState<number>(TIMER_PRESETS[TIMER_PRESETS.length - 1]);
   const [timerState, setTimerState] = useState<TimerState>(() => createIdleTimer(presetMinutes));
   const [elapsedMs, setElapsedMs] = useState(0);
@@ -70,6 +72,12 @@ function App() {
     editorRef.current?.setShowCompleted(next);
   };
 
+  const handleToggleVimMode = () => {
+    const next = !vimMode;
+    setVimMode(next);
+    editorRef.current?.setVimMode(next);
+  };
+
   const handleStart = () => {
     const cursor = editorRef.current?.getCursorLine();
     if (!cursor) return;
@@ -110,6 +118,9 @@ function App() {
         disabled={isRunning}
         showCompleted={showCompleted}
         onToggleShowCompleted={handleToggleShowCompleted}
+        vimMode={vimMode}
+        onToggleVimMode={handleToggleVimMode}
+        vimStatus={vimMode ? vimStatus : null}
       />
       <div className="editor-area">
         <Editor
@@ -118,6 +129,8 @@ function App() {
           initialContent={activeFile.content}
           onChange={handleDocChange}
           onShowCompletedChange={setShowCompleted}
+          vimMode={vimMode}
+          onVimStatusChange={setVimStatus}
         />
       </div>
       <TimerBar
