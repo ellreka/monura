@@ -6,12 +6,12 @@ import { indentWithTab } from "@codemirror/commands";
 import { basicSetup } from "codemirror";
 import { vim } from "@replit/codemirror-vim";
 import { activeLineField, taskDecorationsField } from "./taskDecorations";
-import { type EditorUiState, uiStateField } from "./uiState";
+import { uiStateField } from "./uiState";
 import { editorTheme } from "./theme";
+import { listContinuationKeymap } from "./listContinuation";
 
 export interface CreateMonuraExtensionsOptions {
   onDocChange?: (text: string) => void;
-  onUiStateChange?: (state: EditorUiState) => void;
   vimMode?: boolean;
 }
 
@@ -23,7 +23,8 @@ export function createMonuraExtensions(options: CreateMonuraExtensionsOptions = 
     vimModeCompartment.of(options.vimMode ? [vim()] : []),
     basicSetup,
     keymap.of([indentWithTab]),
-    markdown(),
+    listContinuationKeymap,
+    markdown({ addKeymap: false }),
     uiStateField,
     taskDecorationsField,
     activeLineField,
@@ -32,11 +33,6 @@ export function createMonuraExtensions(options: CreateMonuraExtensionsOptions = 
     EditorView.updateListener.of((update) => {
       if (update.docChanged) {
         options.onDocChange?.(update.state.doc.toString());
-      }
-      const prevUi = update.startState.field(uiStateField);
-      const nextUi = update.state.field(uiStateField);
-      if (prevUi !== nextUi) {
-        options.onUiStateChange?.(nextUi);
       }
     }),
   ];
