@@ -1,4 +1,4 @@
-import { extractSpentMinutes } from "./spent";
+import { extractSpentSeconds } from "./spent";
 import { extractProjects } from "./projects";
 
 const TASK_LINE = /^(\s*)-\s\[([ xX])\]\s?(.*)$/;
@@ -10,7 +10,7 @@ export interface TaskLine {
   isTask: boolean;
   checked: boolean;
   text: string;
-  spentMinutes: number;
+  spentSeconds: number;
   ownProjects: string[];
 }
 
@@ -19,7 +19,7 @@ export interface TaskNode extends TaskLine {
 }
 
 export interface TaskMeta {
-  aggregateMinutes: number;
+  aggregateSeconds: number;
   subtreeComplete: boolean;
   hasChildren: boolean;
   projects: string[];
@@ -36,7 +36,7 @@ export function parseLine(raw: string, lineNumber: number): TaskLine {
       isTask: false,
       checked: false,
       text: raw,
-      spentMinutes: 0,
+      spentSeconds: 0,
       ownProjects: [],
     };
   }
@@ -48,7 +48,7 @@ export function parseLine(raw: string, lineNumber: number): TaskLine {
     isTask: true,
     checked: checkChar.toLowerCase() === "x",
     text: rest,
-    spentMinutes: extractSpentMinutes(rest),
+    spentSeconds: extractSpentSeconds(rest),
     ownProjects: extractProjects(rest),
   };
 }
@@ -83,7 +83,7 @@ export function buildTaskTree(lines: readonly TaskLine[]): TaskNode[] {
 
 /** 自身 + 子孫すべての spent 合計（表示専用の計算であり、行への書き込みは行わない）。 */
 export function aggregateSpent(node: TaskNode): number {
-  return node.spentMinutes + node.children.reduce((sum, child) => sum + aggregateSpent(child), 0);
+  return node.spentSeconds + node.children.reduce((sum, child) => sum + aggregateSpent(child), 0);
 }
 
 /** 自身と子孫すべてが完了しているか。未完了の子孫が1つでもあれば false。 */
@@ -105,7 +105,7 @@ export function computeTaskMeta(content: string): Map<number, TaskMeta> {
   const visit = (node: TaskNode, inheritedProjects: readonly string[]) => {
     const projects = resolveProjects(node, inheritedProjects);
     meta.set(node.lineNumber, {
-      aggregateMinutes: aggregateSpent(node),
+      aggregateSeconds: aggregateSpent(node),
       subtreeComplete: isSubtreeComplete(node),
       hasChildren: node.children.length > 0,
       projects,

@@ -1,4 +1,4 @@
-export { matchSpentTokens, extractSpentMinutes, formatDuration, addSpentToLine } from "./spent";
+export { matchSpentTokens, extractSpentSeconds, formatDuration, formatDurationMinutes, addSpentToLine } from "./spent";
 export type { SpentMatch } from "./spent";
 export { matchProjectTokens, extractProjects } from "./projects";
 export type { ProjectMatch } from "./projects";

@@ -28,17 +28,29 @@ describe("startTimer / computeElapsedMs", () => {
 });
 
 describe("stopTimer", () => {
-  it("floors elapsed time to whole minutes", () => {
+  it("floors elapsed time to whole seconds", () => {
     const state = startTimer(60, 0);
-    const { elapsedMinutes, state: next } = stopTimer(state, 90 * 1000); // 1.5 min
-    expect(elapsedMinutes).toBe(1);
+    const { elapsedSeconds, state: next } = stopTimer(state, 90 * 1000); // 1.5 min
+    expect(elapsedSeconds).toBe(90);
     expect(next.status).toBe("idle");
   });
 
-  it("returns 0 minutes for a stop before a full minute elapses", () => {
+  it("returns 0 seconds for a stop before a full second elapses", () => {
     const state = startTimer(60, 0);
-    const { elapsedMinutes } = stopTimer(state, 30 * 1000);
-    expect(elapsedMinutes).toBe(0);
+    const { elapsedSeconds } = stopTimer(state, 500);
+    expect(elapsedSeconds).toBe(0);
+  });
+
+  it("keeps exact second precision for sub-minute stops instead of discarding them", () => {
+    const state = startTimer(60, 0);
+    const { elapsedSeconds } = stopTimer(state, 45 * 1000);
+    expect(elapsedSeconds).toBe(45);
+  });
+
+  it("keeps exact second precision once the total reaches 1 minute", () => {
+    const state = startTimer(60, 0);
+    const { elapsedSeconds } = stopTimer(state, (5 * 60 + 45) * 1000); // 5m45s
+    expect(elapsedSeconds).toBe(345);
   });
 
   it("preserves the preset when returning to idle", () => {

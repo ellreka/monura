@@ -25,14 +25,14 @@ export function computeElapsedMs(state: TimerState, now: number): number {
 
 export interface StopResult {
   state: TimerState;
-  elapsedMinutes: number;
+  elapsedSeconds: number;
 }
 
-/** タイマーを停止し、加算すべき経過分数（切り捨て）とアイドル状態を返す。 */
+/** タイマーを停止し、加算すべき経過秒数（切り捨て）とアイドル状態を返す。 */
 export function stopTimer(state: TimerState, now: number): StopResult {
   const elapsedMs = computeElapsedMs(state, now);
-  const elapsedMinutes = Math.floor(elapsedMs / 60000);
-  return { state: createIdleTimer(state.presetMinutes), elapsedMinutes };
+  const elapsedSeconds = Math.floor(elapsedMs / 1000);
+  return { state: createIdleTimer(state.presetMinutes), elapsedSeconds };
 }
 
 /** プリセット時間に到達したか。 */

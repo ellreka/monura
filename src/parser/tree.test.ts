@@ -6,7 +6,7 @@ describe("parseLine", () => {
     const line = parseLine("- [ ] task spent:15m +proj", 1);
     expect(line.isTask).toBe(true);
     expect(line.checked).toBe(false);
-    expect(line.spentMinutes).toBe(15);
+    expect(line.spentSeconds).toBe(15 * 60);
     expect(line.ownProjects).toEqual(["proj"]);
   });
 
@@ -19,7 +19,7 @@ describe("parseLine", () => {
   it("treats a plain memo line as non-task and does not interfere", () => {
     const line = parseLine("今日は集中できなかった。", 1);
     expect(line.isTask).toBe(false);
-    expect(line.spentMinutes).toBe(0);
+    expect(line.spentSeconds).toBe(0);
   });
 
   it("captures indentation for nested tasks", () => {
@@ -53,8 +53,8 @@ describe("aggregateSpent", () => {
     const tree = buildTaskTree(
       parseLines(["- [ ] parent spent:1h10m", "  - [ ] child a spent:45m", "  - [ ] child b"].join("\n")),
     );
-    expect(aggregateSpent(tree[0])).toBe(70 + 45);
-    expect(tree[0].spentMinutes).toBe(70);
+    expect(aggregateSpent(tree[0])).toBe((70 + 45) * 60);
+    expect(tree[0].spentSeconds).toBe(70 * 60);
   });
 });
 

@@ -1,7 +1,7 @@
 export interface SessionRecord {
   startedAt: string;
   presetMinutes: number;
-  elapsedMinutes: number;
+  elapsedSeconds: number;
   lineText: string;
   projects: string[];
   lineDeleted: boolean;
@@ -10,7 +10,7 @@ export interface SessionRecord {
 export interface CreateSessionRecordInput {
   startedAt: number;
   presetMinutes: number;
-  elapsedMinutes: number;
+  elapsedSeconds: number;
   lineText: string;
   projects: string[];
   lineDeleted: boolean;
@@ -21,7 +21,7 @@ export function createSessionRecord(input: CreateSessionRecordInput): SessionRec
   return {
     startedAt: new Date(input.startedAt).toISOString(),
     presetMinutes: input.presetMinutes,
-    elapsedMinutes: input.elapsedMinutes,
+    elapsedSeconds: input.elapsedSeconds,
     lineText: input.lineText,
     projects: input.projects,
     lineDeleted: input.lineDeleted,
