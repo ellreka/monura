@@ -3,9 +3,18 @@ import { EditorState, MapMode } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { getCM, vim } from "@replit/codemirror-vim";
 import { createMonuraExtensions, setUiStateEffect, uiStateField, vimModeCompartment } from "../editor";
-import { addSpentToLine, computeTaskMeta } from "../parser";
+import { addSpentToLine, computeTaskMeta, parseLine } from "../parser";
 
 export interface CursorLineInfo {
+  lineNumber: number;
+  text: string;
+}
+
+export interface CursorLineChangeInfo extends CursorLineInfo {
+  isTask: boolean;
+}
+
+export interface TrackedLineChangeInfo {
   lineNumber: number;
   text: string;
 }
@@ -19,8 +28,7 @@ export interface StopTrackingResult {
 export interface EditorHandle {
   getCursorLine(): CursorLineInfo | null;
   startTracking(lineNumber: number): void;
-  updateDelta(label: string | null): void;
-  stopTracking(elapsedMinutes: number): StopTrackingResult;
+  stopTracking(elapsedSeconds: number): StopTrackingResult;
   setVimMode(enabled: boolean): void;
 }
 
@@ -29,10 +37,12 @@ interface EditorProps {
   onChange: (text: string) => void;
   vimMode?: boolean;
   onVimStatusChange?: (status: string | null) => void;
+  onCursorLineChange?: (info: CursorLineChangeInfo) => void;
+  onTrackedLineChange?: (info: TrackedLineChangeInfo) => void;
 }
 
 export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
-  { initialContent, onChange, vimMode = false, onVimStatusChange },
+  { initialContent, onChange, vimMode = false, onVimStatusChange, onCursorLineChange, onTrackedLineChange },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -45,6 +55,19 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   onChangeRef.current = onChange;
   const onVimStatusChangeRef = useRef(onVimStatusChange);
   onVimStatusChangeRef.current = onVimStatusChange;
+  const onCursorLineChangeRef = useRef(onCursorLineChange);
+  onCursorLineChangeRef.current = onCursorLineChange;
+  const onTrackedLineChangeRef = useRef(onTrackedLineChange);
+  onTrackedLineChangeRef.current = onTrackedLineChange;
+
+  function notifyCursorLine(view: EditorView): void {
+    const line = view.state.doc.lineAt(view.state.selection.main.head);
+    onCursorLineChangeRef.current?.({
+      lineNumber: line.number,
+      text: line.text,
+      isTask: parseLine(line.text, line.number).isTask,
+    });
+  }
 
   function subscribeVimMode(view: EditorView): (() => void) | null {
     const cm = getCM(view);
@@ -68,13 +91,21 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
           }),
           // 計測中の行を、編集による位置ずれに追従させる（メモリ内のみの追跡。永続化しない）
           EditorView.updateListener.of((update) => {
-            if (!update.docChanged || trackedAnchorRef.current === null) return;
-            const mapped = update.changes.mapPos(trackedAnchorRef.current, -1, MapMode.TrackDel);
-            trackedAnchorRef.current = mapped;
-            const nextLine = mapped === null ? null : update.state.doc.lineAt(mapped).number;
-            const currentActiveLine = update.state.field(uiStateField).activeLine;
-            if (currentActiveLine !== nextLine) {
-              update.view.dispatch({ effects: setUiStateEffect.of({ activeLine: nextLine }) });
+            if (update.docChanged && trackedAnchorRef.current !== null) {
+              const mapped = update.changes.mapPos(trackedAnchorRef.current, -1, MapMode.TrackDel);
+              trackedAnchorRef.current = mapped;
+              const nextLine = mapped === null ? null : update.state.doc.lineAt(mapped).number;
+              const currentActiveLine = update.state.field(uiStateField).activeLine;
+              if (currentActiveLine !== nextLine) {
+                update.view.dispatch({ effects: setUiStateEffect.of({ activeLine: nextLine }) });
+              }
+              if (nextLine !== null) {
+                const trackedLine = update.state.doc.line(nextLine);
+                onTrackedLineChangeRef.current?.({ lineNumber: nextLine, text: trackedLine.text });
+              }
+            }
+            if (update.docChanged || update.selectionSet) {
+              notifyCursorLine(update.view);
             }
           }),
         ],
@@ -82,6 +113,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       parent: containerRef.current,
     });
     viewRef.current = view;
+    notifyCursorLine(view);
     if (vimMode) {
       vimListenerCleanupRef.current = subscribeVimMode(view);
     }
@@ -112,14 +144,10 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         trackedAnchorRef.current = line.from;
         const meta = computeTaskMeta(view.state.doc.toString()).get(lineNumber);
         trackedSnapshotRef.current = { text: line.text, projects: meta?.projects ?? [] };
-        view.dispatch({ effects: setUiStateEffect.of({ activeLine: lineNumber, activeDeltaLabel: "+00:00" }) });
+        view.dispatch({ effects: setUiStateEffect.of({ activeLine: lineNumber }) });
       },
 
-      updateDelta(label) {
-        viewRef.current?.dispatch({ effects: setUiStateEffect.of({ activeDeltaLabel: label }) });
-      },
-
-      stopTracking(elapsedMinutes) {
+      stopTracking(elapsedSeconds) {
         const view = viewRef.current;
         const snapshot = trackedSnapshotRef.current;
         const anchor = trackedAnchorRef.current;
@@ -127,15 +155,15 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         trackedSnapshotRef.current = null;
 
         if (!view || anchor === null) {
-          view?.dispatch({ effects: setUiStateEffect.of({ activeLine: null, activeDeltaLabel: null }) });
+          view?.dispatch({ effects: setUiStateEffect.of({ activeLine: null }) });
           return { deleted: true, lineText: snapshot?.text ?? "", projects: snapshot?.projects ?? [] };
         }
 
         const line = view.state.doc.lineAt(anchor);
-        const updatedText = elapsedMinutes > 0 ? addSpentToLine(line.text, elapsedMinutes) : line.text;
+        const updatedText = elapsedSeconds > 0 ? addSpentToLine(line.text, elapsedSeconds) : line.text;
         view.dispatch({
           changes: updatedText !== line.text ? { from: line.from, to: line.to, insert: updatedText } : undefined,
-          effects: setUiStateEffect.of({ activeLine: null, activeDeltaLabel: null }),
+          effects: setUiStateEffect.of({ activeLine: null }),
         });
         const meta = computeTaskMeta(view.state.doc.toString()).get(view.state.doc.lineAt(anchor).number);
         return { deleted: false, lineText: updatedText, projects: meta?.projects ?? snapshot?.projects ?? [] };

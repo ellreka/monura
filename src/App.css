@@ -248,6 +248,12 @@ button {
   color: #fff;
 }
 
+.timer-toggle:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
 .timer-bar-clock {
   display: flex;
   align-items: baseline;

@@ -5,15 +5,12 @@ import { FileTabs } from "./components/FileTabs";
 import { TimerBar } from "./components/TimerBar";
 import { SAMPLE_FILES, type SampleFile } from "./sampleFiles";
 import { createSessionRecord, SessionLog } from "./log/session";
-import {
-  computeElapsedMs,
-  createIdleTimer,
-  formatClock,
-  startTimer,
-  stopTimer,
-  TIMER_PRESETS,
-  type TimerState,
-} from "./timer";
+import { computeElapsedMs, createIdleTimer, startTimer, stopTimer, TIMER_PRESETS, type TimerState } from "./timer";
+
+function toTrackingLabel(text: string): string {
+  const trimmed = text.trim();
+  return trimmed.length > 0 ? trimmed : "(空行)";
+}
 
 function App() {
   const [files, setFiles] = useState<SampleFile[]>(SAMPLE_FILES);
@@ -24,6 +21,7 @@ function App() {
   const [timerState, setTimerState] = useState<TimerState>(() => createIdleTimer(presetMinutes));
   const [elapsedMs, setElapsedMs] = useState(0);
   const [trackingLabel, setTrackingLabel] = useState<string | null>(null);
+  const [isCursorOnTask, setIsCursorOnTask] = useState(false);
 
   const editorRef = useRef<EditorHandle>(null);
   const sessionLogRef = useRef(new SessionLog());
@@ -35,9 +33,7 @@ function App() {
     if (timerState.status !== "running") return;
     const id = window.setInterval(() => {
       const now = Date.now();
-      const ms = computeElapsedMs(timerState, now);
-      setElapsedMs(ms);
-      editorRef.current?.updateDelta(`+${formatClock(ms)}`);
+      setElapsedMs(computeElapsedMs(timerState, now));
     }, 250);
     return () => window.clearInterval(id);
   }, [timerState]);
@@ -70,9 +66,10 @@ function App() {
   };
 
   const handleStart = () => {
+    if (!isCursorOnTask) return;
     const cursor = editorRef.current?.getCursorLine();
     if (!cursor) return;
-    setTrackingLabel(cursor.text.trim().length > 0 ? cursor.text.trim() : "(空行)");
+    setTrackingLabel(toTrackingLabel(cursor.text));
     editorRef.current?.startTracking(cursor.lineNumber);
     setTimerState(startTimer(presetMinutes, Date.now()));
     setElapsedMs(0);
@@ -80,14 +77,14 @@ function App() {
 
   const handleStop = () => {
     const now = Date.now();
-    const { elapsedMinutes } = stopTimer(timerState, now);
-    const result = editorRef.current?.stopTracking(elapsedMinutes);
+    const { elapsedSeconds } = stopTimer(timerState, now);
+    const result = editorRef.current?.stopTracking(elapsedSeconds);
     if (result) {
       sessionLogRef.current.append(
         createSessionRecord({
           startedAt: timerState.startedAt ?? now,
           presetMinutes: timerState.presetMinutes,
-          elapsedMinutes,
+          elapsedSeconds,
           lineText: result.lineText,
           projects: result.projects,
           lineDeleted: result.deleted,
@@ -119,11 +116,14 @@ function App() {
           onChange={handleDocChange}
           vimMode={vimMode}
           onVimStatusChange={setVimStatus}
+          onCursorLineChange={(info) => setIsCursorOnTask(info.isTask)}
+          onTrackedLineChange={(info) => setTrackingLabel(toTrackingLabel(info.text))}
         />
       </div>
       <TimerBar
         trackingLabel={trackingLabel}
         isRunning={isRunning}
+        canStart={isCursorOnTask}
         presetMinutes={presetMinutes}
         elapsedMs={elapsedMs}
         onSelectPreset={setPresetMinutes}

@@ -89,12 +89,6 @@ export const editorTheme = EditorView.theme(
       fontSize: "0.78em",
       verticalAlign: "middle",
     },
-    ".cm-delta-badge": {
-      marginLeft: "10px",
-      color: accent,
-      fontWeight: "700",
-      fontSize: "0.85em",
-    },
     ".cm-active-timer-line": {
       backgroundColor: accentSoft,
       borderLeft: `3px solid ${accent}`,

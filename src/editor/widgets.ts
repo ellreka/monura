@@ -1,5 +1,5 @@
 import { EditorView, WidgetType } from "@codemirror/view";
-import { formatDuration } from "../parser";
+import { formatDurationMinutes } from "../parser";
 
 /** チェックリストの `[ ]` / `[x]` を差し替えるクリック可能なチェックボックス。 */
 export class CheckboxWidget extends WidgetType {
@@ -44,37 +44,37 @@ function toggleCheckboxAtLine(view: EditorView, lineNumber: number): void {
 
 /** 親タスク行末に表示する Σ 集計バッジ。 */
 export class SumBadgeWidget extends WidgetType {
-  constructor(private readonly minutes: number) {
+  constructor(private readonly seconds: number) {
     super();
   }
 
   eq(other: SumBadgeWidget): boolean {
-    return other.minutes === this.minutes;
+    return other.seconds === this.seconds;
   }
 
   toDOM(): HTMLElement {
     const el = document.createElement("span");
     el.className = "cm-sum-badge";
-    el.textContent = `Σ ${formatDuration(this.minutes)}`;
+    el.textContent = `Σ ${formatDurationMinutes(this.seconds)}`;
     el.title = "自身 + 子孫タスクの spent 合計（表示のみ。ファイルへは書き込まれません）";
     return el;
   }
 }
 
-/** 計測中の行末に表示する、今回セッションの増分バッジ。 */
-export class DeltaWidget extends WidgetType {
-  constructor(private readonly label: string) {
+/** `spent:` トークンを差し替える、カーソルが当たっていない行用の簡略表示ウィジェット（秒は省略）。 */
+export class SpentWidget extends WidgetType {
+  constructor(private readonly seconds: number) {
     super();
   }
 
-  eq(other: DeltaWidget): boolean {
-    return other.label === this.label;
+  eq(other: SpentWidget): boolean {
+    return other.seconds === this.seconds;
   }
 
   toDOM(): HTMLElement {
     const el = document.createElement("span");
-    el.className = "cm-delta-badge";
-    el.textContent = this.label;
+    el.className = "cm-spent-token";
+    el.textContent = `spent:${formatDurationMinutes(this.seconds)}`;
     return el;
   }
 }

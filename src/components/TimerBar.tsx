@@ -3,6 +3,7 @@ import { TIMER_PRESETS, formatClock, formatPresetLabel } from "../timer";
 interface TimerBarProps {
   trackingLabel: string | null;
   isRunning: boolean;
+  canStart: boolean;
   presetMinutes: number;
   elapsedMs: number;
   onSelectPreset: (minutes: number) => void;
@@ -13,6 +14,7 @@ interface TimerBarProps {
 export function TimerBar({
   trackingLabel,
   isRunning,
+  canStart,
   presetMinutes,
   elapsedMs,
   onSelectPreset,
@@ -44,7 +46,9 @@ export function TimerBar({
           type="button"
           className={"timer-toggle" + (isRunning ? " is-running" : "")}
           onClick={isRunning ? onStop : onStart}
+          disabled={!isRunning && !canStart}
           aria-label={isRunning ? "計測を停止" : "計測を開始"}
+          title={!isRunning && !canStart ? "カーソルをタスク行（- [ ]）に置いてください" : undefined}
         >
           {isRunning ? "■" : "▶"}
         </button>

@@ -1,7 +1,7 @@
 import { EditorState, RangeSetBuilder, StateField } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView } from "@codemirror/view";
 import { computeTaskMeta, matchProjectTokens, matchSpentTokens, parseLines } from "../parser";
-import { CheckboxWidget, DeltaWidget, SumBadgeWidget } from "./widgets";
+import { CheckboxWidget, SpentWidget, SumBadgeWidget } from "./widgets";
 import { setUiStateEffect, uiStateField } from "./uiState";
 
 interface Item {
@@ -16,7 +16,6 @@ function buildDecorations(state: EditorState): DecorationSet {
   const text = doc.toString();
   const lines = parseLines(text);
   const meta = computeTaskMeta(text);
-  const ui = state.field(uiStateField);
 
   const cursorLine = doc.lineAt(state.selection.main.head).number;
 
@@ -39,13 +38,15 @@ function buildDecorations(state: EditorState): DecorationSet {
       }
     }
 
+    const isFocusedLine = line.lineNumber === cursorLine;
     for (const m of matchSpentTokens(lineInfo.text)) {
-      items.push({
-        from: lineInfo.from + m.index,
-        to: lineInfo.from + m.index + m.length,
-        side: 0,
-        deco: Decoration.mark({ class: "cm-spent-token" }),
-      });
+      const from = lineInfo.from + m.index;
+      const to = from + m.length;
+      items.push(
+        isFocusedLine
+          ? { from, to, side: 0, deco: Decoration.mark({ class: "cm-spent-token" }) }
+          : { from, to, side: 0, deco: Decoration.replace({ widget: new SpentWidget(m.seconds) }) },
+      );
     }
 
     for (const p of matchProjectTokens(lineInfo.text)) {
@@ -58,21 +59,12 @@ function buildDecorations(state: EditorState): DecorationSet {
     }
 
     const lineMeta = meta.get(line.lineNumber);
-    if (lineMeta?.hasChildren && lineMeta.aggregateMinutes > 0) {
+    if (lineMeta?.hasChildren && lineMeta.aggregateSeconds > 0) {
       items.push({
         from: lineInfo.to,
         to: lineInfo.to,
         side: 1,
-        deco: Decoration.widget({ widget: new SumBadgeWidget(lineMeta.aggregateMinutes), side: 1 }),
-      });
-    }
-
-    if (ui.activeLine === line.lineNumber && ui.activeDeltaLabel) {
-      items.push({
-        from: lineInfo.to,
-        to: lineInfo.to,
-        side: 2,
-        deco: Decoration.widget({ widget: new DeltaWidget(ui.activeDeltaLabel), side: 2 }),
+        deco: Decoration.widget({ widget: new SumBadgeWidget(lineMeta.aggregateSeconds), side: 1 }),
       });
     }
   }
