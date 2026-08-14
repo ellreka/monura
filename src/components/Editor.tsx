@@ -2,13 +2,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { EditorState, MapMode } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { getCM, vim } from "@replit/codemirror-vim";
-import {
-  createMonuraExtensions,
-  setUiStateEffect,
-  uiStateField,
-  vimModeCompartment,
-  type EditorUiState,
-} from "../editor";
+import { createMonuraExtensions, setUiStateEffect, uiStateField, vimModeCompartment } from "../editor";
 import { addSpentToLine, computeTaskMeta } from "../parser";
 
 export interface CursorLineInfo {
@@ -27,20 +21,18 @@ export interface EditorHandle {
   startTracking(lineNumber: number): void;
   updateDelta(label: string | null): void;
   stopTracking(elapsedMinutes: number): StopTrackingResult;
-  setShowCompleted(show: boolean): void;
   setVimMode(enabled: boolean): void;
 }
 
 interface EditorProps {
   initialContent: string;
   onChange: (text: string) => void;
-  onShowCompletedChange?: (show: boolean) => void;
   vimMode?: boolean;
   onVimStatusChange?: (status: string | null) => void;
 }
 
 export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
-  { initialContent, onChange, onShowCompletedChange, vimMode = false, onVimStatusChange },
+  { initialContent, onChange, vimMode = false, onVimStatusChange },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -51,8 +43,6 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
-  const onShowCompletedChangeRef = useRef(onShowCompletedChange);
-  onShowCompletedChangeRef.current = onShowCompletedChange;
   const onVimStatusChangeRef = useRef(onVimStatusChange);
   onVimStatusChangeRef.current = onVimStatusChange;
 
@@ -74,7 +64,6 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         extensions: [
           createMonuraExtensions({
             onDocChange: (text) => onChangeRef.current(text),
-            onUiStateChange: (state: EditorUiState) => onShowCompletedChangeRef.current?.(state.showCompleted),
             vimMode,
           }),
           // 計測中の行を、編集による位置ずれに追従させる（メモリ内のみの追跡。永続化しない）
@@ -150,10 +139,6 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         });
         const meta = computeTaskMeta(view.state.doc.toString()).get(view.state.doc.lineAt(anchor).number);
         return { deleted: false, lineText: updatedText, projects: meta?.projects ?? snapshot?.projects ?? [] };
-      },
-
-      setShowCompleted(show) {
-        viewRef.current?.dispatch({ effects: setUiStateEffect.of({ showCompleted: show }) });
       },
 
       setVimMode(enabled) {

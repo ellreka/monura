@@ -1,13 +1,11 @@
 import { StateEffect, StateField } from "@codemirror/state";
 
 export interface EditorUiState {
-  showCompleted: boolean;
   activeLine: number | null;
   activeDeltaLabel: string | null;
 }
 
 export const DEFAULT_UI_STATE: EditorUiState = {
-  showCompleted: false,
   activeLine: null,
   activeDeltaLabel: null,
 };

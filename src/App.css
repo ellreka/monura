@@ -126,7 +126,7 @@ button {
   white-space: nowrap;
 }
 
-.show-completed-toggle {
+.pill-toggle {
   flex: none;
   border: 1px solid transparent;
   background: transparent;
@@ -137,11 +137,11 @@ button {
   white-space: nowrap;
 }
 
-.show-completed-toggle:hover {
+.pill-toggle:hover {
   color: var(--ink);
 }
 
-.show-completed-toggle.is-active {
+.pill-toggle.is-active {
   color: var(--accent);
   border-color: var(--accent-soft);
   background-color: var(--accent-soft);

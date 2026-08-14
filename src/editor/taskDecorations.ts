@@ -1,7 +1,7 @@
 import { EditorState, RangeSetBuilder, StateField } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView } from "@codemirror/view";
 import { computeTaskMeta, matchProjectTokens, matchSpentTokens, parseLines } from "../parser";
-import { CheckboxWidget, DeltaWidget, HiddenSeparatorWidget, SumBadgeWidget } from "./widgets";
+import { CheckboxWidget, DeltaWidget, SumBadgeWidget } from "./widgets";
 import { setUiStateEffect, uiStateField } from "./uiState";
 
 interface Item {
@@ -18,36 +18,14 @@ function buildDecorations(state: EditorState): DecorationSet {
   const meta = computeTaskMeta(text);
   const ui = state.field(uiStateField);
 
-  const items: Item[] = [];
-  let hiddenFromLine: number | null = null;
-  let hiddenCount = 0;
+  const cursorLine = doc.lineAt(state.selection.main.head).number;
 
-  const flushHidden = (beforeLine: number) => {
-    if (hiddenFromLine === null) return;
-    const from = doc.line(hiddenFromLine).from;
-    const to = doc.line(beforeLine - 1).to;
-    items.push({
-      from,
-      to,
-      side: 0,
-      deco: Decoration.replace({ widget: new HiddenSeparatorWidget(hiddenCount), block: true }),
-    });
-    hiddenFromLine = null;
-    hiddenCount = 0;
-  };
+  const items: Item[] = [];
 
   for (const line of lines) {
-    const isHiddenTask = !ui.showCompleted && line.isTask && meta.get(line.lineNumber)?.subtreeComplete === true;
-    if (isHiddenTask) {
-      if (hiddenFromLine === null) hiddenFromLine = line.lineNumber;
-      hiddenCount += 1;
-      continue;
-    }
-    flushHidden(line.lineNumber);
-
     const lineInfo = doc.line(line.lineNumber);
 
-    if (line.isTask) {
+    if (line.isTask && line.lineNumber !== cursorLine) {
       const checkboxMatch = /\[( |x|X)\]/.exec(lineInfo.text);
       if (checkboxMatch && checkboxMatch.index !== undefined) {
         const from = lineInfo.from + checkboxMatch.index;
@@ -98,7 +76,6 @@ function buildDecorations(state: EditorState): DecorationSet {
       });
     }
   }
-  flushHidden(lines.length + 1);
 
   items.sort((a, b) => a.from - b.from || a.to - b.to || a.side - b.side);
   const builder = new RangeSetBuilder<Decoration>();
@@ -111,7 +88,8 @@ export const taskDecorationsField = StateField.define<DecorationSet>({
     return buildDecorations(state);
   },
   update(deco, tr) {
-    if (!tr.docChanged && !tr.effects.some((e) => e.is(setUiStateEffect))) {
+    const cursorMoved = tr.startState.selection.main.head !== tr.state.selection.main.head;
+    if (!tr.docChanged && !cursorMoved && !tr.effects.some((e) => e.is(setUiStateEffect))) {
       return deco;
     }
     return buildDecorations(tr.state);

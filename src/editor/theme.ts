@@ -5,7 +5,6 @@ const muted = "#a39b8b";
 const accent = "#c9752f";
 const accentSoft = "#fbe9d8";
 const project = "#4f8f72";
-const border = "#e8e0d0";
 
 export const editorTheme = EditorView.theme(
   {
@@ -99,24 +98,6 @@ export const editorTheme = EditorView.theme(
     ".cm-active-timer-line": {
       backgroundColor: accentSoft,
       borderLeft: `3px solid ${accent}`,
-    },
-    ".cm-hidden-separator": {
-      display: "flex",
-      alignItems: "center",
-      gap: "10px",
-      padding: "6px 20px",
-      color: "#b4ab9a",
-      fontSize: "0.82em",
-      cursor: "pointer",
-      userSelect: "none",
-    },
-    ".cm-hidden-separator:hover": {
-      color: "#948c7c",
-    },
-    ".cm-hidden-separator-rule": {
-      flex: "1",
-      height: "1px",
-      backgroundColor: border,
     },
   },
   { dark: false },

@@ -1,6 +1,5 @@
 import { EditorView, WidgetType } from "@codemirror/view";
 import { formatDuration } from "../parser";
-import { setUiStateEffect, uiStateField } from "./uiState";
 
 /** チェックリストの `[ ]` / `[x]` を差し替えるクリック可能なチェックボックス。 */
 export class CheckboxWidget extends WidgetType {
@@ -76,34 +75,6 @@ export class DeltaWidget extends WidgetType {
     const el = document.createElement("span");
     el.className = "cm-delta-badge";
     el.textContent = this.label;
-    return el;
-  }
-}
-
-/** 完了サブツリーをまとめて畳んだ箇所に表示する区切りウィジェット。クリックで表示切り替え。 */
-export class HiddenSeparatorWidget extends WidgetType {
-  constructor(private readonly count: number) {
-    super();
-  }
-
-  eq(other: HiddenSeparatorWidget): boolean {
-    return other.count === this.count;
-  }
-
-  toDOM(view: EditorView): HTMLElement {
-    const el = document.createElement("div");
-    el.className = "cm-hidden-separator";
-    const label = document.createElement("span");
-    label.className = "cm-hidden-separator-label";
-    label.textContent = `完了${this.count}行を非表示`;
-    const rule = document.createElement("span");
-    rule.className = "cm-hidden-separator-rule";
-    el.append(label, rule);
-    el.onmousedown = (event) => {
-      event.preventDefault();
-      const current = view.state.field(uiStateField);
-      view.dispatch({ effects: setUiStateEffect.of({ showCompleted: !current.showCompleted }) });
-    };
     return el;
   }
 }

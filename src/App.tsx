@@ -18,7 +18,6 @@ import {
 function App() {
   const [files, setFiles] = useState<SampleFile[]>(SAMPLE_FILES);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [showCompleted, setShowCompleted] = useState(false);
   const [vimMode, setVimMode] = useState(false);
   const [vimStatus, setVimStatus] = useState<string | null>(null);
   const [presetMinutes, setPresetMinutes] = useState<number>(TIMER_PRESETS[TIMER_PRESETS.length - 1]);
@@ -50,7 +49,6 @@ function App() {
   const handleSelectFile = (index: number) => {
     if (isRunning) return;
     setActiveIndex(index);
-    setShowCompleted(false);
   };
 
   const handleCreateFile = () => {
@@ -63,13 +61,6 @@ function App() {
     const name = `untitled-${next}.md`;
     setFiles((prev) => [...prev, { name, content: "" }]);
     setActiveIndex(files.length);
-    setShowCompleted(false);
-  };
-
-  const handleToggleShowCompleted = () => {
-    const next = !showCompleted;
-    setShowCompleted(next);
-    editorRef.current?.setShowCompleted(next);
   };
 
   const handleToggleVimMode = () => {
@@ -116,8 +107,6 @@ function App() {
         onSelect={handleSelectFile}
         onCreate={handleCreateFile}
         disabled={isRunning}
-        showCompleted={showCompleted}
-        onToggleShowCompleted={handleToggleShowCompleted}
         vimMode={vimMode}
         onToggleVimMode={handleToggleVimMode}
         vimStatus={vimMode ? vimStatus : null}
@@ -128,7 +117,6 @@ function App() {
           ref={editorRef}
           initialContent={activeFile.content}
           onChange={handleDocChange}
-          onShowCompletedChange={setShowCompleted}
           vimMode={vimMode}
           onVimStatusChange={setVimStatus}
         />
