@@ -18,7 +18,8 @@ export const editorTheme = EditorView.theme(
       fontFamily:
         "'SF Mono', 'Menlo', 'Consolas', ui-monospace, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', sans-serif",
       caretColor: accent,
-      padding: "12px 0",
+      // 下部にフローティング表示されるタイマーバーに最終行が隠れないよう余白を確保
+      padding: "12px 0 90px 0",
     },
     ".cm-cursor": {
       borderLeftColor: accent,

@@ -39,10 +39,21 @@ interface EditorProps {
   onVimStatusChange?: (status: string | null) => void;
   onCursorLineChange?: (info: CursorLineChangeInfo) => void;
   onTrackedLineChange?: (info: TrackedLineChangeInfo) => void;
+  onRequestStartPreset?: (presetMinutes: number) => void;
+  onRequestStop?: () => void;
 }
 
 export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
-  { initialContent, onChange, vimMode = false, onVimStatusChange, onCursorLineChange, onTrackedLineChange },
+  {
+    initialContent,
+    onChange,
+    vimMode = false,
+    onVimStatusChange,
+    onCursorLineChange,
+    onTrackedLineChange,
+    onRequestStartPreset,
+    onRequestStop,
+  },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -59,6 +70,10 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   onCursorLineChangeRef.current = onCursorLineChange;
   const onTrackedLineChangeRef = useRef(onTrackedLineChange);
   onTrackedLineChangeRef.current = onTrackedLineChange;
+  const onRequestStartPresetRef = useRef(onRequestStartPreset);
+  onRequestStartPresetRef.current = onRequestStartPreset;
+  const onRequestStopRef = useRef(onRequestStop);
+  onRequestStopRef.current = onRequestStop;
 
   function notifyCursorLine(view: EditorView): void {
     const line = view.state.doc.lineAt(view.state.selection.main.head);
@@ -88,6 +103,8 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
           createMonuraExtensions({
             onDocChange: (text) => onChangeRef.current(text),
             vimMode,
+            onRequestStartPreset: (presetMinutes) => onRequestStartPresetRef.current?.(presetMinutes),
+            onRequestStop: () => onRequestStopRef.current?.(),
           }),
           // 計測中の行を、編集による位置ずれに追従させる（メモリ内のみの追跡。永続化しない）
           EditorView.updateListener.of((update) => {

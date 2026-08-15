@@ -21,10 +21,13 @@ export function TimerBar({
   onStart,
   onStop,
 }: TimerBarProps) {
-  const progress = Math.min(1, elapsedMs / (presetMinutes * 60 * 1000));
+  const totalMs = presetMinutes * 60 * 1000;
+  const remainingMs = Math.max(0, totalMs - elapsedMs);
+  const remainingRatio = isRunning ? Math.min(1, remainingMs / totalMs) : 0;
 
   return (
     <footer className="timer-bar">
+      <div className="timer-bar-fill" aria-hidden="true" style={{ width: `${remainingRatio * 100}%` }} />
       <div className="timer-bar-label" title={trackingLabel ?? undefined}>
         {trackingLabel ?? "カーソルのある行を計測します"}
       </div>
@@ -45,7 +48,7 @@ export function TimerBar({
         <button
           type="button"
           className={"timer-toggle" + (isRunning ? " is-running" : "")}
-          onClick={isRunning ? onStop : onStart}
+          onClick={() => (isRunning ? onStop() : onStart())}
           disabled={!isRunning && !canStart}
           aria-label={isRunning ? "計測を停止" : "計測を開始"}
           title={!isRunning && !canStart ? "カーソルをタスク行（- [ ]）に置いてください" : undefined}
@@ -53,13 +56,10 @@ export function TimerBar({
           {isRunning ? "■" : "▶"}
         </button>
         <div className="timer-bar-clock">
-          <span className="timer-bar-elapsed">{formatClock(elapsedMs)}</span>
+          <span className="timer-bar-remaining">{formatClock(remainingMs)}</span>
           <span className="timer-bar-clock-sep">/</span>
           <span className="timer-bar-preset-label">{formatPresetLabel(presetMinutes)}</span>
         </div>
-      </div>
-      <div className="timer-bar-progress" aria-hidden="true">
-        <div className="timer-bar-progress-fill" style={{ width: `${progress * 100}%` }} />
       </div>
     </footer>
   );

@@ -11,6 +11,7 @@ interface FileTabsProps {
   vimMode: boolean;
   onToggleVimMode: () => void;
   vimStatus: string | null;
+  onOpenSettings: () => void;
 }
 
 export function FileTabs({
@@ -22,6 +23,7 @@ export function FileTabs({
   vimMode,
   onToggleVimMode,
   vimStatus,
+  onOpenSettings,
 }: FileTabsProps) {
   return (
     <div className="file-tabs">
@@ -56,6 +58,9 @@ export function FileTabs({
           onClick={onToggleVimMode}
         >
           Vim
+        </button>
+        <button type="button" className="settings-trigger" onClick={onOpenSettings} aria-label="設定を開く" title="設定 (Cmd+,)">
+          ⚙
         </button>
       </div>
     </div>
