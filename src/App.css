@@ -8,6 +8,7 @@
   --bg: #fdfbf6;
   --bg-tabs: #f6f1e6;
   --pill: #ffffff;
+  --rail-width: 44px;
 
   font-family: "SF Mono", "Menlo", "Consolas", ui-monospace, "Hiragino Kaku Gothic ProN", "Hiragino Sans", sans-serif;
   color: var(--ink);
@@ -59,7 +60,7 @@ button {
   flex-direction: column;
   align-items: center;
   justify-content: space-between;
-  width: 44px;
+  width: var(--rail-width);
   padding: 10px 0;
   background-color: var(--bg-tabs);
   border-right: 1px solid var(--border);
@@ -320,10 +321,10 @@ button {
 
 .timer-bar {
   position: absolute;
-  left: 50%;
+  left: calc(50% + var(--rail-width) / 2);
   bottom: 16px;
   transform: translateX(-50%);
-  width: calc(100% - 32px);
+  width: calc(100% - var(--rail-width) - 32px);
   max-width: 480px;
   display: flex;
   align-items: center;
