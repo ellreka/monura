@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { isTauri } from "@tauri-apps/api/core";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import "./App.css";
 import { Editor, type EditorHandle } from "./components/Editor";
@@ -52,6 +52,7 @@ import {
   createDefaultTimerShortcuts,
   createIdleTimer,
   fastForwardToRemaining,
+  formatClock,
   isExpired,
   reassignShortcut,
   startTimer,
@@ -110,6 +111,8 @@ function App() {
   const pendingSaveRef = useRef<MdFile | null>(null);
   /** While replacing the doc from disk, suppress the local save path (handleDocChange). */
   const applyingExternalRef = useRef(false);
+  /** Last whole-second remaining value sent to the tray (throttles tray_tick to ~1/s). */
+  const lastTraySecRef = useRef<number | null>(null);
 
   const isRunning = timerState.status === "running";
   const isCursorOnTask = focusedTaskLabel !== null;
@@ -468,16 +471,38 @@ function App() {
     setLogRefreshKey((key) => key + 1);
   };
 
+  // ---- Tray icon (Tauri only; no-ops in the browser) ----
+  // The tray is a lens on an active session only — hidden while idle, shown with the tracked
+  // task's title and a live "mm:ss" countdown the moment a timer starts, hidden again on stop.
+
+  const trayStart = (label: string, remaining: string) => {
+    if (!isTauri()) return;
+    void invoke("tray_start", { label, remaining }).catch((e) => console.error("tray start failed:", e));
+  };
+
+  const trayTick = (remaining: string) => {
+    if (!isTauri()) return;
+    void invoke("tray_tick", { remaining }).catch((e) => console.error("tray tick failed:", e));
+  };
+
+  const trayStop = () => {
+    if (!isTauri()) return;
+    void invoke("tray_stop").catch((e) => console.error("tray stop failed:", e));
+  };
+
   const handleStart = () => {
     if (isRunning || !isCursorOnTask || pendingResolution !== null) return;
     const cursor = editorRef.current?.getCursorLine();
     if (!cursor) return;
-    setTrackingLabel(toTrackingLabel(cursor.text));
+    const label = toTrackingLabel(cursor.text);
+    setTrackingLabel(label);
     editorRef.current?.startTracking(cursor.lineNumber);
     setTrackingProjects(editorRef.current?.getTrackedProjects() ?? []);
     setTrackedLost(false);
     setTimerState(startTimer(presetMinutes, Date.now()));
     setElapsedMs(0);
+    lastTraySecRef.current = presetMinutes * 60;
+    trayStart(label, formatClock(presetMinutes * 60 * 1000));
     editorRef.current?.focus();
   };
 
@@ -523,6 +548,8 @@ function App() {
     setTrackingLabel(null);
     setTrackingProjects([]);
     setTrackedLost(false);
+    lastTraySecRef.current = null;
+    trayStop();
   };
 
   /** Mirrors the ▶/■ button for the editor's start/stop shortcut: starts if idle, stops if running. */
@@ -543,7 +570,14 @@ function App() {
     if (timerState.status !== "running") return;
     const id = window.setInterval(() => {
       const now = Date.now();
-      setElapsedMs(computeElapsedMs(timerState, now));
+      const elapsed = computeElapsedMs(timerState, now);
+      setElapsedMs(elapsed);
+      const remainingMs = Math.max(0, timerState.presetMinutes * 60000 - elapsed);
+      const remainingSec = Math.floor(remainingMs / 1000);
+      if (lastTraySecRef.current !== remainingSec) {
+        lastTraySecRef.current = remainingSec;
+        trayTick(formatClock(remainingMs));
+      }
       // Expiry is treated like manual stop (add the elapsed time up to now to spent:) plus an OS notification.
       // Stop the interval in place so the stop handler doesn't run again before re-render
       if (isExpired(timerState, now)) {
@@ -553,6 +587,25 @@ function App() {
     }, 250);
     return () => window.clearInterval(id);
   }, [timerState]);
+
+  // Receive the Stop click from the tray menu (frontend owns the timer's domain logic — the
+  // tray only asks it to stop, same as clicking ■ in the timer bar).
+  useEffect(() => {
+    if (!isTauri()) return;
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+    listen("tray-stop-requested", () => stopTrackingRef.current("manual")).then((fn) => {
+      if (cancelled) {
+        fn();
+      } else {
+        unlisten = fn;
+      }
+    });
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, []);
 
   /** Let the user choose the destination: keep it only in the log and finish. */
   const handleResolveLogOnly = () => {

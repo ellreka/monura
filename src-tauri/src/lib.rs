@@ -1,8 +1,9 @@
 mod commands;
+mod tray;
 mod watch;
 
 use tauri::menu::{MenuBuilder, MenuItem, SubmenuBuilder};
-use tauri::Emitter;
+use tauri::{Emitter, Manager, RunEvent, WindowEvent};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -21,6 +22,9 @@ pub fn run() {
             commands::read_session_log,
             commands::send_notification,
             watch::watch_data_dir,
+            tray::tray_start,
+            tray::tray_tick,
+            tray::tray_stop,
         ])
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
@@ -74,8 +78,31 @@ pub fn run() {
                 }
             });
 
+            tray::setup(app)?;
+
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while running tauri application")
+        .run(|app_handle, event| {
+            // Hide instead of quitting so a running timer keeps counting in the background;
+            // the tray icon (or the dock icon on macOS) brings the window back.
+            if let RunEvent::WindowEvent {
+                label,
+                event: WindowEvent::CloseRequested { api, .. },
+                ..
+            } = &event
+            {
+                if label == "main" {
+                    api.prevent_close();
+                    if let Some(window) = app_handle.get_webview_window("main") {
+                        let _ = window.hide();
+                    }
+                }
+            }
+            #[cfg(target_os = "macos")]
+            if let RunEvent::Reopen { .. } = &event {
+                tray::show_main_window(app_handle);
+            }
+        });
 }
