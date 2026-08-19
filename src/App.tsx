@@ -35,14 +35,32 @@ import {
   type SessionRecord,
 } from "./lib/log/session";
 import { notifyTimerExpired } from "./lib/notify";
-import { getLastFileFor, loadSettings, saveDataDir, saveLastFileFor, saveTheme, saveVimMode } from "./lib/settings";
 import {
+  getLastFileFor,
+  loadSettings,
+  saveDataDir,
+  saveLastFileFor,
+  savePresets,
+  saveShortcuts,
+  saveTheme,
+  saveVimMode,
+} from "./lib/settings";
+import {
+  compactPresets,
+  compactPresetShortcuts,
   computeElapsedMs,
+  createDefaultTimerShortcuts,
   createIdleTimer,
+  fastForwardToRemaining,
   isExpired,
+  reassignShortcut,
   startTimer,
   stopTimer,
+  DEBUG_FAST_FORWARD_SECONDS,
   DEFAULT_PRESET_MINUTES,
+  DEFAULT_PRESETS,
+  type ShortcutTarget,
+  type TimerShortcuts,
   type TimerState,
 } from "./lib/timer";
 
@@ -71,6 +89,8 @@ function App() {
   const [vimMode, setVimMode] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [presetMinutes, setPresetMinutes] = useState<number>(DEFAULT_PRESET_MINUTES);
+  const [presetSlots, setPresetSlots] = useState<(number | null)[]>(() => [...DEFAULT_PRESETS]);
+  const [shortcuts, setShortcuts] = useState<TimerShortcuts>(createDefaultTimerShortcuts);
   const [timerState, setTimerState] = useState<TimerState>(() => createIdleTimer(presetMinutes));
   const [elapsedMs, setElapsedMs] = useState(0);
   const [trackingLabel, setTrackingLabel] = useState<string | null>(null);
@@ -92,6 +112,8 @@ function App() {
 
   const isRunning = timerState.status === "running";
   const activeFile = files[activeIndex];
+  const presets = compactPresets(presetSlots);
+  const presetKeymap = compactPresetShortcuts(presetSlots, shortcuts.presets);
 
   // Mirror to read the latest state from async callbacks (watch refresh)
   const filesRef = useRef(files);
@@ -155,6 +177,8 @@ function App() {
         setDataDir(settings.dataDir);
         setVimMode(settings.vimMode);
         setTheme(settings.theme);
+        setPresetSlots(settings.presets);
+        setShortcuts(settings.shortcuts);
       } catch (e) {
         console.error("settings load failed:", e);
       } finally {
@@ -293,27 +317,9 @@ function App() {
     };
   }, [dataDir, refreshFromDisk]);
 
-  // View switching is a simple operation that doesn't depend on whether the app has focus,
-  // so unlike timer operations (which need task-line focus) it's handled at the window level.
-  // Cmd+, toggles the settings view. Even if the native menu (Tauri side) also fires Cmd+,
-  // the toggle just runs twice, which is harmless.
+  // Escape returns to the editor view regardless of focus, so it's handled at the window level.
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key === ",") {
-        event.preventDefault();
-        setView((v) => (v === "settings" ? "editor" : "settings"));
-        return;
-      }
-      if ((event.metaKey || event.ctrlKey) && event.key === "1") {
-        event.preventDefault();
-        setView("editor");
-        return;
-      }
-      if ((event.metaKey || event.ctrlKey) && event.key === "2") {
-        event.preventDefault();
-        setView((v) => (v === "log" ? "editor" : "log"));
-        return;
-      }
       if (event.key === "Escape") {
         setView((v) => (v === "editor" ? v : "editor"));
       }
@@ -424,6 +430,29 @@ function App() {
     }
   };
 
+  const handleSetPresetSlot = (index: number, minutes: number | null) => {
+    const next = presetSlots.slice();
+    next[index] = minutes;
+    setPresetSlots(next);
+    editorRef.current?.setTimerKeymap(compactPresetShortcuts(next, shortcuts.presets), shortcuts.toggle);
+    if (isTauri()) {
+      void savePresets(next).catch((e) => console.error("save presets failed:", e));
+    }
+  };
+
+  /**
+   * Assigns a keyboard shortcut to the start/stop toggle or to a preset slot, clearing it from
+   * whichever other action previously held that key (see `reassignShortcut`).
+   */
+  const handleSetShortcut = (target: ShortcutTarget, key: string | null) => {
+    const next = reassignShortcut(shortcuts, target, key);
+    setShortcuts(next);
+    editorRef.current?.setTimerKeymap(compactPresetShortcuts(presetSlots, next.presets), next.toggle);
+    if (isTauri()) {
+      void saveShortcuts(next).catch((e) => console.error("save shortcuts failed:", e));
+    }
+  };
+
   const appendRecord = (input: CreateSessionRecordInput) => {
     const record = createSessionRecord(input);
     sessionLogRef.current.append(record);
@@ -436,7 +465,7 @@ function App() {
     setLogRefreshKey((key) => key + 1);
   };
 
-  const handleStart = (targetPresetMinutes: number = presetMinutes) => {
+  const handleStart = () => {
     if (isRunning || !isCursorOnTask || pendingResolution !== null) return;
     const cursor = editorRef.current?.getCursorLine();
     if (!cursor) return;
@@ -444,8 +473,7 @@ function App() {
     editorRef.current?.startTracking(cursor.lineNumber);
     setTrackingProjects(editorRef.current?.getTrackedProjects() ?? []);
     setTrackedLost(false);
-    setPresetMinutes(targetPresetMinutes);
-    setTimerState(startTimer(targetPresetMinutes, Date.now()));
+    setTimerState(startTimer(presetMinutes, Date.now()));
     setElapsedMs(0);
   };
 
@@ -491,6 +519,12 @@ function App() {
     setTrackingLabel(null);
     setTrackingProjects([]);
     setTrackedLost(false);
+  };
+
+  /** Mirrors the ▶/■ button for the editor's start/stop shortcut: starts if idle, stops if running. */
+  const handleToggleTracking = () => {
+    if (isRunning) stopTracking("manual");
+    else handleStart();
   };
 
   // Always call the latest stop handler from the interval (expiry detection)
@@ -539,6 +573,11 @@ function App() {
     });
     flushSave();
     setPendingResolution(null);
+  };
+
+  /** Dev-only: jump the running timer to DEBUG_FAST_FORWARD_SECONDS remaining, to quickly verify expiry/notifications. */
+  const handleDebugFastForward = () => {
+    setTimerState((state) => fastForwardToRemaining(state, Date.now(), DEBUG_FAST_FORWARD_SECONDS));
   };
 
   // ---- First-run setup (no data folder configured or load failed) ----
@@ -618,11 +657,13 @@ function App() {
                 onChange={handleDocChange}
                 vimMode={vimMode}
                 theme={theme}
+                presets={presetKeymap}
                 onCursorLineChange={(info) => setIsCursorOnTask(info.isTask)}
                 onTrackedLineChange={(info) => setTrackingLabel(toTrackingLabel(info.text))}
                 onTrackedLineLost={() => setTrackedLost(true)}
-                onRequestStartPreset={handleStart}
-                onRequestStop={() => stopTracking("manual")}
+                toggleKey={shortcuts.toggle}
+                onSelectPreset={setPresetMinutes}
+                onToggle={handleToggleTracking}
               />
             ) : (
               <div className="editor-empty">Create an .md file with “+ New file” in the sidebar</div>
@@ -649,6 +690,10 @@ function App() {
               onToggleVimMode={handleToggleVimMode}
               theme={theme}
               onSetTheme={handleSetTheme}
+              presetSlots={presetSlots}
+              onSetPresetSlot={handleSetPresetSlot}
+              shortcuts={shortcuts}
+              onSetShortcut={handleSetShortcut}
               dataDir={dataDir}
               dataDirDisabled={isRunning}
               onPickDataDir={async () => {
@@ -664,6 +709,7 @@ function App() {
           isRunning={isRunning}
           canStart={isCursorOnTask && pendingResolution === null}
           presetMinutes={presetMinutes}
+          presets={presets}
           elapsedMs={elapsedMs}
           onSelectPreset={setPresetMinutes}
           onStart={handleStart}
@@ -672,6 +718,7 @@ function App() {
           canAssignToCursor={isCursorOnTask}
           onResolveLogOnly={handleResolveLogOnly}
           onResolveAssignToCursor={handleResolveAssignToCursor}
+          onDebugFastForward={handleDebugFastForward}
         />
       </div>
     </div>

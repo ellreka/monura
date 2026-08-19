@@ -64,8 +64,8 @@ export function IconRail({ view, onSelect, filesOpen, onToggleFiles }: IconRailP
           type="button"
           className={"icon-rail-button" + (view === "log" ? " is-active" : "")}
           onClick={() => onSelect("log")}
-          aria-label="Session log (Cmd+2)"
-          title="Session log (Cmd+2)"
+          aria-label="Session log"
+          title="Session log"
         >
           <LogIcon />
         </button>
@@ -74,8 +74,8 @@ export function IconRail({ view, onSelect, filesOpen, onToggleFiles }: IconRailP
         type="button"
         className={"icon-rail-button" + (view === "settings" ? " is-active" : "")}
         onClick={() => onSelect("settings")}
-        aria-label="Settings (Cmd+,)"
-        title="Settings (Cmd+,)"
+        aria-label="Settings"
+        title="Settings"
       >
         <SettingsIcon />
       </button>

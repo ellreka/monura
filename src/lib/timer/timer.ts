@@ -6,19 +6,104 @@ export interface TimerState {
   startedAt: number | null;
 }
 
-/** Dev preset (seconds) to quickly verify notifications and expiry. Excluded from production builds. */
-export const DEBUG_PRESET_SECONDS = 5;
+/** Dev fast-forward target (seconds remaining until expiry), for quickly verifying notifications. Excluded from production builds. */
+export const DEBUG_FAST_FORWARD_SECONDS = 5;
 
 /** The preset selected at startup (minutes). */
 export const DEFAULT_PRESET_MINUTES = 60;
 
+/** Number of user-configurable preset slots (Settings screen). */
+export const MAX_PRESETS = 4;
+
+/** Default preset slots shipped out of the box: 3 of the 4 slots filled, the 4th left empty. */
+export const DEFAULT_PRESETS: readonly (number | null)[] = [10, 30, DEFAULT_PRESET_MINUTES, null];
+
+/** A single preset slot paired with its shortcut for building the editor keymap. */
+export interface PresetKeymapEntry {
+  minutes: number;
+  /** null = no shortcut assigned to this preset. */
+  key: string | null;
+}
+
 /**
- * Selectable preset times (minutes).
- * In dev only, appends a short preset at the end (kept last so Mod-1..3 stay aligned with production).
+ * User-configurable shortcuts for the timer: one to start/stop tracking (mirrors the ▶/■
+ * toggle button) and one per preset slot (mirrors clicking a preset pill — selects only,
+ * never starts). null = unassigned.
  */
-export const TIMER_PRESETS: readonly number[] = import.meta.env.DEV
-  ? [10, 30, DEFAULT_PRESET_MINUTES, DEBUG_PRESET_SECONDS / 60]
-  : [10, 30, DEFAULT_PRESET_MINUTES];
+export interface TimerShortcuts {
+  toggle: string | null;
+  presets: (string | null)[];
+}
+
+/**
+ * Shortcuts shipped out of the box, matching the historical Cmd-1..4 / Cmd-Enter bindings.
+ * "Meta" (not CodeMirror's platform-adaptive "Mod") because matching is now literal against
+ * `KeyboardEvent`'s modifier flags — see lib/keybinding.ts and lib/editor/timerKeymap.ts —
+ * and this app targets macOS only (Cmd), matching the native menu's own Cmd+, convention.
+ */
+export const DEFAULT_TIMER_SHORTCUTS: TimerShortcuts = {
+  toggle: "Meta-Enter",
+  presets: ["Meta-1", "Meta-2", "Meta-3", "Meta-4"],
+};
+
+/** Deep-clones the default shortcuts (the arrays inside must never be shared/mutated). */
+export function createDefaultTimerShortcuts(): TimerShortcuts {
+  return { toggle: DEFAULT_TIMER_SHORTCUTS.toggle, presets: [...DEFAULT_TIMER_SHORTCUTS.presets] };
+}
+
+/** Drops empty slots, preserving slot order. This is the effective list used for buttons and keybindings. */
+export function compactPresets(slots: readonly (number | null)[]): number[] {
+  return slots.filter((minutes): minutes is number => minutes !== null);
+}
+
+/**
+ * Pairs each configured preset slot with its shortcut, dropping empty slots (same order as
+ * `compactPresets`). This is what the editor keymap is built from.
+ */
+export function compactPresetShortcuts(
+  slots: readonly (number | null)[],
+  shortcutKeys: readonly (string | null)[],
+): PresetKeymapEntry[] {
+  const entries: PresetKeymapEntry[] = [];
+  slots.forEach((minutes, index) => {
+    if (minutes !== null) entries.push({ minutes, key: shortcutKeys[index] ?? null });
+  });
+  return entries;
+}
+
+/** Which shortcut a key is being assigned to: the start/stop toggle, or a preset slot index. */
+export type ShortcutTarget = "toggle" | number;
+
+/**
+ * Assigns `key` to `target`, clearing it from whichever other slot/toggle previously held the
+ * same key (last write wins — two actions can never share one shortcut). Passing `key: null`
+ * clears `target` only.
+ */
+export function reassignShortcut(shortcuts: TimerShortcuts, target: ShortcutTarget, key: string | null): TimerShortcuts {
+  const releaseIfTaken = (existing: string | null) => (key !== null && existing === key ? null : existing);
+  return {
+    toggle: target === "toggle" ? key : releaseIfTaken(shortcuts.toggle),
+    presets: shortcuts.presets.map((existing, index) => (target === index ? key : releaseIfTaken(existing))),
+  };
+}
+
+/**
+ * Rewinds `startedAt` so only `remainingSeconds` remain until expiry (preset duration unchanged).
+ * No-op while idle.
+ */
+export function fastForwardToRemaining(state: TimerState, now: number, remainingSeconds: number): TimerState {
+  if (state.status !== "running" || state.startedAt === null) return state;
+  const totalMs = state.presetMinutes * 60000;
+  const targetElapsedMs = Math.max(0, totalMs - remainingSeconds * 1000);
+  return { ...state, startedAt: now - targetElapsedMs };
+}
+
+/** Validates and rounds a user-entered preset value (minutes). Returns null when out of range. */
+export function sanitizePresetMinutes(value: number): number | null {
+  if (!Number.isFinite(value)) return null;
+  const rounded = Math.round(value);
+  return rounded >= 1 && rounded <= 1440 ? rounded : null;
+}
 
 export function createIdleTimer(presetMinutes: number = DEFAULT_PRESET_MINUTES): TimerState {
   return { status: "idle", presetMinutes, startedAt: null };

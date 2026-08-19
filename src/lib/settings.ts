@@ -1,4 +1,5 @@
 import { LazyStore } from "@tauri-apps/plugin-store";
+import { createDefaultTimerShortcuts, DEFAULT_PRESETS, type TimerShortcuts } from "./timer";
 
 /**
  * Persisted app settings, stored as JSON in the app data directory
@@ -8,6 +9,10 @@ export interface AppSettings {
   dataDir: string | null;
   vimMode: boolean;
   theme: "light" | "dark";
+  /** 4 fixed timer preset slots (minutes); null = empty slot. */
+  presets: (number | null)[];
+  /** Keyboard shortcuts for starting/stopping the timer and switching presets. */
+  shortcuts: TimerShortcuts;
 }
 
 /** Key used before plugin-store adoption (WebView localStorage). */
@@ -32,7 +37,9 @@ export async function loadSettings(): Promise<AppSettings> {
   const dataDir = (await store.get<string>("dataDir")) ?? null;
   const vimMode = (await store.get<boolean>("vimMode")) ?? false;
   const theme = (await store.get<"light" | "dark">("theme")) ?? "light";
-  return { dataDir, vimMode, theme };
+  const presets = (await store.get<(number | null)[]>("presets")) ?? [...DEFAULT_PRESETS];
+  const shortcuts = (await store.get<TimerShortcuts>("shortcuts")) ?? createDefaultTimerShortcuts();
+  return { dataDir, vimMode, theme, presets, shortcuts };
 }
 
 export async function saveDataDir(dir: string): Promise<void> {
@@ -45,6 +52,14 @@ export async function saveVimMode(enabled: boolean): Promise<void> {
 
 export async function saveTheme(theme: "light" | "dark"): Promise<void> {
   await store.set("theme", theme);
+}
+
+export async function savePresets(presets: (number | null)[]): Promise<void> {
+  await store.set("presets", presets);
+}
+
+export async function saveShortcuts(shortcuts: TimerShortcuts): Promise<void> {
+  await store.set("shortcuts", shortcuts);
 }
 
 /** The last active file name for a data directory, or null when unknown. */

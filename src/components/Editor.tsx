@@ -6,6 +6,7 @@ import {
   createMonuraExtensions,
   editorTheme,
   markdownHighlighting,
+  timerKeymapCompartment,
   setUiStateEffect,
   themeCompartment,
   uiStateField,
@@ -13,6 +14,8 @@ import {
   vimModeCompartment,
 } from "../lib/editor";
 import { findLineByText } from "../lib/editor/lineMatch";
+import { createTimerKeymap } from "../lib/editor/timerKeymap";
+import type { PresetKeymapEntry } from "../lib/timer";
 import { addSpentToLine, computeTaskMeta, parseLines } from "../lib/parser";
 
 /** Annotation marking a doc replacement that originates externally (from disk). Line tracking is handled by the imperative side. */
@@ -62,6 +65,7 @@ export interface EditorHandle {
   applySpentToLine(lineNumber: number, elapsedSeconds: number): AppliedSpentResult | null;
   setVimMode(enabled: boolean): void;
   setTheme(dark: boolean): void;
+  setTimerKeymap(presets: readonly PresetKeymapEntry[], toggleKey: string | null): void;
 }
 
 interface EditorProps {
@@ -69,13 +73,18 @@ interface EditorProps {
   onChange: (text: string) => void;
   vimMode?: boolean;
   theme?: "light" | "dark";
+  presets: readonly PresetKeymapEntry[];
+  /** null = no shortcut assigned. */
+  toggleKey?: string | null;
   onVimStatusChange?: (status: string | null) => void;
   onCursorLineChange?: (info: CursorLineChangeInfo) => void;
   onTrackedLineChange?: (info: TrackedLineChangeInfo) => void;
   /** Called when the tracked line is lost (deleted, or not re-identified after an external edit). */
   onTrackedLineLost?: () => void;
-  onRequestStartPreset?: (presetMinutes: number) => void;
-  onRequestStop?: () => void;
+  /** Changes the selected preset only — never starts tracking. */
+  onSelectPreset?: (presetMinutes: number) => void;
+  /** Starts tracking with the current preset when idle, stops when running. */
+  onToggle?: () => void;
 }
 
 export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
@@ -84,12 +93,14 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     onChange,
     vimMode = false,
     theme = "light",
+    presets,
+    toggleKey = null,
     onVimStatusChange,
     onCursorLineChange,
     onTrackedLineChange,
     onTrackedLineLost,
-    onRequestStartPreset,
-    onRequestStop,
+    onSelectPreset,
+    onToggle,
   },
   ref,
 ) {
@@ -111,10 +122,10 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   onTrackedLineChangeRef.current = onTrackedLineChange;
   const onTrackedLineLostRef = useRef(onTrackedLineLost);
   onTrackedLineLostRef.current = onTrackedLineLost;
-  const onRequestStartPresetRef = useRef(onRequestStartPreset);
-  onRequestStartPresetRef.current = onRequestStartPreset;
-  const onRequestStopRef = useRef(onRequestStop);
-  onRequestStopRef.current = onRequestStop;
+  const onSelectPresetRef = useRef(onSelectPreset);
+  onSelectPresetRef.current = onSelectPreset;
+  const onToggleRef = useRef(onToggle);
+  onToggleRef.current = onToggle;
 
   function notifyCursorLine(view: EditorView): void {
     const line = view.state.doc.lineAt(view.state.selection.main.head);
@@ -159,8 +170,10 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
             onDocChange: (text) => onChangeRef.current(text),
             vimMode,
             dark: theme === "dark",
-            onRequestStartPreset: (presetMinutes) => onRequestStartPresetRef.current?.(presetMinutes),
-            onRequestStop: () => onRequestStopRef.current?.(),
+            presets,
+            toggleKey,
+            onSelectPreset: (presetMinutes) => onSelectPresetRef.current?.(presetMinutes),
+            onToggle: () => onToggleRef.current?.(),
           }),
           // Keep the tracked line following position shifts caused by edits (in-memory tracking only; not persisted)
           EditorView.updateListener.of((update) => {
@@ -334,6 +347,21 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         if (!view) return;
         view.dispatch({
           effects: themeCompartment.reconfigure([editorTheme(dark), markdownHighlighting(dark)]),
+        });
+      },
+
+      setTimerKeymap(nextPresets, nextToggleKey) {
+        const view = viewRef.current;
+        if (!view) return;
+        view.dispatch({
+          effects: timerKeymapCompartment.reconfigure(
+            createTimerKeymap({
+              presets: nextPresets,
+              toggleKey: nextToggleKey,
+              onSelectPreset: (minutes) => onSelectPresetRef.current?.(minutes),
+              onToggle: () => onToggleRef.current?.(),
+            }),
+          ),
         });
       },
     }),

@@ -1,5 +1,5 @@
 import { formatDuration } from "../lib/log/analytics";
-import { TIMER_PRESETS, formatClock, formatPresetLabel } from "../lib/timer";
+import { DEBUG_FAST_FORWARD_SECONDS, formatClock, formatPresetLabel } from "../lib/timer";
 
 /** A record of a finished measurement whose tracked line was lost (not finalized until a recording target is chosen). */
 export interface PendingRecord {
@@ -14,6 +14,7 @@ interface TimerBarProps {
   isRunning: boolean;
   canStart: boolean;
   presetMinutes: number;
+  presets: readonly number[];
   elapsedMs: number;
   onSelectPreset: (minutes: number) => void;
   onStart: () => void;
@@ -24,6 +25,8 @@ interface TimerBarProps {
   canAssignToCursor: boolean;
   onResolveLogOnly: () => void;
   onResolveAssignToCursor: () => void;
+  /** Dev-only: rewinds the running timer's start time so DEBUG_FAST_FORWARD_SECONDS remain. */
+  onDebugFastForward: () => void;
 }
 
 export function TimerBar({
@@ -32,6 +35,7 @@ export function TimerBar({
   isRunning,
   canStart,
   presetMinutes,
+  presets,
   elapsedMs,
   onSelectPreset,
   onStart,
@@ -40,6 +44,7 @@ export function TimerBar({
   canAssignToCursor,
   onResolveLogOnly,
   onResolveAssignToCursor,
+  onDebugFastForward,
 }: TimerBarProps) {
   const totalMs = presetMinutes * 60 * 1000;
   const remainingMs = Math.max(0, totalMs - elapsedMs);
@@ -83,9 +88,9 @@ export function TimerBar({
       </div>
       <div className="timer-bar-controls">
         <div className="timer-bar-presets">
-          {TIMER_PRESETS.map((minutes) => (
+          {presets.map((minutes, index) => (
             <button
-              key={minutes}
+              key={index}
               type="button"
               className={"timer-preset" + (minutes === presetMinutes ? " is-active" : "")}
               onClick={() => onSelectPreset(minutes)}
@@ -110,6 +115,16 @@ export function TimerBar({
           <span className="timer-bar-clock-sep">/</span>
           <span className="timer-bar-preset-label">{formatPresetLabel(presetMinutes)}</span>
         </div>
+        {import.meta.env.DEV && isRunning && (
+          <button
+            type="button"
+            className="timer-debug-fast-forward"
+            onClick={onDebugFastForward}
+            title={`Debug: jump to ${DEBUG_FAST_FORWARD_SECONDS}s remaining`}
+          >
+            ⏩{DEBUG_FAST_FORWARD_SECONDS}s
+          </button>
+        )}
       </div>
     </footer>
   );

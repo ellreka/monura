@@ -11,14 +11,16 @@ import { editorTheme, markdownHighlighting } from "./theme";
 import { listContinuationKeymap } from "./listContinuation";
 import { vimNormalModeGuardKeymap } from "./vimGuard";
 import { createTimerKeymap } from "./timerKeymap";
-import { TIMER_PRESETS } from "../timer";
+import type { PresetKeymapEntry } from "../timer";
 
 export interface CreateMonuraExtensionsOptions {
   onDocChange?: (text: string) => void;
   vimMode?: boolean;
   dark?: boolean;
-  onRequestStartPreset?: (presetMinutes: number) => void;
-  onRequestStop?: () => void;
+  presets?: readonly PresetKeymapEntry[];
+  toggleKey?: string | null;
+  onSelectPreset?: (presetMinutes: number) => void;
+  onToggle?: () => void;
 }
 
 export const vimModeCompartment = new Compartment();
@@ -31,6 +33,7 @@ export const vimModeCompartment = new Compartment();
  */
 export const vimEditableCompartment = new Compartment();
 export const themeCompartment = new Compartment();
+export const timerKeymapCompartment = new Compartment();
 
 // Disable the `:`-triggered Ex commands (:w, :q, etc.), because they don't mesh with this
 // app's file operation model of auto-save and tab switching. Vim state is module-level
@@ -48,11 +51,14 @@ export function createMonuraExtensions(options: CreateMonuraExtensionsOptions = 
     editorBaseSetup,
     keymap.of([indentWithTab]),
     listContinuationKeymap,
-    createTimerKeymap({
-      presets: TIMER_PRESETS,
-      onRequestStart: (minutes) => options.onRequestStartPreset?.(minutes),
-      onRequestStop: () => options.onRequestStop?.(),
-    }),
+    timerKeymapCompartment.of(
+      createTimerKeymap({
+        presets: options.presets ?? [],
+        toggleKey: options.toggleKey ?? null,
+        onSelectPreset: (minutes) => options.onSelectPreset?.(minutes),
+        onToggle: () => options.onToggle?.(),
+      }),
+    ),
     markdown({ addKeymap: false }),
     uiStateField,
     taskDecorationsField,

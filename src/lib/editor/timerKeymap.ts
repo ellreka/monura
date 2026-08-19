@@ -1,44 +1,51 @@
 import { Prec } from "@codemirror/state";
-import { type Command, type EditorView, type KeyBinding, keymap } from "@codemirror/view";
-import { parseLines } from "../parser";
+import { EditorView } from "@codemirror/view";
+import { captureKeyBinding } from "../keybinding";
+import type { PresetKeymapEntry } from "../timer";
 
 export interface TimerKeymapOptions {
-  presets: readonly number[];
-  onRequestStart: (presetMinutes: number) => void;
-  onRequestStop: () => void;
-}
-
-function isCursorOnTaskLine(view: EditorView): boolean {
-  const line = view.state.doc.lineAt(view.state.selection.main.head);
-  const lines = parseLines(view.state.doc.toString());
-  return lines[line.number - 1]?.isTask ?? false;
-}
-
-function createStartCommand(minutes: number, onRequestStart: (presetMinutes: number) => void): Command {
-  return (view) => {
-    if (!isCursorOnTaskLine(view)) return false;
-    onRequestStart(minutes);
-    return true;
-  };
+  presets: readonly PresetKeymapEntry[];
+  /** null = no shortcut assigned. */
+  toggleKey: string | null;
+  /** Changes the selected preset only (mirrors clicking a preset pill) — never starts tracking. */
+  onSelectPreset: (presetMinutes: number) => void;
+  /** Starts tracking with the current preset when idle, stops when running (mirrors the ▶/■ button). */
+  onToggle: () => void;
 }
 
 /**
- * Assign a key per preset time so selection and starting measurement happen in one operation
- * (Mod-1/Mod-2/Mod-3 correspond to presets[0]/presets[1]/presets[2]).
- * Stopping is assigned to Mod-Enter. Whether starting/stopping is allowed (non-task line,
- * double-start, etc.) is left to the caller's logic (App.tsx).
+ * User-configurable shortcuts for the timer. Deliberately NOT built with CodeMirror's
+ * `keymap`/`KeyBinding.key` DSL: that format matches keydowns via `.key` (the character the
+ * current layout produces), which macOS's Option/Alt modifier can remap to an unrelated symbol
+ * (Alt+2 on a US layout produces `.key === "™"`, not "2"), silently breaking any binding
+ * recorded with Alt held. Instead this matches the same layout-independent `.code`-based
+ * encoding the Settings capture UI records (`lib/keybinding.ts`), so whatever a user records
+ * there is guaranteed to fire for that exact physical key combo.
+ *
+ * Preset shortcuts only change the selection; eligibility for starting/stopping (task line
+ * under cursor, already running, pending resolution, etc.) is entirely the caller's concern
+ * (App.tsx's handleStart/stopTracking self-guard), so a match here unconditionally consumes
+ * the key.
  */
 export function createTimerKeymap(options: TimerKeymapOptions) {
-  const bindings: KeyBinding[] = options.presets.map((minutes, index) => ({
-    key: `Mod-${index + 1}`,
-    run: createStartCommand(minutes, options.onRequestStart),
-  }));
-  bindings.push({
-    key: "Mod-Enter",
-    run: () => {
-      options.onRequestStop();
-      return true;
-    },
-  });
-  return Prec.high(keymap.of(bindings));
+  return Prec.high(
+    EditorView.domEventHandlers({
+      keydown(event) {
+        const pressed = captureKeyBinding(event);
+        if (pressed === null) return false;
+        if (pressed === options.toggleKey) {
+          event.preventDefault();
+          options.onToggle();
+          return true;
+        }
+        const preset = options.presets.find((p) => p.key === pressed);
+        if (preset) {
+          event.preventDefault();
+          options.onSelectPreset(preset.minutes);
+          return true;
+        }
+        return false;
+      },
+    }),
+  );
 }

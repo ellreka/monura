@@ -1,15 +1,23 @@
 import { describe, expect, it } from "vitest";
 import {
-  DEBUG_PRESET_SECONDS,
+  DEBUG_FAST_FORWARD_SECONDS,
   DEFAULT_PRESET_MINUTES,
-  TIMER_PRESETS,
+  DEFAULT_PRESETS,
+  DEFAULT_TIMER_SHORTCUTS,
+  MAX_PRESETS,
+  compactPresets,
+  compactPresetShortcuts,
   computeElapsedMs,
   createIdleTimer,
+  fastForwardToRemaining,
   formatClock,
   formatPresetLabel,
   isExpired,
+  reassignShortcut,
+  sanitizePresetMinutes,
   startTimer,
   stopTimer,
+  type TimerShortcuts,
 } from "./timer";
 
 describe("startTimer / computeElapsedMs", () => {
@@ -101,19 +109,115 @@ describe("formatPresetLabel", () => {
     expect(formatPresetLabel(90)).toBe("90m");
   });
 
-  it("formats sub-minute debug presets in seconds", () => {
-    expect(formatPresetLabel(DEBUG_PRESET_SECONDS / 60)).toBe("5s");
+  it("formats sub-minute values in seconds", () => {
     expect(formatPresetLabel(0.5)).toBe("30s");
   });
 });
 
-describe("TIMER_PRESETS", () => {
-  it("keeps Mod-1..3 assigned to the production presets", () => {
-    expect(TIMER_PRESETS.slice(0, 3)).toEqual([10, 30, DEFAULT_PRESET_MINUTES]);
+describe("DEFAULT_PRESETS", () => {
+  it("ships 3 of the 4 configurable slots filled, the 4th empty", () => {
+    expect(DEFAULT_PRESETS).toHaveLength(MAX_PRESETS);
+    expect(DEFAULT_PRESETS).toEqual([10, 30, DEFAULT_PRESET_MINUTES, null]);
+  });
+});
+
+describe("compactPresets", () => {
+  it("drops empty slots while preserving order", () => {
+    expect(compactPresets([10, null, 30, null])).toEqual([10, 30]);
+  });
+});
+
+describe("compactPresetShortcuts", () => {
+  it("pairs each configured slot with its shortcut, dropping empty slots", () => {
+    expect(compactPresetShortcuts([10, null, 30], ["Meta-1", "Meta-2", "Meta-3"])).toEqual([
+      { minutes: 10, key: "Meta-1" },
+      { minutes: 30, key: "Meta-3" },
+    ]);
   });
 
-  it("appends the debug preset last in dev builds only", () => {
-    expect(import.meta.env.DEV).toBe(true);
-    expect(TIMER_PRESETS[TIMER_PRESETS.length - 1]).toBe(DEBUG_PRESET_SECONDS / 60);
+  it("treats a missing or undefined shortcut entry as unassigned", () => {
+    expect(compactPresetShortcuts([10], [])).toEqual([{ minutes: 10, key: null }]);
+  });
+});
+
+describe("reassignShortcut", () => {
+  const shortcuts: TimerShortcuts = { toggle: "Meta-Enter", presets: ["Meta-1", "Meta-2", null] };
+
+  it("assigns a key to a preset slot", () => {
+    expect(reassignShortcut(shortcuts, 2, "Meta-3")).toEqual({
+      toggle: "Meta-Enter",
+      presets: ["Meta-1", "Meta-2", "Meta-3"],
+    });
+  });
+
+  it("assigns a key to the toggle", () => {
+    expect(reassignShortcut(shortcuts, "toggle", "Meta-Space")).toEqual({
+      toggle: "Meta-Space",
+      presets: ["Meta-1", "Meta-2", null],
+    });
+  });
+
+  it("clears the key from whichever other slot held it (last write wins)", () => {
+    expect(reassignShortcut(shortcuts, 2, "Meta-1")).toEqual({
+      toggle: "Meta-Enter",
+      presets: [null, "Meta-2", "Meta-1"],
+    });
+  });
+
+  it("clears the key from the toggle when a preset claims it", () => {
+    expect(reassignShortcut(shortcuts, 2, "Meta-Enter")).toEqual({
+      toggle: null,
+      presets: ["Meta-1", "Meta-2", "Meta-Enter"],
+    });
+  });
+
+  it("clears a target without touching other bindings when key is null", () => {
+    expect(reassignShortcut(shortcuts, 0, null)).toEqual({
+      toggle: "Meta-Enter",
+      presets: [null, "Meta-2", null],
+    });
+  });
+});
+
+describe("DEFAULT_TIMER_SHORTCUTS", () => {
+  it("has one shortcut per preset slot plus the toggle, matching the historical bindings", () => {
+    expect(DEFAULT_TIMER_SHORTCUTS.presets).toHaveLength(MAX_PRESETS);
+    expect(DEFAULT_TIMER_SHORTCUTS).toEqual({
+      toggle: "Meta-Enter",
+      presets: ["Meta-1", "Meta-2", "Meta-3", "Meta-4"],
+    });
+  });
+});
+
+describe("fastForwardToRemaining", () => {
+  it("rewinds startedAt so only remainingSeconds are left until expiry", () => {
+    const state = startTimer(10, 0); // 10-minute preset started at t=0
+    const rewound = fastForwardToRemaining(state, 1000, DEBUG_FAST_FORWARD_SECONDS);
+    expect(isExpired(rewound, 1000)).toBe(false);
+    expect(isExpired(rewound, 1000 + DEBUG_FAST_FORWARD_SECONDS * 1000)).toBe(true);
+  });
+
+  it("does not change the preset duration", () => {
+    const state = startTimer(10, 0);
+    const rewound = fastForwardToRemaining(state, 1000, DEBUG_FAST_FORWARD_SECONDS);
+    expect(rewound.presetMinutes).toBe(10);
+  });
+
+  it("is a no-op while idle", () => {
+    const state = createIdleTimer(10);
+    expect(fastForwardToRemaining(state, 1000, DEBUG_FAST_FORWARD_SECONDS)).toEqual(state);
+  });
+});
+
+describe("sanitizePresetMinutes", () => {
+  it("rounds fractional input", () => {
+    expect(sanitizePresetMinutes(29.6)).toBe(30);
+  });
+
+  it("rejects zero, negative, non-finite, and out-of-range input", () => {
+    expect(sanitizePresetMinutes(0)).toBeNull();
+    expect(sanitizePresetMinutes(-5)).toBeNull();
+    expect(sanitizePresetMinutes(NaN)).toBeNull();
+    expect(sanitizePresetMinutes(1441)).toBeNull();
   });
 });
