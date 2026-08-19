@@ -593,22 +593,22 @@ function App() {
               }}
             />
           )}
-          <TimerBar
-            trackingLabel={trackingLabel}
-            trackedLost={trackedLost}
-            isRunning={isRunning}
-            canStart={isCursorOnTask && pendingResolution === null}
-            presetMinutes={presetMinutes}
-            elapsedMs={elapsedMs}
-            onSelectPreset={setPresetMinutes}
-            onStart={handleStart}
-            onStop={() => stopTracking("manual")}
-            pending={pendingResolution}
-            canAssignToCursor={isCursorOnTask}
-            onResolveLogOnly={handleResolveLogOnly}
-            onResolveAssignToCursor={handleResolveAssignToCursor}
-          />
         </div>
+        <TimerBar
+          trackingLabel={trackingLabel}
+          trackedLost={trackedLost}
+          isRunning={isRunning}
+          canStart={isCursorOnTask && pendingResolution === null}
+          presetMinutes={presetMinutes}
+          elapsedMs={elapsedMs}
+          onSelectPreset={setPresetMinutes}
+          onStart={handleStart}
+          onStop={() => stopTracking("manual")}
+          pending={pendingResolution}
+          canAssignToCursor={isCursorOnTask}
+          onResolveLogOnly={handleResolveLogOnly}
+          onResolveAssignToCursor={handleResolveAssignToCursor}
+        />
       </div>
     </div>
   );
