@@ -46,6 +46,9 @@ export function createMonuraExtensions(options: CreateMonuraExtensionsOptions = 
     activeLineField,
     editorTheme,
     EditorView.lineWrapping,
+    // Keep the tracked line clear of the floating timer bar when scrolling into
+    // view (e.g. Vim's G), since CodeMirror ignores CSS scroll-padding here.
+    EditorView.scrollMargins.of(() => ({ bottom: 90 })),
     EditorView.updateListener.of((update) => {
       if (update.docChanged) {
         options.onDocChange?.(update.state.doc.toString());
