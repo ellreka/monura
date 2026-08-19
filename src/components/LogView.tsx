@@ -1,23 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
+import { addMonths, format, isSameMonth, parseISO, startOfMonth } from "date-fns";
 import type { SessionRecord } from "../lib/log/session";
-import {
-  baseTitle,
-  formatDuration,
-  formatMinutesOfDay,
-  localDateKey,
-  localMinutesOfDay,
-  projectTotals,
-} from "../lib/log/analytics";
+import { baseTitle, formatDuration, localDateKey, projectTotals, recordDate } from "../lib/log/analytics";
 import { sessionLogFilename } from "../lib/log/session";
-import { formatPresetLabel } from "../lib/timer";
-
-type Period = "today" | "week" | "month";
 
 const NO_PROJECT = "";
 const PALETTE = ["var(--accent)", "var(--project)", "#4f8fbb", "#b05c8a", "#8a6fc9"];
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-/** Gaps shorter than this many minutes are not emitted as rows (only "slacking off" at or above the threshold is visualized) */
-const MIN_GAP_MINUTES = 5;
 
 interface RunningSession {
   label: string;
@@ -37,43 +25,10 @@ interface DayGroup {
   day: string;
   records: SessionRecord[];
   totalSec: number;
-  gapSec: number;
 }
 
-/** The record's local start time (milliseconds after the timezone shift; used for same-day gap calculation). */
-function localStartMs(r: SessionRecord): number {
-  return Date.parse(r.startedAt) + r.tzOffsetMinutes * 60000;
-}
-
-function startOfToday(): number {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
-}
-
-/** The week starts on Monday. */
-function startOfWeek(): number {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-  return d.getTime();
-}
-
-function startOfMonth(): number {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  d.setDate(1);
-  return d.getTime();
-}
-
-function periodStart(period: Period): number {
-  if (period === "today") return startOfToday();
-  if (period === "week") return startOfWeek();
-  return startOfMonth();
-}
-
-/** Groups records in the period by day (newest day first) and computes the gaps between sessions. */
-function groupByDayWithGaps(records: SessionRecord[]): DayGroup[] {
+/** Groups records (assumed already scoped to one month) by day, newest day first. */
+function groupByDay(records: SessionRecord[]): DayGroup[] {
   const byDay = new Map<string, SessionRecord[]>();
   for (const r of records) {
     const key = localDateKey(r);
@@ -83,65 +38,27 @@ function groupByDayWithGaps(records: SessionRecord[]): DayGroup[] {
   }
   const groups: DayGroup[] = [];
   for (const [day, list] of byDay) {
-    const sorted = [...list].sort((a, b) => localStartMs(a) - localStartMs(b));
-    let totalSec = 0;
-    let gapSec = 0;
-    let prevEnd: number | null = null;
-    for (const r of sorted) {
-      const start = localStartMs(r);
-      totalSec += r.elapsedSeconds;
-      if (prevEnd !== null && start > prevEnd) {
-        gapSec += (start - prevEnd) / 1000;
-      }
-      prevEnd = Math.max(prevEnd ?? 0, start + r.elapsedSeconds * 1000);
-    }
-    groups.push({ day, records: sorted, totalSec, gapSec });
+    const sorted = [...list].sort((a, b) => recordDate(a).getTime() - recordDate(b).getTime());
+    const totalSec = sorted.reduce((sum, r) => sum + r.elapsedSeconds, 0);
+    groups.push({ day, records: sorted, totalSec });
   }
   return groups.sort((a, b) => b.day.localeCompare(a.day));
 }
 
-type DayRow =
-  | { kind: "session"; record: SessionRecord }
-  | { kind: "gap"; startMinutes: number; gapSec: number };
-
-/** Expands one day's records into an alternating sequence of sessions and gaps. */
-function rowsOf(records: SessionRecord[]): DayRow[] {
-  const rows: DayRow[] = [];
-  let prevEnd: number | null = null;
-  for (const r of records) {
-    const start = localStartMs(r);
-    if (prevEnd !== null && start > prevEnd) {
-      const gapSec = (start - prevEnd) / 1000;
-      if (gapSec >= MIN_GAP_MINUTES * 60) {
-        rows.push({ kind: "gap", startMinutes: Math.floor(prevEnd / 60000), gapSec });
-      }
-    }
-    rows.push({ kind: "session", record: r });
-    prevEnd = Math.max(prevEnd ?? 0, start + r.elapsedSeconds * 1000);
-  }
-  return rows;
-}
-
+/** "YYYY-MM-DD" (a `localDateKey`-shaped day key) → "MM-dd Weekday". */
 function dayLabel(day: string): string {
-  const d = new Date(day + "T00:00:00");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${mm}-${dd} ${WEEKDAYS[d.getDay()]}`;
+  return format(parseISO(day), "MM-dd EEE");
 }
 
 /** Local date key of the in-progress session (browser local time is fine). */
 function runningDayKey(running: RunningSession): string {
-  const d = new Date(running.startedAt);
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${mm}-${dd}`;
+  return format(new Date(running.startedAt), "yyyy-MM-dd");
 }
 
 function RunningRow({ running }: { running: RunningSession }) {
-  const d = new Date(running.startedAt);
   return (
     <div className="log-row is-running">
-      <span className="log-row-time">{formatMinutesOfDay(d.getHours() * 60 + d.getMinutes())}</span>
+      <span className="log-row-time">{format(new Date(running.startedAt), "H:mm")}</span>
       <span className="log-row-title">
         {baseTitle(running.label)}
         {running.projects.map((p) => (
@@ -157,7 +74,7 @@ function RunningRow({ running }: { running: RunningSession }) {
 
 export function LogView({ loadRecords, refreshKey, running = null }: LogViewProps) {
   const [records, setRecords] = useState<SessionRecord[]>([]);
-  const [period, setPeriod] = useState<Period>("week");
+  const [activeMonth, setActiveMonth] = useState<Date>(() => startOfMonth(new Date()));
 
   useEffect(() => {
     let cancelled = false;
@@ -171,16 +88,18 @@ export function LogView({ loadRecords, refreshKey, running = null }: LogViewProp
     };
   }, [loadRecords, refreshKey]);
 
-  const filtered = useMemo(() => {
-    const start = periodStart(period);
-    return records.filter((r) => Date.parse(r.startedAt) >= start);
-  }, [records, period]);
+  const isCurrentMonth = isSameMonth(activeMonth, new Date());
 
-  const days = useMemo(() => groupByDayWithGaps(filtered), [filtered]);
+  const filtered = useMemo(
+    () => records.filter((r) => isSameMonth(recordDate(r), activeMonth)),
+    [records, activeMonth],
+  );
+
+  const days = useMemo(() => groupByDay(filtered), [filtered]);
   const projects = useMemo(() => projectTotals(filtered), [filtered]);
   const totalSec = useMemo(() => filtered.reduce((sum, r) => sum + r.elapsedSeconds, 0), [filtered]);
   const maxProjectSec = projects[0]?.seconds ?? 0;
-  const monthLabel = new Date().toLocaleString("en-US", { month: "short" });
+  const activeMonthLabel = format(activeMonth, "yyyy/MM");
 
   if (records.length === 0 && !running) {
     return (
@@ -194,28 +113,27 @@ export function LogView({ loadRecords, refreshKey, running = null }: LogViewProp
     <div className="log-view">
       <h2 className="view-title">Session log</h2>
       <div className="log-header">
-        <div className="log-periods" role="tablist" aria-label="Period">
-          {(
-            [
-              ["week", "This Week"],
-              ["today", "Today"],
-              ["month", monthLabel],
-            ] as [Period, string][]
-          ).map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              role="tab"
-              aria-selected={period === key}
-              className={"log-period" + (period === key ? " is-active" : "")}
-              onClick={() => setPeriod(key)}
-            >
-              {label}
-            </button>
-          ))}
+        <div className="log-month-nav">
+          <button
+            type="button"
+            className="log-month-arrow"
+            onClick={() => setActiveMonth((m) => addMonths(m, -1))}
+            aria-label="Previous month"
+          >
+            ◁
+          </button>
+          <span className="log-month-label">{activeMonthLabel}</span>
+          <button
+            type="button"
+            className="log-month-arrow"
+            onClick={() => setActiveMonth((m) => addMonths(m, 1))}
+            aria-label="Next month"
+          >
+            ▷
+          </button>
         </div>
         <div className="log-total">
-          {formatDuration(totalSec)} <span className="log-total-count">/ {filtered.length}</span>
+          {formatDuration(totalSec)}
         </div>
       </div>
 
@@ -239,8 +157,8 @@ export function LogView({ loadRecords, refreshKey, running = null }: LogViewProp
       )}
 
       <div className="log-days-list">
-        {filtered.length === 0 && !running && <div className="log-empty">No sessions in this period</div>}
-        {running && !days.some((g) => g.day === runningDayKey(running)) && (
+        {filtered.length === 0 && !running && <div className="log-empty">No sessions in {activeMonthLabel}</div>}
+        {running && isCurrentMonth && !days.some((g) => g.day === runningDayKey(running)) && (
           <section className="log-day-group">
             <header className="log-day-header">
               <span className="log-day-label">{dayLabel(runningDayKey(running))}</span>
@@ -253,28 +171,17 @@ export function LogView({ loadRecords, refreshKey, running = null }: LogViewProp
             <header className="log-day-header">
               <span className="log-day-label">{dayLabel(group.day)}</span>
               <span className="log-day-total">Tracked {formatDuration(group.totalSec)}</span>
-              {group.gapSec >= MIN_GAP_MINUTES * 60 && (
-                <span className="log-day-gap">Gap {formatDuration(group.gapSec)}</span>
-              )}
             </header>
-            {running && group.day === runningDayKey(running) && <RunningRow running={running} />}
-            {rowsOf(group.records).map((row, i) =>
-              row.kind === "gap" ? (
-                <div key={`gap-${i}`} className="log-row is-gap">
-                  <span className="log-row-time">{formatMinutesOfDay(row.startMinutes)}</span>
-                  <span className="log-row-title">Gap {formatDuration(row.gapSec)}</span>
-                  <span className="log-row-dur">―</span>
-                </div>
-              ) : (
-                <SessionRow key={`s-${i}`} record={row.record} />
-              ),
-            )}
+            {running && isCurrentMonth && group.day === runningDayKey(running) && <RunningRow running={running} />}
+            {group.records.map((r, i) => (
+              <SessionRow key={`s-${i}`} record={r} />
+            ))}
           </section>
         ))}
       </div>
 
       <p className="log-note">
-        {sessionLogFilename(new Date())} (append-only). Line text and tags are snapshots from tracking time.
+        {sessionLogFilename(activeMonth)} (append-only). Line text and tags are snapshots from tracking time.
       </p>
     </div>
   );
@@ -283,7 +190,7 @@ export function LogView({ loadRecords, refreshKey, running = null }: LogViewProp
 function SessionRow({ record: r }: { record: SessionRecord }) {
   return (
     <div className="log-row">
-      <span className="log-row-time">{formatMinutesOfDay(localMinutesOfDay(r))}</span>
+      <span className="log-row-time">{format(recordDate(r), "H:mm")}</span>
       <span className="log-row-title">
         {baseTitle(r.lineText)}
         {r.projects.map((p) => (
@@ -293,10 +200,7 @@ function SessionRow({ record: r }: { record: SessionRecord }) {
         ))}
         {r.lineDeleted && <span className="log-chip-warn">line deleted</span>}
       </span>
-      <span className="log-row-dur">
-        {formatDuration(r.elapsedSeconds)}
-        <span className="log-row-preset">/{formatPresetLabel(r.presetMinutes)}</span>
-      </span>
+      <span className="log-row-dur">{formatDuration(r.elapsedSeconds)}</span>
     </div>
   );
 }

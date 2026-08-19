@@ -1,6 +1,6 @@
 import { Prec } from "@codemirror/state";
 import { type Command, type EditorView, type KeyBinding, keymap } from "@codemirror/view";
-import { parseLine } from "../parser";
+import { parseLines } from "../parser";
 
 export interface TimerKeymapOptions {
   presets: readonly number[];
@@ -10,7 +10,8 @@ export interface TimerKeymapOptions {
 
 function isCursorOnTaskLine(view: EditorView): boolean {
   const line = view.state.doc.lineAt(view.state.selection.main.head);
-  return parseLine(line.text, line.number).isTask;
+  const lines = parseLines(view.state.doc.toString());
+  return lines[line.number - 1]?.isTask ?? false;
 }
 
 function createStartCommand(minutes: number, onRequestStart: (presetMinutes: number) => void): Command {

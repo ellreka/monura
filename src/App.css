@@ -325,11 +325,10 @@ button {
   bottom: 16px;
   transform: translateX(-50%);
   width: calc(100% - var(--rail-width) - 32px);
-  max-width: 480px;
+  max-width: 420px;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  flex-direction: column;
+  gap: 8px;
   padding: 10px 16px;
   background-color: var(--bg-tabs);
   border: 1px solid var(--border);
@@ -350,13 +349,10 @@ button {
 .timer-bar-label {
   position: relative;
   z-index: 1;
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   font-size: 12px;
   color: var(--muted);
+  white-space: normal;
+  word-break: break-word;
 }
 
 .timer-bar-controls {
@@ -365,7 +361,6 @@ button {
   display: flex;
   align-items: center;
   gap: 10px;
-  flex: none;
 }
 
 .timer-bar-presets {
@@ -432,6 +427,7 @@ button {
   font-variant-numeric: tabular-nums;
   min-width: 84px;
   justify-content: flex-end;
+  margin-left: auto;
 }
 
 .timer-bar-remaining {
@@ -452,13 +448,6 @@ button {
 
 .timer-bar.is-resolving {
   border-color: var(--accent);
-  max-width: 620px;
-}
-
-/* 記録先の選択は読み切れることが大事なので、この行だけ折り返す */
-.timer-bar.is-resolving .timer-bar-label {
-  white-space: normal;
-  overflow: visible;
 }
 
 .timer-resolve {
@@ -695,31 +684,32 @@ button {
   margin-bottom: 14px;
 }
 
-.log-periods {
+.log-month-nav {
   display: flex;
+  align-items: center;
   gap: 4px;
-  background-color: var(--bg-tabs);
-  border-radius: 8px;
-  padding: 2px;
 }
 
-.log-period {
+.log-month-arrow {
   border: none;
   background: transparent;
   color: var(--muted);
-  font-size: 12px;
-  padding: 5px 12px;
+  font-size: 13px;
+  padding: 4px 6px;
   border-radius: 6px;
+  line-height: 1;
 }
 
-.log-period:hover {
+.log-month-arrow:hover {
   color: var(--ink);
+  background: var(--bg-tabs);
 }
 
-.log-period.is-active {
-  background-color: var(--pill);
+.log-month-label {
   color: var(--ink);
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 4px 8px;
 }
 
 .log-total {
@@ -808,10 +798,6 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
-.log-day-gap {
-  margin-left: auto;
-}
-
 .log-row {
   display: flex;
   align-items: baseline;
@@ -839,15 +825,6 @@ button {
 .log-row-dur {
   flex: none;
   font-variant-numeric: tabular-nums;
-}
-
-.log-row-preset {
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.log-row.is-gap {
-  color: var(--muted);
 }
 
 .log-row.is-running {

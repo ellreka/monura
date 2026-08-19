@@ -2,6 +2,7 @@ export { matchSpentTokens, extractSpentSeconds, formatDuration, formatDurationMi
 export type { SpentMatch } from "./spent";
 export { matchProjectTokens, extractProjects } from "./projects";
 export type { ProjectMatch } from "./projects";
+export { fencedCodeLineNumbers } from "./codeBlocks";
 export {
   parseLine,
   parseLines,

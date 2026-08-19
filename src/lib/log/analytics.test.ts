@@ -131,4 +131,10 @@ describe("formatDuration", () => {
     expect(formatDuration(5400)).toBe("1h30m");
     expect(formatDuration(3600)).toBe("1h00m");
   });
+
+  it("falls back to seconds when it would round to 0m", () => {
+    expect(formatDuration(8)).toBe("8s");
+    expect(formatDuration(29)).toBe("29s");
+    expect(formatDuration(30)).toBe("1m");
+  });
 });

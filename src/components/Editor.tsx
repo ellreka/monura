@@ -2,9 +2,9 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { Annotation, EditorState, MapMode } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { getCM, vim } from "@replit/codemirror-vim";
-import { createMonuraExtensions, setUiStateEffect, uiStateField, vimModeCompartment } from "../lib/editor";
+import { createMonuraExtensions, setUiStateEffect, uiStateField, vimEditableCompartment, vimModeCompartment } from "../lib/editor";
 import { findLineByText } from "../lib/editor/lineMatch";
-import { addSpentToLine, computeTaskMeta, parseLine } from "../lib/parser";
+import { addSpentToLine, computeTaskMeta, parseLines } from "../lib/parser";
 
 /** Annotation marking a doc replacement that originates externally (from disk). Line tracking is handled by the imperative side. */
 const externalReloadAnnotation = Annotation.define<boolean>();
@@ -106,17 +106,31 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 
   function notifyCursorLine(view: EditorView): void {
     const line = view.state.doc.lineAt(view.state.selection.main.head);
+    const lines = parseLines(view.state.doc.toString());
     onCursorLineChangeRef.current?.({
       lineNumber: line.number,
       text: line.text,
-      isTask: parseLine(line.text, line.number).isTask,
+      isTask: lines[line.number - 1]?.isTask ?? false,
     });
   }
 
   function subscribeVimMode(view: EditorView): (() => void) | null {
     const cm = getCM(view);
     if (!cm) return null;
-    const handler = (e: { mode: string }) => onVimStatusChangeRef.current?.(e.mode);
+    const handler = (e: { mode: string }) => {
+      onVimStatusChangeRef.current?.(e.mode);
+      // Defer: dispatching synchronously from within vim's own mode-change signal corrupts its
+      // internal operation state (observed: Vim gets stuck unresponsive after Escape from
+      // visual-line mode, e.g. Shift-V then Escape). Queueing a microtask lets vim's current
+      // operation finish first — matches the fix documented on the CodeMirror forum for this
+      // exact editable-toggle pattern.
+      queueMicrotask(() => {
+        if (viewRef.current !== view) return;
+        view.dispatch({
+          effects: vimEditableCompartment.reconfigure(EditorView.editable.of(!!cm.state.vim?.insertMode)),
+        });
+      });
+    };
     cm.on("vim-mode-change", handler);
     onVimStatusChangeRef.current?.(cm.state.vim?.mode ?? "normal");
     return () => cm.off("vim-mode-change", handler);
@@ -168,8 +182,12 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     viewRef.current = view;
     notifyCursorLine(view);
     if (vimMode) {
+      // See vimEditableCompartment: keep the element focusable via script even while
+      // `editable` is toggled off (contenteditable alone drops it from natural focusability).
+      view.contentDOM.tabIndex = -1;
       vimListenerCleanupRef.current = subscribeVimMode(view);
     }
+    view.focus();
 
     return () => {
       vimListenerCleanupRef.current?.();
@@ -283,11 +301,18 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         if (!view) return;
         vimListenerCleanupRef.current?.();
         vimListenerCleanupRef.current = null;
-        view.dispatch({ effects: vimModeCompartment.reconfigure(enabled ? [vim()] : []) });
+        if (enabled) view.contentDOM.tabIndex = -1;
+        view.dispatch({
+          effects: [
+            vimModeCompartment.reconfigure(enabled ? [vim()] : []),
+            vimEditableCompartment.reconfigure(EditorView.editable.of(!enabled)),
+          ],
+        });
         if (enabled) {
           vimListenerCleanupRef.current = subscribeVimMode(view);
         } else {
           onVimStatusChangeRef.current?.(null);
+          view.contentDOM.removeAttribute("tabindex");
         }
       },
     }),

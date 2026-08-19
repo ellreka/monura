@@ -26,7 +26,7 @@ import {
   type Eol,
   type MdFile,
 } from "./lib/files";
-import { parseSessionLines } from "./lib/log/analytics";
+import { baseTitle, parseSessionLines } from "./lib/log/analytics";
 import {
   createSessionRecord,
   SessionLog,
@@ -35,6 +35,7 @@ import {
   type SessionRecord,
 } from "./lib/log/session";
 import { notifyTimerExpired } from "./lib/notify";
+import { getLastFileFor, loadSettings, saveDataDir, saveLastFileFor, saveVimMode } from "./lib/settings";
 import {
   computeElapsedMs,
   createIdleTimer,
@@ -52,11 +53,10 @@ import {
  */
 type PendingResolution = Omit<CreateSessionRecordInput, "lineDeleted">;
 
-const DATA_DIR_KEY = "monura.dataDir";
-
+/** Task title for display: strips the checklist marker (`- [ ]`), spent:, and +project — no markdown. */
 function toTrackingLabel(text: string): string {
-  const trimmed = text.trim();
-  return trimmed.length > 0 ? trimmed : "(blank line)";
+  const title = baseTitle(text);
+  return title.length > 0 ? title : "(blank line)";
 }
 
 function App() {
@@ -64,9 +64,9 @@ function App() {
     isTauri() ? [] : SAMPLE_FILES.map((f) => ({ ...f, eol: "\n" as Eol })),
   );
   const [activeIndex, setActiveIndex] = useState(0);
-  const [dataDir, setDataDir] = useState<string | null>(() =>
-    isTauri() ? localStorage.getItem(DATA_DIR_KEY) : null,
-  );
+  const [dataDir, setDataDir] = useState<string | null>(null);
+  /** False until plugin-store settings are loaded (prevents a setup-screen flash). */
+  const [settingsReady, setSettingsReady] = useState(() => !isTauri());
   const [loadError, setLoadError] = useState<string | null>(null);
   const [vimMode, setVimMode] = useState(false);
   const [presetMinutes, setPresetMinutes] = useState<number>(DEFAULT_PRESET_MINUTES);
@@ -142,6 +142,28 @@ function App() {
     return () => window.removeEventListener("beforeunload", flushSave);
   }, [flushSave]);
 
+  // ---- Settings load (plugin-store; one-time migration from legacy localStorage) ----
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const settings = await loadSettings();
+        if (cancelled) return;
+        setDataDir(settings.dataDir);
+        setVimMode(settings.vimMode);
+      } catch (e) {
+        console.error("settings load failed:", e);
+      } finally {
+        if (!cancelled) setSettingsReady(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // ---- Initial data folder load (subsequent tracking is handled by the watcher) ----
 
   useEffect(() => {
@@ -149,14 +171,17 @@ function App() {
     let cancelled = false;
     (async () => {
       try {
+        const lastFilePromise = getLastFileFor(dataDir);
         const names = await listMdFiles(dataDir);
         const loaded: MdFile[] = [];
         for (const name of names) {
           loaded.push(await readMdFile(dataDir, name));
         }
+        const lastFile = await lastFilePromise;
         if (cancelled) return;
         setFiles(loaded);
-        setActiveIndex(0);
+        const restored = lastFile !== null ? loaded.findIndex((f) => f.name === lastFile) : -1;
+        setActiveIndex(restored >= 0 ? restored : 0);
         setLoadError(null);
       } catch (e) {
         if (!cancelled) setLoadError(e instanceof Error ? e.message : String(e));
@@ -167,9 +192,19 @@ function App() {
     };
   }, [dataDir]);
 
+  // ---- Active file persistence (remembers the last opened file per data directory) ----
+
+  const activeFileName = files[activeIndex]?.name ?? null;
+  useEffect(() => {
+    if (!isTauri() || !dataDir || activeFileName === null) return;
+    void saveLastFileFor(dataDir, activeFileName).catch((e) => console.error("save last file failed:", e));
+  }, [dataDir, activeFileName]);
+
   const applyDataDir = (dir: string) => {
     flushSave();
-    localStorage.setItem(DATA_DIR_KEY, dir);
+    if (isTauri()) {
+      void saveDataDir(dir).catch((e) => console.error("save dataDir failed:", e));
+    }
     setDataDir(dir);
   };
 
@@ -366,6 +401,9 @@ function App() {
     const next = !vimMode;
     setVimMode(next);
     editorRef.current?.setVimMode(next);
+    if (isTauri()) {
+      void saveVimMode(next).catch((e) => console.error("save vimMode failed:", e));
+    }
   };
 
   const appendRecord = (input: CreateSessionRecordInput) => {
@@ -486,6 +524,11 @@ function App() {
   };
 
   // ---- First-run setup (no data folder configured or load failed) ----
+  // Don't show the setup screen while settings are still loading (it would flash briefly)
+  if (isTauri() && !settingsReady) {
+    return <div className="app-shell" />;
+  }
+
 
   if (isTauri() && (!dataDir || loadError)) {
     return (

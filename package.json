@@ -13,18 +13,22 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@codemirror/autocomplete": "^6.20.3",
     "@codemirror/commands": "^6.10.4",
     "@codemirror/lang-markdown": "^6.5.2",
     "@codemirror/language": "^6.12.4",
+    "@codemirror/lint": "^6.9.7",
     "@codemirror/search": "^6.7.1",
     "@codemirror/state": "^6.7.1",
     "@codemirror/view": "^6.43.8",
+    "@date-fns/tz": "^1.5.0",
     "@lezer/highlight": "^1.2.3",
     "@replit/codemirror-vim": "^6.4.0",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-dialog": "^2.7.2",
     "@tauri-apps/plugin-opener": "^2",
-    "codemirror": "^6.0.2",
+    "@tauri-apps/plugin-store": "~2.4.4",
+    "date-fns": "^4.4.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },

@@ -1,6 +1,6 @@
 import { EditorState, RangeSetBuilder, StateField } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView } from "@codemirror/view";
-import { computeTaskMeta, matchProjectTokens, matchSpentTokens, parseLines } from "../parser";
+import { computeTaskMeta, fencedCodeLineNumbers, matchProjectTokens, matchSpentTokens, parseLines } from "../parser";
 import { CheckboxWidget, SpentWidget, SumBadgeWidget } from "./widgets";
 import { setUiStateEffect, uiStateField } from "./uiState";
 
@@ -16,12 +16,14 @@ function buildDecorations(state: EditorState): DecorationSet {
   const text = doc.toString();
   const lines = parseLines(text);
   const meta = computeTaskMeta(text);
+  const fenced = fencedCodeLineNumbers(text);
 
   const cursorLine = doc.lineAt(state.selection.main.head).number;
 
   const items: Item[] = [];
 
   for (const line of lines) {
+    if (fenced.has(line.lineNumber)) continue;
     const lineInfo = doc.line(line.lineNumber);
 
     if (line.isTask && line.lineNumber !== cursorLine) {

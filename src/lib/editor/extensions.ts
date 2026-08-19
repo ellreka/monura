@@ -3,12 +3,13 @@ import { Compartment } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import { EditorView, keymap } from "@codemirror/view";
 import { indentWithTab } from "@codemirror/commands";
-import { basicSetup } from "codemirror";
+import { editorBaseSetup } from "./baseSetup";
 import { Vim, vim } from "@replit/codemirror-vim";
 import { activeLineField, taskDecorationsField } from "./taskDecorations";
 import { uiStateField } from "./uiState";
 import { editorTheme } from "./theme";
 import { listContinuationKeymap } from "./listContinuation";
+import { vimNormalModeGuardKeymap } from "./vimGuard";
 import { createTimerKeymap } from "./timerKeymap";
 import { TIMER_PRESETS } from "../timer";
 
@@ -20,6 +21,14 @@ export interface CreateMonuraExtensionsOptions {
 }
 
 export const vimModeCompartment = new Compartment();
+/**
+ * codemirror-vim doesn't reliably block IME composition while in NORMAL mode (upstream bug:
+ * https://github.com/replit/codemirror-vim/issues/178) — characters can get inserted or
+ * deleted even though the status shows NORMAL. Toggling CodeMirror's own `editable` facet off
+ * outside insert mode prevents composition from starting in the first place; this is the
+ * workaround documented on the CodeMirror forum for this exact bug.
+ */
+export const vimEditableCompartment = new Compartment();
 
 // Disable the `:`-triggered Ex commands (:w, :q, etc.), because they don't mesh with this
 // app's file operation model of auto-save and tab switching. Vim state is module-level
@@ -30,9 +39,11 @@ Vim.unmap(":", undefined as unknown as string);
 
 export function createMonuraExtensions(options: CreateMonuraExtensionsOptions = {}): Extension[] {
   return [
-    // vim must take effect before the keymaps that come from basicSetup
+    // vim must take effect before the keymaps that come from editorBaseSetup
     vimModeCompartment.of(options.vimMode ? [vim()] : []),
-    basicSetup,
+    vimEditableCompartment.of(EditorView.editable.of(!options.vimMode)),
+    vimNormalModeGuardKeymap,
+    editorBaseSetup,
     keymap.of([indentWithTab]),
     listContinuationKeymap,
     createTimerKeymap({

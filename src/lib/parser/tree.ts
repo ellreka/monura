@@ -1,5 +1,6 @@
 import { extractSpentSeconds } from "./spent";
 import { extractProjects } from "./projects";
+import { fencedCodeLineNumbers } from "./codeBlocks";
 
 const TASK_LINE = /^(\s*)-\s\[([ xX])\]\s?(.*)$/;
 
@@ -25,21 +26,17 @@ export interface TaskMeta {
   projects: string[];
 }
 
-/** Parses a single line. Lines that are not checklist lines get isTask=false. */
+/** The shape of a line that is not task syntax (plain memo, or content inside a fenced code block). */
+function nonTaskLine(raw: string, lineNumber: number): TaskLine {
+  return { lineNumber, raw, indent: 0, isTask: false, checked: false, text: raw, spentSeconds: 0, ownProjects: [] };
+}
+
+/** Parses a single line in isolation. Lines that are not checklist lines get isTask=false.
+ * Has no document context, so it cannot know whether the line sits inside a fenced code
+ * block — callers with a full document should use `parseLines` instead. */
 export function parseLine(raw: string, lineNumber: number): TaskLine {
   const match = TASK_LINE.exec(raw);
-  if (!match) {
-    return {
-      lineNumber,
-      raw,
-      indent: 0,
-      isTask: false,
-      checked: false,
-      text: raw,
-      spentSeconds: 0,
-      ownProjects: [],
-    };
-  }
+  if (!match) return nonTaskLine(raw, lineNumber);
   const [, indentStr, checkChar, rest] = match;
   return {
     lineNumber,
@@ -53,9 +50,14 @@ export function parseLine(raw: string, lineNumber: number): TaskLine {
   };
 }
 
-/** Parses the full markdown text line by line. */
+/** Parses the full markdown text line by line. Lines inside a fenced code block are
+ * never task syntax, even if they happen to match the checklist pattern. */
 export function parseLines(content: string): TaskLine[] {
-  return content.split("\n").map((raw, i) => parseLine(raw, i + 1));
+  const fenced = fencedCodeLineNumbers(content);
+  return content.split("\n").map((raw, i) => {
+    const lineNumber = i + 1;
+    return fenced.has(lineNumber) ? nonTaskLine(raw, lineNumber) : parseLine(raw, lineNumber);
+  });
 }
 
 /** Builds a tree from only the task lines, based on indentation. Non-task lines are excluded. */

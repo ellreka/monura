@@ -129,6 +129,7 @@ src/              # フロントエンド (TypeScript)
     parser/       # spent: / +project 記法のパース・シリアライズ（純粋関数、Tauri非依存）
     timer/        # タイマー状態管理
     notify.ts     # OS通知（Tauri IPC の境界層。タイマー満了時に呼ぶ）
+    settings.ts   # アプリ設定（データフォルダ・Vimモード・最後に開いたファイル）の永続化（tauri-plugin-store。セッションログと同じアプリデータディレクトリ）
 src-tauri/      # Rust側（ファイルI/O、ウォッチ、トレイ、通知）
 docs/           # SPEC.md, ARCHITECTURE.md, DATA_MODEL.md 等
 ```

@@ -1,3 +1,5 @@
+import { format } from "date-fns";
+import { TZDate } from "@date-fns/tz";
 import { parseLine } from "../parser";
 import type { SessionRecord } from "./session";
 
@@ -35,18 +37,27 @@ function isSessionRecord(v: unknown): v is SessionRecord {
   );
 }
 
+/** "+09:00"-style offset string from a minutes offset, for `TZDate`. */
+function offsetString(minutes: number): string {
+  const sign = minutes < 0 ? "-" : "+";
+  const abs = Math.abs(minutes);
+  return `${sign}${String(Math.floor(abs / 60)).padStart(2, "0")}:${String(abs % 60).padStart(2, "0")}`;
+}
+
+/** The record's start time, represented in the timezone it was captured in (not the viewer's). */
+export function recordDate(r: SessionRecord): TZDate {
+  return new TZDate(r.startedAt, offsetString(r.tzOffsetMinutes));
+}
+
 /** Local date of a record (YYYY-MM-DD). Uses tzOffsetMinutes as captured at tracking time. */
 export function localDateKey(r: SessionRecord): string {
-  const shifted = new Date(Date.parse(r.startedAt) + r.tzOffsetMinutes * 60000);
-  const m = String(shifted.getUTCMonth() + 1).padStart(2, "0");
-  const d = String(shifted.getUTCDate()).padStart(2, "0");
-  return `${shifted.getUTCFullYear()}-${m}-${d}`;
+  return format(recordDate(r), "yyyy-MM-dd");
 }
 
 /** Local start time of a record (minutes since midnight). */
 export function localMinutesOfDay(r: SessionRecord): number {
-  const shifted = new Date(Date.parse(r.startedAt) + r.tzOffsetMinutes * 60000);
-  return shifted.getUTCHours() * 60 + shifted.getUTCMinutes();
+  const d = recordDate(r);
+  return d.getHours() * 60 + d.getMinutes();
 }
 
 /** Extracts just the title from a line's text (removes checkbox, spent:, and +project). */
@@ -59,16 +70,12 @@ export function baseTitle(lineText: string): string {
     .trim();
 }
 
-/** Elapsed-time label in "1h25m" / "45m" form. */
+/** Elapsed-time label in "1h25m" / "45m" form. Falls back to seconds ("8s") when it would round to 0m. */
 export function formatDuration(seconds: number): string {
   const m = Math.round(seconds / 60);
   if (m >= 60) return `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")}m`;
+  if (m === 0) return `${Math.round(seconds)}s`;
   return `${m}m`;
-}
-
-/** Formats minutes since midnight as "10:30". */
-export function formatMinutesOfDay(minutes: number): string {
-  return `${Math.floor(minutes / 60)}:${String(Math.round(minutes % 60)).padStart(2, "0")}`;
 }
 
 export interface DayBucket {

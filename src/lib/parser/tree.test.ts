@@ -28,6 +28,21 @@ describe("parseLine", () => {
   });
 });
 
+describe("parseLines", () => {
+  it("does not treat checklist-like text inside a fenced code block as a task", () => {
+    const content = ["```js", "- [ ] test", "```"].join("\n");
+    const lines = parseLines(content);
+    expect(lines[1].isTask).toBe(false);
+    expect(buildTaskTree(lines)).toHaveLength(0);
+  });
+
+  it("still recognizes real tasks surrounding a fenced code block", () => {
+    const content = ["- [ ] before", "```", "- [ ] not a task", "```", "- [ ] after"].join("\n");
+    const lines = parseLines(content);
+    expect(lines.filter((l) => l.isTask).map((l) => l.lineNumber)).toEqual([1, 5]);
+  });
+});
+
 describe("buildTaskTree", () => {
   it("nests tasks by indentation and ignores non-task lines", () => {
     const lines = parseLines(
