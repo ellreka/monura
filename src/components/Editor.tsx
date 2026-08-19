@@ -2,7 +2,16 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { Annotation, EditorState, MapMode } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { getCM, vim } from "@replit/codemirror-vim";
-import { createMonuraExtensions, setUiStateEffect, uiStateField, vimEditableCompartment, vimModeCompartment } from "../lib/editor";
+import {
+  createMonuraExtensions,
+  editorTheme,
+  markdownHighlighting,
+  setUiStateEffect,
+  themeCompartment,
+  uiStateField,
+  vimEditableCompartment,
+  vimModeCompartment,
+} from "../lib/editor";
 import { findLineByText } from "../lib/editor/lineMatch";
 import { addSpentToLine, computeTaskMeta, parseLines } from "../lib/parser";
 
@@ -52,12 +61,14 @@ export interface EditorHandle {
    */
   applySpentToLine(lineNumber: number, elapsedSeconds: number): AppliedSpentResult | null;
   setVimMode(enabled: boolean): void;
+  setTheme(dark: boolean): void;
 }
 
 interface EditorProps {
   initialContent: string;
   onChange: (text: string) => void;
   vimMode?: boolean;
+  theme?: "light" | "dark";
   onVimStatusChange?: (status: string | null) => void;
   onCursorLineChange?: (info: CursorLineChangeInfo) => void;
   onTrackedLineChange?: (info: TrackedLineChangeInfo) => void;
@@ -72,6 +83,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     initialContent,
     onChange,
     vimMode = false,
+    theme = "light",
     onVimStatusChange,
     onCursorLineChange,
     onTrackedLineChange,
@@ -146,6 +158,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
           createMonuraExtensions({
             onDocChange: (text) => onChangeRef.current(text),
             vimMode,
+            dark: theme === "dark",
             onRequestStartPreset: (presetMinutes) => onRequestStartPresetRef.current?.(presetMinutes),
             onRequestStop: () => onRequestStopRef.current?.(),
           }),
@@ -314,6 +327,14 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
           onVimStatusChangeRef.current?.(null);
           view.contentDOM.removeAttribute("tabindex");
         }
+      },
+
+      setTheme(dark) {
+        const view = viewRef.current;
+        if (!view) return;
+        view.dispatch({
+          effects: themeCompartment.reconfigure([editorTheme(dark), markdownHighlighting(dark)]),
+        });
       },
     }),
     [],

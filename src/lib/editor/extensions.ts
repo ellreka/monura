@@ -7,7 +7,7 @@ import { editorBaseSetup } from "./baseSetup";
 import { Vim, vim } from "@replit/codemirror-vim";
 import { activeLineField, taskDecorationsField } from "./taskDecorations";
 import { uiStateField } from "./uiState";
-import { editorTheme } from "./theme";
+import { editorTheme, markdownHighlighting } from "./theme";
 import { listContinuationKeymap } from "./listContinuation";
 import { vimNormalModeGuardKeymap } from "./vimGuard";
 import { createTimerKeymap } from "./timerKeymap";
@@ -16,6 +16,7 @@ import { TIMER_PRESETS } from "../timer";
 export interface CreateMonuraExtensionsOptions {
   onDocChange?: (text: string) => void;
   vimMode?: boolean;
+  dark?: boolean;
   onRequestStartPreset?: (presetMinutes: number) => void;
   onRequestStop?: () => void;
 }
@@ -29,6 +30,7 @@ export const vimModeCompartment = new Compartment();
  * workaround documented on the CodeMirror forum for this exact bug.
  */
 export const vimEditableCompartment = new Compartment();
+export const themeCompartment = new Compartment();
 
 // Disable the `:`-triggered Ex commands (:w, :q, etc.), because they don't mesh with this
 // app's file operation model of auto-save and tab switching. Vim state is module-level
@@ -55,7 +57,7 @@ export function createMonuraExtensions(options: CreateMonuraExtensionsOptions = 
     uiStateField,
     taskDecorationsField,
     activeLineField,
-    editorTheme,
+    themeCompartment.of([editorTheme(!!options.dark), markdownHighlighting(!!options.dark)]),
     EditorView.lineWrapping,
     // Keep the tracked line clear of the floating timer bar when scrolling into
     // view (e.g. Vim's G), since CodeMirror ignores CSS scroll-padding here.

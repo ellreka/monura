@@ -1,6 +1,8 @@
 interface SettingsViewProps {
   vimMode: boolean;
   onToggleVimMode: () => void;
+  theme: "light" | "dark";
+  onSetTheme: (theme: "light" | "dark") => void;
   dataDir?: string | null;
   dataDirDisabled?: boolean;
   onPickDataDir?: () => void;
@@ -9,6 +11,8 @@ interface SettingsViewProps {
 export function SettingsView({
   vimMode,
   onToggleVimMode,
+  theme,
+  onSetTheme,
   dataDir,
   dataDirDisabled = false,
   onPickDataDir,
@@ -17,6 +21,35 @@ export function SettingsView({
     <div className="settings-view">
       <h2 className="view-title">Settings</h2>
       <div className="settings-body">
+        <section className="settings-section">
+          <div className="settings-row">
+            <div className="settings-row-text">
+              <div className="settings-row-title">Theme</div>
+              <div className="settings-row-desc">Choose the app's color scheme</div>
+            </div>
+            <div className="settings-segmented" role="radiogroup" aria-label="Theme">
+              <button
+                type="button"
+                role="radio"
+                aria-checked={theme === "light"}
+                className={theme === "light" ? "is-active" : undefined}
+                onClick={() => onSetTheme("light")}
+              >
+                Light
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={theme === "dark"}
+                className={theme === "dark" ? "is-active" : undefined}
+                onClick={() => onSetTheme("dark")}
+              >
+                Dark
+              </button>
+            </div>
+          </div>
+        </section>
+
         <section className="settings-section">
           <div className="settings-row">
             <div className="settings-row-text">

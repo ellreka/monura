@@ -35,7 +35,7 @@ import {
   type SessionRecord,
 } from "./lib/log/session";
 import { notifyTimerExpired } from "./lib/notify";
-import { getLastFileFor, loadSettings, saveDataDir, saveLastFileFor, saveVimMode } from "./lib/settings";
+import { getLastFileFor, loadSettings, saveDataDir, saveLastFileFor, saveTheme, saveVimMode } from "./lib/settings";
 import {
   computeElapsedMs,
   createIdleTimer,
@@ -69,6 +69,7 @@ function App() {
   const [settingsReady, setSettingsReady] = useState(() => !isTauri());
   const [loadError, setLoadError] = useState<string | null>(null);
   const [vimMode, setVimMode] = useState(false);
+  const [theme, setTheme] = useState<"light" | "dark">("light");
   const [presetMinutes, setPresetMinutes] = useState<number>(DEFAULT_PRESET_MINUTES);
   const [timerState, setTimerState] = useState<TimerState>(() => createIdleTimer(presetMinutes));
   const [elapsedMs, setElapsedMs] = useState(0);
@@ -153,6 +154,7 @@ function App() {
         if (cancelled) return;
         setDataDir(settings.dataDir);
         setVimMode(settings.vimMode);
+        setTheme(settings.theme);
       } catch (e) {
         console.error("settings load failed:", e);
       } finally {
@@ -163,6 +165,12 @@ function App() {
       cancelled = true;
     };
   }, []);
+
+  // ---- Theme reflection (data-theme attribute drives the CSS palette in App.css) ----
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+  }, [theme]);
 
   // ---- Initial data folder load (subsequent tracking is handled by the watcher) ----
 
@@ -406,6 +414,14 @@ function App() {
     }
   };
 
+  const handleSetTheme = (next: "light" | "dark") => {
+    setTheme(next);
+    editorRef.current?.setTheme(next === "dark");
+    if (isTauri()) {
+      void saveTheme(next).catch((e) => console.error("save theme failed:", e));
+    }
+  };
+
   const appendRecord = (input: CreateSessionRecordInput) => {
     const record = createSessionRecord(input);
     sessionLogRef.current.append(record);
@@ -599,6 +615,7 @@ function App() {
                 initialContent={activeFile.content}
                 onChange={handleDocChange}
                 vimMode={vimMode}
+                theme={theme}
                 onCursorLineChange={(info) => setIsCursorOnTask(info.isTask)}
                 onTrackedLineChange={(info) => setTrackingLabel(toTrackingLabel(info.text))}
                 onTrackedLineLost={() => setTrackedLost(true)}
@@ -628,6 +645,8 @@ function App() {
             <SettingsView
               vimMode={vimMode}
               onToggleVimMode={handleToggleVimMode}
+              theme={theme}
+              onSetTheme={handleSetTheme}
               dataDir={dataDir}
               dataDirDisabled={isRunning}
               onPickDataDir={async () => {

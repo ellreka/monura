@@ -4,6 +4,8 @@ export {
   uiStateField,
   vimModeCompartment,
   vimEditableCompartment,
+  themeCompartment,
   DEFAULT_UI_STATE,
 } from "./extensions";
+export { editorTheme, markdownHighlighting } from "./theme";
 export type { CreateMonuraExtensionsOptions, EditorUiState } from "./extensions";

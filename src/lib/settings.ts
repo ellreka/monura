@@ -7,6 +7,7 @@ import { LazyStore } from "@tauri-apps/plugin-store";
 export interface AppSettings {
   dataDir: string | null;
   vimMode: boolean;
+  theme: "light" | "dark";
 }
 
 /** Key used before plugin-store adoption (WebView localStorage). */
@@ -30,7 +31,8 @@ export async function loadSettings(): Promise<AppSettings> {
   }
   const dataDir = (await store.get<string>("dataDir")) ?? null;
   const vimMode = (await store.get<boolean>("vimMode")) ?? false;
-  return { dataDir, vimMode };
+  const theme = (await store.get<"light" | "dark">("theme")) ?? "light";
+  return { dataDir, vimMode, theme };
 }
 
 export async function saveDataDir(dir: string): Promise<void> {
@@ -39,6 +41,10 @@ export async function saveDataDir(dir: string): Promise<void> {
 
 export async function saveVimMode(enabled: boolean): Promise<void> {
   await store.set("vimMode", enabled);
+}
+
+export async function saveTheme(theme: "light" | "dark"): Promise<void> {
+  await store.set("theme", theme);
 }
 
 /** The last active file name for a data directory, or null when unknown. */
