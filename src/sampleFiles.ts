@@ -5,37 +5,36 @@ export interface SampleFile {
 
 const WORK_MD = `## 2026-08-13
 
-- [ ] パーサーの加算 +monura spent:1h10m
-  - [ ] 行末以外の  spent: spent:45m
-  - [ ] 不正な時間表記
-朝イチでレビューが返ってきたら
-差し込みで対応する。
+- [ ] Parser addition +monura spent:1h10m
+  - [ ] Non-line-end spent: spent:45m
+  - [ ] Invalid time notation
+Insert and handle it if a review comes back first thing in the morning.
 
-- [ ] decoration の再計算 +monura
-- [ ] notify のイベント間引き +monura
-- [x] CodeMirrorのバージョン確認 +monura spent:20m
-- [x] pnpmワークスペースの初期設定 spent:10m
+- [ ] Recalculate decorations +monura
+- [ ] Throttle notify events +monura
+- [x] Verify CodeMirror version +monura spent:20m
+- [x] Initial pnpm workspace setup spent:10m
 
-## あとで
-- [ ] Vim で開いた時の折返し
+## Later
+- [ ] Line wrapping when opened in Vim
 
-grep できる状態を壊さない。
+Don't break the grep-able state.
 `;
 
-const MONURA_MD = `## 設計メモ
+const MONURA_MD = `## Design notes
 
-- [ ] タイマーのアイコンをドック常駐に対応させる +monura
-  - [ ] トレイアイコンのクリックイベント
-  - [ ] 通知権限のリクエストタイミング
-- [ ] セッションログのJSONLローテーション設計 +monura
+- [ ] Make the timer icon dock-resident +monura
+  - [ ] Tray icon click event
+  - [ ] Notification permission request timing
+- [ ] Session log JSONL rotation design +monura
 
-思いついたことはここに書く。まだタスクじゃなくていい。
+Write down ideas here. They don't have to be tasks yet.
 `;
 
-const INBOX_MD = `思いついたことを何でも書く場所。
+const INBOX_MD = `A place to write down anything that comes to mind.
 
-- [ ] Tauriのfs権限設定を見直す
-- [ ] 完了タスクの一括非表示アニメーションを検討
+- [ ] Review Tauri fs permission settings
+- [ ] Consider a bulk-hide animation for completed tasks
 `;
 
 export const SAMPLE_FILES: SampleFile[] = [

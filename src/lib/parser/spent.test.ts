@@ -22,25 +22,25 @@ describe("matchSpentTokens / extractSpentSeconds", () => {
     expect(extractSpentSeconds("- [ ] task spent:1h10m30s")).toBe(3600 + 600 + 30);
   });
 
-  it("ignores spent: not followed by a digit (行末以外/不正な時間表記)", () => {
-    expect(extractSpentSeconds("- [ ] 行末以外の spent: の話")).toBe(0);
+  it("ignores spent: not followed by a digit (not at line end / invalid time)", () => {
+    expect(extractSpentSeconds("- [ ] spent: mid-line")).toBe(0);
     expect(extractSpentSeconds("- [ ] spent:abc")).toBe(0);
   });
 
   it("finds a real token even when a bare 'spent:' appears earlier in the line", () => {
-    const line = "  - [ ] 行末以外の  spent: spent:45m";
+    const line = "  - [ ] mid-line  spent: spent:45m";
     expect(extractSpentSeconds(line)).toBe(45 * 60);
     const matches = matchSpentTokens(line);
     expect(matches).toHaveLength(1);
     expect(matches[0].seconds).toBe(45 * 60);
   });
 
-  it("sums duplicated spent: tokens on the same line (重複したspent:)", () => {
+  it("sums duplicated spent: tokens on the same line (duplicate spent:)", () => {
     expect(extractSpentSeconds("- [ ] task spent:10m spent:20m")).toBe(30 * 60);
   });
 
   it("returns 0 when there is no spent token", () => {
-    expect(extractSpentSeconds("- [ ] 不正な時間表記")).toBe(0);
+    expect(extractSpentSeconds("- [ ] invalid time")).toBe(0);
   });
 });
 
@@ -94,7 +94,7 @@ describe("formatDurationMinutes", () => {
 
 describe("addSpentToLine", () => {
   it("appends a new spent: token when none exists", () => {
-    expect(addSpentToLine("- [ ] READMEを書く", 15 * 60)).toBe("- [ ] READMEを書く spent:15m");
+    expect(addSpentToLine("- [ ] write README", 15 * 60)).toBe("- [ ] write README spent:15m");
   });
 
   it("accumulates onto the existing token instead of adding a second one", () => {
@@ -112,8 +112,8 @@ describe("addSpentToLine", () => {
   });
 
   it("does not touch a bare 'spent:' that has no digits, only the real token", () => {
-    const result = addSpentToLine("- [ ] 行末以外の  spent: spent:45m", 15 * 60);
-    expect(result).toBe("- [ ] 行末以外の  spent: spent:1h");
+    const result = addSpentToLine("- [ ] mid-line  spent: spent:45m", 15 * 60);
+    expect(result).toBe("- [ ] mid-line  spent: spent:1h");
   });
 
   it("preserves trailing content after the spent token", () => {

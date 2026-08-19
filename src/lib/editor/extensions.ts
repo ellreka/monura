@@ -21,16 +21,16 @@ export interface CreateMonuraExtensionsOptions {
 
 export const vimModeCompartment = new Compartment();
 
-// `:` によるExコマンド（:w, :q など）は自動保存・タブ切り替えというこのアプリの
-// ファイル操作モデルと噛み合わないため無効化する。Vimの状態はモジュール単位で
-// グローバルなので、ロード時に一度だけ解除すればよい。
-// 型定義上 ctx は string 必須だが、`:` は無コンテキスト（undefined）で登録されているため
-// undefined を渡す必要がある。
+// Disable the `:`-triggered Ex commands (:w, :q, etc.), because they don't mesh with this
+// app's file operation model of auto-save and tab switching. Vim state is module-level
+// global, so unbinding once at load time is enough.
+// The type definition makes ctx a required string, but `:` is registered with no context
+// (undefined), so we need to pass undefined.
 Vim.unmap(":", undefined as unknown as string);
 
 export function createMonuraExtensions(options: CreateMonuraExtensionsOptions = {}): Extension[] {
   return [
-    // vimはbasicSetup由来のキーマップより先に効かせる必要がある
+    // vim must take effect before the keymaps that come from basicSetup
     vimModeCompartment.of(options.vimMode ? [vim()] : []),
     basicSetup,
     keymap.of([indentWithTab]),

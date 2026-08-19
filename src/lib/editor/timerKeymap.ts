@@ -22,10 +22,10 @@ function createStartCommand(minutes: number, onRequestStart: (presetMinutes: num
 }
 
 /**
- * プリセット時間ごとにキーを割り当て、選択と計測開始を1操作で行えるようにする
- * （Mod-1/Mod-2/Mod-3 が presets[0]/presets[1]/presets[2] に対応）。
- * 停止は Mod-Enter に割り当てる。開始・停止の可否判定（タスク行以外・二重開始など）は
- * 呼び出し側（App.tsx）のロジックに委ねる。
+ * Assign a key per preset time so selection and starting measurement happen in one operation
+ * (Mod-1/Mod-2/Mod-3 correspond to presets[0]/presets[1]/presets[2]).
+ * Stopping is assigned to Mod-Enter. Whether starting/stopping is allowed (non-task line,
+ * double-start, etc.) is left to the caller's logic (App.tsx).
  */
 export function createTimerKeymap(options: TimerKeymapOptions) {
   const bindings: KeyBinding[] = options.presets.map((minutes, index) => ({

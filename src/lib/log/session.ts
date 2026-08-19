@@ -1,5 +1,11 @@
 export interface SessionRecord {
+  /** Schema version. Append-only files never rewrite past lines, so mixed versions are expected. */
+  v: 1;
+  /** The .md file the tracked line belonged to. */
+  file: string;
   startedAt: string;
+  /** Local timezone offset at tracking time (minutes; JST=540). Needed for the day boundary in daily aggregation. */
+  tzOffsetMinutes: number;
   presetMinutes: number;
   elapsedSeconds: number;
   lineText: string;
@@ -8,6 +14,7 @@ export interface SessionRecord {
 }
 
 export interface CreateSessionRecordInput {
+  file: string;
   startedAt: number;
   presetMinutes: number;
   elapsedSeconds: number;
@@ -16,10 +23,13 @@ export interface CreateSessionRecordInput {
   lineDeleted: boolean;
 }
 
-/** セッション履歴1件を作成する。計測時点のスナップショットとして焼き込む（後からの再解決はしない）。 */
+/** Creates one session history record. Bakes in a snapshot at tracking time (no later re-resolution). */
 export function createSessionRecord(input: CreateSessionRecordInput): SessionRecord {
   return {
+    v: 1,
+    file: input.file,
     startedAt: new Date(input.startedAt).toISOString(),
+    tzOffsetMinutes: -new Date(input.startedAt).getTimezoneOffset(),
     presetMinutes: input.presetMinutes,
     elapsedSeconds: input.elapsedSeconds,
     lineText: input.lineText,
@@ -28,9 +38,14 @@ export function createSessionRecord(input: CreateSessionRecordInput): SessionRec
   };
 }
 
+/** Log filename for monthly rotation (local month basis). */
+export function sessionLogFilename(d: Date): string {
+  return `sessions-${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}.jsonl`;
+}
+
 /**
- * セッション履歴の追記専用ストア（現時点ではメモリ内のみ）。
- * JSONLへの永続化は src-tauri 側のファイルI/Oが用意でき次第つなぎ込む。
+ * In-memory list of session history. Persistence (append to JSONL) happens at the
+ * same place as record creation (App.tsx timer-stop handling).
  */
 export class SessionLog {
   private records: SessionRecord[] = [];

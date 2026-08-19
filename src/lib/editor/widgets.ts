@@ -1,7 +1,7 @@
 import { EditorView, WidgetType } from "@codemirror/view";
 import { formatDurationMinutes } from "../parser";
 
-/** チェックリストの `[ ]` / `[x]` を差し替えるクリック可能なチェックボックス。 */
+/** Clickable checkbox that replaces the checklist's `[ ]` / `[x]`. */
 export class CheckboxWidget extends WidgetType {
   constructor(
     private readonly checked: boolean,
@@ -42,7 +42,7 @@ function toggleCheckboxAtLine(view: EditorView, lineNumber: number): void {
   view.dispatch({ changes: { from, to, insert: isChecked ? "[ ]" : "[x]" } });
 }
 
-/** 親タスク行末に表示する Σ 集計バッジ。 */
+/** Σ aggregation badge shown at the end of a parent task line. */
 export class SumBadgeWidget extends WidgetType {
   constructor(private readonly seconds: number) {
     super();
@@ -56,12 +56,12 @@ export class SumBadgeWidget extends WidgetType {
     const el = document.createElement("span");
     el.className = "cm-sum-badge";
     el.textContent = `Σ ${formatDurationMinutes(this.seconds)}`;
-    el.title = "自身 + 子孫タスクの spent 合計（表示のみ。ファイルへは書き込まれません）";
+    el.title = "Total spent for self + descendant tasks (display only; not written to the file)";
     return el;
   }
 }
 
-/** `spent:` トークンを差し替える、カーソルが当たっていない行用の簡略表示ウィジェット（秒は省略）。 */
+/** Simplified display widget (seconds omitted) that replaces the `spent:` token on lines without the cursor. */
 export class SpentWidget extends WidgetType {
   constructor(private readonly seconds: number) {
     super();

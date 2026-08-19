@@ -6,10 +6,21 @@ export interface TimerState {
   startedAt: number | null;
 }
 
-/** 選択可能なプリセット時間（分）。 */
-export const TIMER_PRESETS = [10, 30, 60] as const;
+/** Dev preset (seconds) to quickly verify notifications and expiry. Excluded from production builds. */
+export const DEBUG_PRESET_SECONDS = 5;
 
-export function createIdleTimer(presetMinutes: number = TIMER_PRESETS[TIMER_PRESETS.length - 1]): TimerState {
+/** The preset selected at startup (minutes). */
+export const DEFAULT_PRESET_MINUTES = 60;
+
+/**
+ * Selectable preset times (minutes).
+ * In dev only, appends a short preset at the end (kept last so Mod-1..3 stay aligned with production).
+ */
+export const TIMER_PRESETS: readonly number[] = import.meta.env.DEV
+  ? [10, 30, DEFAULT_PRESET_MINUTES, DEBUG_PRESET_SECONDS / 60]
+  : [10, 30, DEFAULT_PRESET_MINUTES];
+
+export function createIdleTimer(presetMinutes: number = DEFAULT_PRESET_MINUTES): TimerState {
   return { status: "idle", presetMinutes, startedAt: null };
 }
 
@@ -17,7 +28,7 @@ export function startTimer(presetMinutes: number, now: number): TimerState {
   return { status: "running", presetMinutes, startedAt: now };
 }
 
-/** 現在時刻における経過ミリ秒。停止中は常に 0。 */
+/** Elapsed milliseconds at the given time; always 0 when idle. */
 export function computeElapsedMs(state: TimerState, now: number): number {
   if (state.status !== "running" || state.startedAt === null) return 0;
   return Math.max(0, now - state.startedAt);
@@ -28,19 +39,19 @@ export interface StopResult {
   elapsedSeconds: number;
 }
 
-/** タイマーを停止し、加算すべき経過秒数（切り捨て）とアイドル状態を返す。 */
+/** Stops the timer and returns the elapsed seconds to add (floored) plus the idle state. */
 export function stopTimer(state: TimerState, now: number): StopResult {
   const elapsedMs = computeElapsedMs(state, now);
   const elapsedSeconds = Math.floor(elapsedMs / 1000);
   return { state: createIdleTimer(state.presetMinutes), elapsedSeconds };
 }
 
-/** プリセット時間に到達したか。 */
+/** Whether the preset time has been reached. */
 export function isExpired(state: TimerState, now: number): boolean {
   return computeElapsedMs(state, now) >= state.presetMinutes * 60000;
 }
 
-/** ミリ秒を mm:ss 形式に整形する（時計表示）。 */
+/** Formats milliseconds as mm:ss (clock display). */
 export function formatClock(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
   const m = Math.floor(totalSeconds / 60);
@@ -48,8 +59,9 @@ export function formatClock(ms: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-/** プリセット分数を "10m" / "1h" のようなラベルに整形する。 */
+/** Formats preset minutes as a label like "5s" / "10m" / "1h". */
 export function formatPresetLabel(minutes: number): string {
+  if (minutes < 1) return `${Math.round(minutes * 60)}s`;
   if (minutes >= 60 && minutes % 60 === 0) return `${minutes / 60}h`;
   return `${minutes}m`;
 }

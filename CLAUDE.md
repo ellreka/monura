@@ -120,11 +120,15 @@
 ## ディレクトリ構成
 
 ```
-src/            # フロントエンド (TypeScript)
-  editor/       # CodeMirror拡張（タスク認識、spentパース、装飾、計測中行の追跡）
-  timer/        # タイマー状態管理
-  parser/       # spent: / +project 記法のパース・シリアライズ（純粋関数、Tauri非依存）
-  log/          # セッションログの読み書き
+src/              # フロントエンド (TypeScript)
+  components/     # React ビュー（Editor, Sidebar, LogView, TimerBar, SettingsView, IconRail）
+  lib/            # 非UIモジュール（ロジック・Tauri IPC 境界層）
+    editor/       # CodeMirror拡張（タスク認識、spentパース、装飾、計測中行の追跡）
+    files/        # .md ファイルI/O（Tauri IPC の境界層。改行コード保持などの純粋関数を含む）
+    log/          # セッションログのレコード定義と集計（純粋関数。LogView のデータソース）
+    parser/       # spent: / +project 記法のパース・シリアライズ（純粋関数、Tauri非依存）
+    timer/        # タイマー状態管理
+    notify.ts     # OS通知（Tauri IPC の境界層。タイマー満了時に呼ぶ）
 src-tauri/      # Rust側（ファイルI/O、ウォッチ、トレイ、通知）
 docs/           # SPEC.md, ARCHITECTURE.md, DATA_MODEL.md 等
 ```

@@ -5,16 +5,17 @@ import { getCM } from "@replit/codemirror-vim";
 const LIST_MARKER = /^(\s*)([-*+])(\s+)(\[[ xX]\]\s*)?/;
 
 /**
- * `markdown()` 標準の Enter ハンドラ（insertNewlineContinueMarkup）は
- * CommonMark の loose list 判定に依存し、リスト内に空行が1つでもあると
- * 新規行の前に余分な空行を挿入してしまう。
- * monura はタスク行の間に自由なメモ・空行が混在する前提のため、
- * 構文木を見ずテキストの行頭マーカーだけで判定するシンプルな版に差し替える。
+ * The standard Enter handler from `markdown()` (insertNewlineContinueMarkup) relies on
+ * CommonMark's loose-list detection and inserts an extra blank line before the new line
+ * whenever the list contains even one blank line.
+ * Since monura assumes free interleaving of memos and blank lines between task lines,
+ * we replace it with a simple version that judges only by the line-start marker without
+ * looking at the syntax tree.
  */
 const continueList: Command = (view) => {
-  // vimのNORMALモードではEnterは行移動コマンドなので横取りしない。
-  // このkeymapはCodeMirrorのdomEventHandlers内でvimのkeydownハンドラより先に評価されるため、
-  // ここで明示的にモードを見て委譲する必要がある。
+  // In vim NORMAL mode Enter is a line-move command, so don't intercept it.
+  // This keymap is evaluated before vim's keydown handler inside CodeMirror's domEventHandlers,
+  // so we need to explicitly check the mode here and delegate.
   const cm = getCM(view);
   if (cm && cm.state.vim && !cm.state.vim.insertMode) return false;
 
@@ -32,7 +33,7 @@ const continueList: Command = (view) => {
     handled = true;
     const rest = line.text.slice(match[0].length);
 
-    // 空のリスト項目でEnter: マーカーを消してリストを抜ける
+    // Enter on an empty list item: remove the marker and exit the list
     if (rest.trim().length === 0 && range.from >= line.to) {
       return {
         range: EditorSelection.cursor(line.from),

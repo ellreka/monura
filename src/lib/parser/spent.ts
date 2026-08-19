@@ -7,8 +7,8 @@ export interface SpentMatch {
 const SPENT_TOKEN = /spent:(?=\d)(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?/g;
 
 /**
- * 単一の "1h10m30s" / "45m" / "1h" / "30s" 形式をパースする。
- * digit が続かない `spent:` (不正表記) は呼び出し側の正規表現で除外される前提。
+ * Parses a single "1h10m30s" / "45m" / "1h" / "30s" form.
+ * A `spent:` not followed by a digit (invalid) is assumed to be excluded by the caller's regex.
  */
 function parseDurationSeconds(hours: string | undefined, minutes: string | undefined, seconds: string | undefined): number | null {
   if (!hours && !minutes && !seconds) return null;
@@ -18,7 +18,7 @@ function parseDurationSeconds(hours: string | undefined, minutes: string | undef
   return h * 3600 + m * 60 + s;
 }
 
-/** 行内に現れる有効な `spent:` トークンをすべて列挙する（不正表記・値なしは無視）。 */
+/** Lists every valid `spent:` token on the line (ignoring invalid or valueless forms). */
 export function matchSpentTokens(text: string): SpentMatch[] {
   const matches: SpentMatch[] = [];
   SPENT_TOKEN.lastIndex = 0;
@@ -31,12 +31,12 @@ export function matchSpentTokens(text: string): SpentMatch[] {
   return matches;
 }
 
-/** 行内の有効な spent: トークンの合計値（秒）。複数存在する場合は合算する。 */
+/** Total value of the valid spent: tokens on the line, in seconds. Multiple tokens are summed. */
 export function extractSpentSeconds(text: string): number {
   return matchSpentTokens(text).reduce((sum, m) => sum + m.seconds, 0);
 }
 
-/** 秒を `1h10m30s` / `45m` / `2h` / `30s` 形式に整形する。値が0の成分は省略する。 */
+/** Formats seconds as `1h10m30s` / `45m` / `2h` / `30s`, omitting zero-valued components. */
 export function formatDuration(totalSeconds: number): string {
   const seconds = Math.max(0, Math.round(totalSeconds));
   const h = Math.floor(seconds / 3600);
@@ -49,7 +49,7 @@ export function formatDuration(totalSeconds: number): string {
   return parts.join("");
 }
 
-/** 秒を分単位に丸めて `1h10m` / `45m` / `2h` 形式に整形する（秒は表示しない、簡略表示用）。 */
+/** Formats seconds rounded to minutes as `1h10m` / `45m` / `2h` (no seconds; compact display). */
 export function formatDurationMinutes(totalSeconds: number): string {
   const minutes = Math.max(0, Math.round(totalSeconds / 60));
   const h = Math.floor(minutes / 60);
@@ -60,9 +60,9 @@ export function formatDurationMinutes(totalSeconds: number): string {
 }
 
 /**
- * 行に spent: を加算した新しい行テキストを返す。
- * 既存の有効な spent: トークンがあれば最後の1つを合計値で置き換え、それ以外は削除する。
- * 存在しなければ行末に追記する。
+ * Returns new line text with the given seconds added to a spent: token.
+ * If existing valid spent: tokens are present, replaces the last one with the total and removes the rest.
+ * If none exists, appends one at the end of the line.
  */
 export function addSpentToLine(line: string, secondsToAdd: number): string {
   if (secondsToAdd <= 0) return line;
@@ -81,7 +81,7 @@ export function addSpentToLine(line: string, secondsToAdd: number): string {
     if (t === lastToken) {
       return { from: t.index, to: t.index + t.length, insert: `spent:${formatDuration(newTotal)}` };
     }
-    // 重複した spent: トークンは削除する。隣接する空白を1つ道連れにして二重スペースを防ぐ。
+    // Remove duplicated spent: tokens, taking one adjacent whitespace with each to avoid double spaces.
     let from = t.index;
     let to = t.index + t.length;
     if (from > 0 && /[ \t]/.test(line[from - 1])) {

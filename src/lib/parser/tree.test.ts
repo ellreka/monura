@@ -17,7 +17,7 @@ describe("parseLine", () => {
   });
 
   it("treats a plain memo line as non-task and does not interfere", () => {
-    const line = parseLine("今日は集中できなかった。", 1);
+    const line = parseLine("I couldn't focus today.", 1);
     expect(line.isTask).toBe(false);
     expect(line.spentSeconds).toBe(0);
   });

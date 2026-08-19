@@ -6,7 +6,7 @@ export interface ProjectMatch {
 
 const PROJECT_TOKEN = /(^|\s)\+([A-Za-z0-9_-]+)/g;
 
-/** 行内の +project トークンをすべて列挙する。 */
+/** Lists all +project tokens on the line. */
 export function matchProjectTokens(text: string): ProjectMatch[] {
   const matches: ProjectMatch[] = [];
   PROJECT_TOKEN.lastIndex = 0;
@@ -18,7 +18,7 @@ export function matchProjectTokens(text: string): ProjectMatch[] {
   return matches;
 }
 
-/** 行自身が持つ +project タグ名の一覧（重複除去）。 */
+/** Returns the list of +project tag names the line itself holds (deduplicated). */
 export function extractProjects(text: string): string[] {
   const names = matchProjectTokens(text).map((m) => m.name);
   return Array.from(new Set(names));

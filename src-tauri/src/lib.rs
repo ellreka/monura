@@ -1,13 +1,31 @@
+mod commands;
+mod watch;
+
 use tauri::menu::{MenuBuilder, MenuItem, SubmenuBuilder};
 use tauri::Emitter;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![
+            commands::list_md_files,
+            commands::read_md_file,
+            commands::write_md_file,
+            commands::create_md_file,
+            commands::rename_md_file,
+            commands::delete_md_file,
+            commands::ensure_default_data_dir,
+            commands::append_session_log,
+            commands::list_session_logs,
+            commands::read_session_log,
+            commands::send_notification,
+            watch::watch_data_dir,
+        ])
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .manage(watch::WatcherState(std::sync::Mutex::new(None)))
         .setup(|app| {
             let handle = app.handle();
 

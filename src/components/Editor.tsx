@@ -1,9 +1,13 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
-import { EditorState, MapMode } from "@codemirror/state";
+import { Annotation, EditorState, MapMode } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { getCM, vim } from "@replit/codemirror-vim";
-import { createMonuraExtensions, setUiStateEffect, uiStateField, vimModeCompartment } from "../editor";
-import { addSpentToLine, computeTaskMeta, parseLine } from "../parser";
+import { createMonuraExtensions, setUiStateEffect, uiStateField, vimModeCompartment } from "../lib/editor";
+import { findLineByText } from "../lib/editor/lineMatch";
+import { addSpentToLine, computeTaskMeta, parseLine } from "../lib/parser";
+
+/** Annotation marking a doc replacement that originates externally (from disk). Line tracking is handled by the imperative side. */
+const externalReloadAnnotation = Annotation.define<boolean>();
 
 export interface CursorLineInfo {
   lineNumber: number;
@@ -25,10 +29,28 @@ export interface StopTrackingResult {
   projects: string[];
 }
 
+export interface AppliedSpentResult {
+  lineText: string;
+  projects: string[];
+}
+
 export interface EditorHandle {
   getCursorLine(): CursorLineInfo | null;
   startTracking(lineNumber: number): void;
   stopTracking(elapsedSeconds: number): StopTrackingResult;
+  /** Inheritance-resolved projects for the tracked line. null while not tracking. */
+  getTrackedProjects(): string[] | null;
+  /**
+   * Replaces the whole doc (used to reflect external edits; never called from our own edit path).
+   * While tracking, re-identifies the tracked line by exact text match; if not found,
+   * calls onTrackedLineLost (merging with the same flow as line deletion). Undo history is reset.
+   */
+  reloadContent(text: string): void;
+  /**
+   * Adds spent: to the given line (used to pick a new recording target after the tracked line is lost).
+   * Returns null if the line does not exist.
+   */
+  applySpentToLine(lineNumber: number, elapsedSeconds: number): AppliedSpentResult | null;
   setVimMode(enabled: boolean): void;
 }
 
@@ -39,6 +61,8 @@ interface EditorProps {
   onVimStatusChange?: (status: string | null) => void;
   onCursorLineChange?: (info: CursorLineChangeInfo) => void;
   onTrackedLineChange?: (info: TrackedLineChangeInfo) => void;
+  /** Called when the tracked line is lost (deleted, or not re-identified after an external edit). */
+  onTrackedLineLost?: () => void;
   onRequestStartPreset?: (presetMinutes: number) => void;
   onRequestStop?: () => void;
 }
@@ -51,6 +75,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     onVimStatusChange,
     onCursorLineChange,
     onTrackedLineChange,
+    onTrackedLineLost,
     onRequestStartPreset,
     onRequestStop,
   },
@@ -60,6 +85,8 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   const viewRef = useRef<EditorView | null>(null);
   const trackedAnchorRef = useRef<number | null>(null);
   const trackedSnapshotRef = useRef<{ text: string; projects: string[] } | null>(null);
+  /** Latest text of the tracked line (the re-identification key after external edits). */
+  const trackedTextRef = useRef<string | null>(null);
   const vimListenerCleanupRef = useRef<(() => void) | null>(null);
 
   const onChangeRef = useRef(onChange);
@@ -70,6 +97,8 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   onCursorLineChangeRef.current = onCursorLineChange;
   const onTrackedLineChangeRef = useRef(onTrackedLineChange);
   onTrackedLineChangeRef.current = onTrackedLineChange;
+  const onTrackedLineLostRef = useRef(onTrackedLineLost);
+  onTrackedLineLostRef.current = onTrackedLineLost;
   const onRequestStartPresetRef = useRef(onRequestStartPreset);
   onRequestStartPresetRef.current = onRequestStartPreset;
   const onRequestStopRef = useRef(onRequestStop);
@@ -106,9 +135,12 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
             onRequestStartPreset: (presetMinutes) => onRequestStartPresetRef.current?.(presetMinutes),
             onRequestStop: () => onRequestStopRef.current?.(),
           }),
-          // 計測中の行を、編集による位置ずれに追従させる（メモリ内のみの追跡。永続化しない）
+          // Keep the tracked line following position shifts caused by edits (in-memory tracking only; not persisted)
           EditorView.updateListener.of((update) => {
-            if (update.docChanged && trackedAnchorRef.current !== null) {
+            const isExternalReload = update.transactions.some(
+              (tr) => tr.annotation(externalReloadAnnotation) === true,
+            );
+            if (update.docChanged && !isExternalReload && trackedAnchorRef.current !== null) {
               const mapped = update.changes.mapPos(trackedAnchorRef.current, -1, MapMode.TrackDel);
               trackedAnchorRef.current = mapped;
               const nextLine = mapped === null ? null : update.state.doc.lineAt(mapped).number;
@@ -116,8 +148,12 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
               if (currentActiveLine !== nextLine) {
                 update.view.dispatch({ effects: setUiStateEffect.of({ activeLine: nextLine }) });
               }
-              if (nextLine !== null) {
+              if (nextLine === null) {
+                // Line deletion is not blocking; the user picks the recording target when tracking ends
+                onTrackedLineLostRef.current?.();
+              } else {
                 const trackedLine = update.state.doc.line(nextLine);
+                trackedTextRef.current = trackedLine.text;
                 onTrackedLineChangeRef.current?.({ lineNumber: nextLine, text: trackedLine.text });
               }
             }
@@ -159,6 +195,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         if (!view || lineNumber > view.state.doc.lines) return;
         const line = view.state.doc.line(lineNumber);
         trackedAnchorRef.current = line.from;
+        trackedTextRef.current = line.text;
         const meta = computeTaskMeta(view.state.doc.toString()).get(lineNumber);
         trackedSnapshotRef.current = { text: line.text, projects: meta?.projects ?? [] };
         view.dispatch({ effects: setUiStateEffect.of({ activeLine: lineNumber }) });
@@ -169,6 +206,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         const snapshot = trackedSnapshotRef.current;
         const anchor = trackedAnchorRef.current;
         trackedAnchorRef.current = null;
+        trackedTextRef.current = null;
         trackedSnapshotRef.current = null;
 
         if (!view || anchor === null) {
@@ -184,6 +222,60 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         });
         const meta = computeTaskMeta(view.state.doc.toString()).get(view.state.doc.lineAt(anchor).number);
         return { deleted: false, lineText: updatedText, projects: meta?.projects ?? snapshot?.projects ?? [] };
+      },
+
+      getTrackedProjects() {
+        return trackedSnapshotRef.current?.projects ?? null;
+      },
+
+      reloadContent(text) {
+        const view = viewRef.current;
+        if (!view || view.state.doc.toString() === text) return;
+        const trackedAnchor = trackedAnchorRef.current;
+        const trackedText = trackedAnchor === null ? null : trackedTextRef.current;
+        const trackedLineNumber = trackedAnchor === null ? null : view.state.doc.lineAt(trackedAnchor).number;
+        const head = view.state.selection.main.head;
+        const cursorLine = view.state.doc.lineAt(head);
+        const cursorColumn = head - cursorLine.from;
+
+        // External replacement. History isolation is unsupported (external edits are assumed infrequent).
+        view.dispatch({
+          changes: { from: 0, to: view.state.doc.length, insert: text },
+          annotations: externalReloadAnnotation.of(true),
+        });
+
+        // A full-doc replacement jumps the cursor to the end, so restore it near the same line/column
+        const restoredLine = view.state.doc.line(Math.min(cursorLine.number, view.state.doc.lines));
+        view.dispatch({
+          selection: { anchor: Math.min(restoredLine.from + cursorColumn, restoredLine.to) },
+        });
+
+        if (trackedText === null) return;
+        // The design has no persistent ID, so re-identify the tracked line by exact text match
+        const found = findLineByText(view.state.doc, trackedText, trackedLineNumber);
+        if (found === null) {
+          trackedAnchorRef.current = null;
+          trackedTextRef.current = null;
+          view.dispatch({ effects: setUiStateEffect.of({ activeLine: null }) });
+          onTrackedLineLostRef.current?.();
+          return;
+        }
+        trackedAnchorRef.current = found.from;
+        trackedTextRef.current = found.text;
+        view.dispatch({ effects: setUiStateEffect.of({ activeLine: found.number }) });
+        onTrackedLineChangeRef.current?.({ lineNumber: found.number, text: found.text });
+      },
+
+      applySpentToLine(lineNumber, elapsedSeconds) {
+        const view = viewRef.current;
+        if (!view || lineNumber < 1 || lineNumber > view.state.doc.lines) return null;
+        const line = view.state.doc.line(lineNumber);
+        const updatedText = elapsedSeconds > 0 ? addSpentToLine(line.text, elapsedSeconds) : line.text;
+        if (updatedText !== line.text) {
+          view.dispatch({ changes: { from: line.from, to: line.to, insert: updatedText } });
+        }
+        const meta = computeTaskMeta(view.state.doc.toString()).get(lineNumber);
+        return { lineText: updatedText, projects: meta?.projects ?? [] };
       },
 
       setVimMode(enabled) {

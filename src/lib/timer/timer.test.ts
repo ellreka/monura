@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  DEBUG_PRESET_SECONDS,
+  DEFAULT_PRESET_MINUTES,
+  TIMER_PRESETS,
   computeElapsedMs,
   createIdleTimer,
   formatClock,
@@ -96,5 +99,21 @@ describe("formatPresetLabel", () => {
 
   it("formats non-hour-aligned large presets in minutes", () => {
     expect(formatPresetLabel(90)).toBe("90m");
+  });
+
+  it("formats sub-minute debug presets in seconds", () => {
+    expect(formatPresetLabel(DEBUG_PRESET_SECONDS / 60)).toBe("5s");
+    expect(formatPresetLabel(0.5)).toBe("30s");
+  });
+});
+
+describe("TIMER_PRESETS", () => {
+  it("keeps Mod-1..3 assigned to the production presets", () => {
+    expect(TIMER_PRESETS.slice(0, 3)).toEqual([10, 30, DEFAULT_PRESET_MINUTES]);
+  });
+
+  it("appends the debug preset last in dev builds only", () => {
+    expect(import.meta.env.DEV).toBe(true);
+    expect(TIMER_PRESETS[TIMER_PRESETS.length - 1]).toBe(DEBUG_PRESET_SECONDS / 60);
   });
 });

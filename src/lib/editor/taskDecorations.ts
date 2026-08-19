@@ -89,7 +89,7 @@ export const taskDecorationsField = StateField.define<DecorationSet>({
   provide: (field) => EditorView.decorations.from(field),
 });
 
-/** 計測中の行を強調表示する（行背景 + 左ボーダー）。ウィジェット装飾とは別フィールドにして順序問題を避ける。 */
+/** Highlight the line currently being measured (line background + left border). Kept as a separate field from widget decorations to avoid ordering issues. */
 export const activeLineField = StateField.define<DecorationSet>({
   create(state) {
     return buildActiveLineDecorations(state);

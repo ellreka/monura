@@ -1,7 +1,16 @@
-import { TIMER_PRESETS, formatClock, formatPresetLabel } from "../timer";
+import { formatDuration } from "../lib/log/analytics";
+import { TIMER_PRESETS, formatClock, formatPresetLabel } from "../lib/timer";
+
+/** A record of a finished measurement whose tracked line was lost (not finalized until a recording target is chosen). */
+export interface PendingRecord {
+  elapsedSeconds: number;
+  lineText: string;
+}
 
 interface TimerBarProps {
   trackingLabel: string | null;
+  /** The tracked line was lost while measuring. */
+  trackedLost: boolean;
   isRunning: boolean;
   canStart: boolean;
   presetMinutes: number;
@@ -9,10 +18,17 @@ interface TimerBarProps {
   onSelectPreset: (minutes: number) => void;
   onStart: () => void;
   onStop: () => void;
+  /** Non-null means waiting to choose a recording target. */
+  pending: PendingRecord | null;
+  /** The cursor is on a task line and can be chosen as the add target. */
+  canAssignToCursor: boolean;
+  onResolveLogOnly: () => void;
+  onResolveAssignToCursor: () => void;
 }
 
 export function TimerBar({
   trackingLabel,
+  trackedLost,
   isRunning,
   canStart,
   presetMinutes,
@@ -20,16 +36,50 @@ export function TimerBar({
   onSelectPreset,
   onStart,
   onStop,
+  pending,
+  canAssignToCursor,
+  onResolveLogOnly,
+  onResolveAssignToCursor,
 }: TimerBarProps) {
   const totalMs = presetMinutes * 60 * 1000;
   const remainingMs = Math.max(0, totalMs - elapsedMs);
   const remainingRatio = isRunning ? Math.min(1, remainingMs / totalMs) : 0;
 
+  // Waiting to choose a recording target. Ask non-destructively on the timer bar rather than in a modal
+  if (pending) {
+    return (
+      <footer className="timer-bar is-resolving">
+        <div className="timer-bar-label" title={pending.lineText}>
+          <span className="timer-bar-warn">Tracked line not found.</span>
+          Choose where to record {formatDuration(pending.elapsedSeconds)}
+        </div>
+        <div className="timer-bar-controls">
+          <button type="button" className="timer-resolve" onClick={onResolveLogOnly}>
+            Log only
+          </button>
+          <button
+            type="button"
+            className="timer-resolve is-primary"
+            onClick={onResolveAssignToCursor}
+            disabled={!canAssignToCursor}
+            title={canAssignToCursor ? undefined : "Place the cursor on the line to add to"}
+          >
+            Add to cursor line
+          </button>
+        </div>
+      </footer>
+    );
+  }
+
   return (
     <footer className="timer-bar">
       <div className="timer-bar-fill" aria-hidden="true" style={{ width: `${remainingRatio * 100}%` }} />
       <div className="timer-bar-label" title={trackingLabel ?? undefined}>
-        {trackingLabel ?? "カーソルのある行を計測します"}
+        {trackedLost ? (
+          <span className="timer-bar-warn">Tracked line not found (choose destination when stopping)</span>
+        ) : (
+          (trackingLabel ?? "Track the line under the cursor")
+        )}
       </div>
       <div className="timer-bar-controls">
         <div className="timer-bar-presets">
@@ -50,8 +100,8 @@ export function TimerBar({
           className={"timer-toggle" + (isRunning ? " is-running" : "")}
           onClick={() => (isRunning ? onStop() : onStart())}
           disabled={!isRunning && !canStart}
-          aria-label={isRunning ? "計測を停止" : "計測を開始"}
-          title={!isRunning && !canStart ? "カーソルをタスク行（- [ ]）に置いてください" : undefined}
+          aria-label={isRunning ? "Stop tracking" : "Start tracking"}
+          title={!isRunning && !canStart ? "Place the cursor on a task line (- [ ])" : undefined}
         >
           {isRunning ? "■" : "▶"}
         </button>

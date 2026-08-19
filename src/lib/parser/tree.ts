@@ -25,7 +25,7 @@ export interface TaskMeta {
   projects: string[];
 }
 
-/** 1行を解析する。チェックリスト行でなければ isTask=false になる。 */
+/** Parses a single line. Lines that are not checklist lines get isTask=false. */
 export function parseLine(raw: string, lineNumber: number): TaskLine {
   const match = TASK_LINE.exec(raw);
   if (!match) {
@@ -53,12 +53,12 @@ export function parseLine(raw: string, lineNumber: number): TaskLine {
   };
 }
 
-/** マークダウン全文を行ごとに解析する。 */
+/** Parses the full markdown text line by line. */
 export function parseLines(content: string): TaskLine[] {
   return content.split("\n").map((raw, i) => parseLine(raw, i + 1));
 }
 
-/** タスク行だけをインデントに基づいて木構造に組み立てる。非タスク行は木に含めない。 */
+/** Builds a tree from only the task lines, based on indentation. Non-task lines are excluded. */
 export function buildTaskTree(lines: readonly TaskLine[]): TaskNode[] {
   const roots: TaskNode[] = [];
   const stack: TaskNode[] = [];
@@ -81,22 +81,22 @@ export function buildTaskTree(lines: readonly TaskLine[]): TaskNode[] {
   return roots;
 }
 
-/** 自身 + 子孫すべての spent 合計（表示専用の計算であり、行への書き込みは行わない）。 */
+/** Total spent of self plus all descendants (display-only; does not write back to the line). */
 export function aggregateSpent(node: TaskNode): number {
   return node.spentSeconds + node.children.reduce((sum, child) => sum + aggregateSpent(child), 0);
 }
 
-/** 自身と子孫すべてが完了しているか。未完了の子孫が1つでもあれば false。 */
+/** Whether self and all descendants are complete. False if even one descendant is incomplete. */
 export function isSubtreeComplete(node: TaskNode): boolean {
   return node.checked && node.children.every(isSubtreeComplete);
 }
 
-/** 親のプロジェクトタグを子孫に継承した、解決済みタグ一覧（表示・集計専用）。 */
+/** Resolved tag list inheriting the parent's project tags into descendants (display/aggregation only). */
 export function resolveProjects(node: TaskNode, inherited: readonly string[] = []): string[] {
   return Array.from(new Set([...inherited, ...node.ownProjects]));
 }
 
-/** 木全体を走査し、行番号ごとの表示用メタ情報（集計・完了判定・継承タグ）を計算する。 */
+/** Traverses the whole tree and computes per-line display metadata (aggregation, completion, inherited tags). */
 export function computeTaskMeta(content: string): Map<number, TaskMeta> {
   const lines = parseLines(content);
   const roots = buildTaskTree(lines);
