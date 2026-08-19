@@ -247,9 +247,11 @@ function App() {
         }),
       );
       if (name) {
-        if (!names.includes(name)) {
+        const newIndex = names.indexOf(name);
+        if (newIndex < 0) {
           setActiveIndex(0);
         } else {
+          setActiveIndex(newIndex);
           const disk = await readMdFile(dataDir, name);
           if (pendingSaveRef.current !== null) return;
           const state = filesRef.current[activeIndexRef.current];
@@ -363,8 +365,8 @@ function App() {
         return;
       }
     }
-    setFiles((prev) => [...prev, { name, content: "", eol: "\n" as Eol }]);
-    setActiveIndex(files.length);
+    setFiles((prev) => [{ name, content: "", eol: "\n" as Eol }, ...prev]);
+    setActiveIndex(0);
   };
 
   const handleRenameFile = async (from: string, to: string) => {

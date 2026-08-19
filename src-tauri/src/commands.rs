@@ -23,9 +23,9 @@ fn md_path(dir: &str, name: &str) -> Result<PathBuf, String> {
     Ok(Path::new(dir).join(name))
 }
 
-/// List .md file names in the directory (hidden files excluded, in creation order).
-/// Creation order = ascending creation time (oldest first). Since the creation time is immutable,
-/// the order doesn't shift on edit; only newly created files are appended at the end.
+/// List .md file names in the directory (hidden files excluded, newest-first).
+/// Order = descending creation time (newest first). Since the creation time is immutable,
+/// the order doesn't shift on edit; newly created files always appear at the top.
 #[tauri::command]
 pub fn list_md_files(dir: String) -> Result<Vec<String>, String> {
     let mut entries = Vec::new();
@@ -41,7 +41,7 @@ pub fn list_md_files(dir: String) -> Result<Vec<String>, String> {
         let created = entry.metadata().map(|m| created_key(&m)).unwrap_or((0, 0));
         entries.push((name, created));
     }
-    entries.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
+    entries.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| b.0.cmp(&a.0)));
     Ok(entries.into_iter().map(|(name, _)| name).collect())
 }
 
@@ -231,7 +231,7 @@ mod tests {
     }
 
     #[test]
-    fn list_md_files_sorted_by_creation_order() {
+    fn list_md_files_sorted_newest_first() {
         let dir = std::env::temp_dir().join(format!("monura-list-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -245,6 +245,7 @@ mod tests {
 
         let result = list_md_files(dir.to_string_lossy().into_owned());
         let _ = std::fs::remove_dir_all(&dir);
-        assert_eq!(result.unwrap(), vec!["ccc.md", "bbb.md", "aaa.md"]);
+        // aaa.md was created last (newest), so it sorts first.
+        assert_eq!(result.unwrap(), vec!["aaa.md", "bbb.md", "ccc.md"]);
     }
 }
