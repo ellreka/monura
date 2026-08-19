@@ -13,6 +13,8 @@
   --wash-rgb: 51, 46, 38;
   --shadow-rgb: 51, 46, 38;
   --rail-width: 44px;
+  /* Reserves space below scrollable views (log/settings) so their content never sits under the floating timer bar (74px tall, 16px off the bottom). */
+  --timer-bar-clearance: 110px;
 
   font-family: "SF Mono", "Menlo", "Consolas", ui-monospace, "Hiragino Kaku Gothic ProN", "Hiragino Sans", sans-serif;
   color: var(--ink);
@@ -511,7 +513,7 @@ button {
 .settings-view {
   height: 100%;
   overflow-y: auto;
-  padding: 20px 28px;
+  padding: 20px 28px var(--timer-bar-clearance);
 }
 
 .view-title {
@@ -787,7 +789,7 @@ button {
 .log-view {
   height: 100%;
   overflow-y: auto;
-  padding: 20px 28px;
+  padding: 20px 28px var(--timer-bar-clearance);
 }
 
 .log-header {

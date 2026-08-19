@@ -63,6 +63,8 @@ export interface EditorHandle {
    * Returns null if the line does not exist.
    */
   applySpentToLine(lineNumber: number, elapsedSeconds: number): AppliedSpentResult | null;
+  /** Moves DOM focus into the editor (e.g. after a click on a chrome button, like starting the timer). */
+  focus(): void;
   setVimMode(enabled: boolean): void;
   setTheme(dark: boolean): void;
   setTimerKeymap(presets: readonly PresetKeymapEntry[], toggleKey: string | null): void;
@@ -320,6 +322,10 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         }
         const meta = computeTaskMeta(view.state.doc.toString()).get(lineNumber);
         return { lineText: updatedText, projects: meta?.projects ?? [] };
+      },
+
+      focus() {
+        viewRef.current?.focus();
       },
 
       setVimMode(enabled) {

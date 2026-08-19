@@ -88,7 +88,8 @@ function App() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [vimMode, setVimMode] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
-  const [presetMinutes, setPresetMinutes] = useState<number>(DEFAULT_PRESET_MINUTES);
+  /** Preset 1 (the first slot) is the startup selection — guarantees a preset is always highlighted, even if slot 3 (default 1h) was customized away. */
+  const [presetMinutes, setPresetMinutes] = useState<number>(() => compactPresets(DEFAULT_PRESETS)[0] ?? DEFAULT_PRESET_MINUTES);
   const [presetSlots, setPresetSlots] = useState<(number | null)[]>(() => [...DEFAULT_PRESETS]);
   const [shortcuts, setShortcuts] = useState<TimerShortcuts>(createDefaultTimerShortcuts);
   const [timerState, setTimerState] = useState<TimerState>(() => createIdleTimer(presetMinutes));
@@ -98,7 +99,7 @@ function App() {
   /** The tracked line was lost during an active session (deleted or unidentifiable after an external edit). */
   const [trackedLost, setTrackedLost] = useState(false);
   const [pendingResolution, setPendingResolution] = useState<PendingResolution | null>(null);
-  const [isCursorOnTask, setIsCursorOnTask] = useState(false);
+  const [focusedTaskLabel, setFocusedTaskLabel] = useState<string | null>(null);
   const [view, setView] = useState<AppView>("editor");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [logRefreshKey, setLogRefreshKey] = useState(0);
@@ -111,6 +112,7 @@ function App() {
   const applyingExternalRef = useRef(false);
 
   const isRunning = timerState.status === "running";
+  const isCursorOnTask = focusedTaskLabel !== null;
   const activeFile = files[activeIndex];
   const presets = compactPresets(presetSlots);
   const presetKeymap = compactPresetShortcuts(presetSlots, shortcuts.presets);
@@ -178,6 +180,7 @@ function App() {
         setVimMode(settings.vimMode);
         setTheme(settings.theme);
         setPresetSlots(settings.presets);
+        setPresetMinutes(compactPresets(settings.presets)[0] ?? DEFAULT_PRESET_MINUTES);
         setShortcuts(settings.shortcuts);
       } catch (e) {
         console.error("settings load failed:", e);
@@ -475,6 +478,7 @@ function App() {
     setTrackedLost(false);
     setTimerState(startTimer(presetMinutes, Date.now()));
     setElapsedMs(0);
+    editorRef.current?.focus();
   };
 
   const stopTracking = (reason: "manual" | "expired") => {
@@ -658,7 +662,7 @@ function App() {
                 vimMode={vimMode}
                 theme={theme}
                 presets={presetKeymap}
-                onCursorLineChange={(info) => setIsCursorOnTask(info.isTask)}
+                onCursorLineChange={(info) => setFocusedTaskLabel(info.isTask ? toTrackingLabel(info.text) : null)}
                 onTrackedLineChange={(info) => setTrackingLabel(toTrackingLabel(info.text))}
                 onTrackedLineLost={() => setTrackedLost(true)}
                 toggleKey={shortcuts.toggle}
@@ -705,6 +709,7 @@ function App() {
         </div>
         <TimerBar
           trackingLabel={trackingLabel}
+          focusedTaskLabel={focusedTaskLabel}
           trackedLost={trackedLost}
           isRunning={isRunning}
           canStart={isCursorOnTask && pendingResolution === null}

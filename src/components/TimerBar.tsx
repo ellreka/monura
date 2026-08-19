@@ -9,6 +9,8 @@ export interface PendingRecord {
 
 interface TimerBarProps {
   trackingLabel: string | null;
+  /** The task currently under the cursor (independent of tracking state); shown while idle. */
+  focusedTaskLabel: string | null;
   /** The tracked line was lost while measuring. */
   trackedLost: boolean;
   isRunning: boolean;
@@ -31,6 +33,7 @@ interface TimerBarProps {
 
 export function TimerBar({
   trackingLabel,
+  focusedTaskLabel,
   trackedLost,
   isRunning,
   canStart,
@@ -49,6 +52,8 @@ export function TimerBar({
   const totalMs = presetMinutes * 60 * 1000;
   const remainingMs = Math.max(0, totalMs - elapsedMs);
   const remainingRatio = isRunning ? Math.min(1, remainingMs / totalMs) : 0;
+  /** Tracked line while running; otherwise the task under the cursor, so the bar shows the focused task whether or not it's currently measuring. */
+  const displayLabel = trackingLabel ?? focusedTaskLabel;
 
   // Waiting to choose a recording target. Ask non-destructively on the timer bar rather than in a modal
   if (pending) {
@@ -79,11 +84,11 @@ export function TimerBar({
   return (
     <footer className="timer-bar">
       <div className="timer-bar-fill" aria-hidden="true" style={{ width: `${remainingRatio * 100}%` }} />
-      <div className="timer-bar-label" title={trackingLabel ?? undefined}>
+      <div className="timer-bar-label" title={displayLabel ?? undefined}>
         {trackedLost ? (
           <span className="timer-bar-warn">Tracked line not found (choose destination when stopping)</span>
         ) : (
-          (trackingLabel ?? "Track the line under the cursor")
+          (displayLabel ?? "Track the line under the cursor")
         )}
       </div>
       <div className="timer-bar-controls">
