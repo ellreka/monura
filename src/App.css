@@ -279,6 +279,7 @@ button {
 /* ---- Main area / editor ---- */
 
 .main-area {
+  position: relative;
   flex: 1;
   min-width: 0;
   display: flex;

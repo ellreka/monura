@@ -593,24 +593,22 @@ function App() {
               }}
             />
           )}
+          <TimerBar
+            trackingLabel={trackingLabel}
+            trackedLost={trackedLost}
+            isRunning={isRunning}
+            canStart={isCursorOnTask && pendingResolution === null}
+            presetMinutes={presetMinutes}
+            elapsedMs={elapsedMs}
+            onSelectPreset={setPresetMinutes}
+            onStart={handleStart}
+            onStop={() => stopTracking("manual")}
+            pending={pendingResolution}
+            canAssignToCursor={isCursorOnTask}
+            onResolveLogOnly={handleResolveLogOnly}
+            onResolveAssignToCursor={handleResolveAssignToCursor}
+          />
         </div>
-        {/* Center over the area excluding the rail (including the file list).
-            Since it overlaps the element at the bottom of the sidebar, place the new-file button at the top */}
-        <TimerBar
-          trackingLabel={trackingLabel}
-          trackedLost={trackedLost}
-          isRunning={isRunning}
-          canStart={isCursorOnTask && pendingResolution === null}
-          presetMinutes={presetMinutes}
-          elapsedMs={elapsedMs}
-          onSelectPreset={setPresetMinutes}
-          onStart={handleStart}
-          onStop={() => stopTracking("manual")}
-          pending={pendingResolution}
-          canAssignToCursor={isCursorOnTask}
-          onResolveLogOnly={handleResolveLogOnly}
-          onResolveAssignToCursor={handleResolveAssignToCursor}
-        />
       </div>
     </div>
   );
