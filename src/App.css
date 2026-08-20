@@ -16,7 +16,9 @@
   /* Reserves space below scrollable views (log/settings) so their content never sits under the floating timer bar (74px tall, 16px off the bottom). */
   --timer-bar-clearance: 110px;
 
-  font-family: "SF Mono", "Menlo", "Consolas", ui-monospace, "Hiragino Kaku Gothic ProN", "Hiragino Sans", sans-serif;
+  font-family:
+    "SF Mono", "Menlo", "Consolas", ui-monospace, "Hiragino Kaku Gothic ProN", "Hiragino Sans",
+    sans-serif;
   color: var(--ink);
   background-color: var(--bg);
   font-synthesis: none;
@@ -103,6 +105,7 @@ button {
   background: transparent;
   color: var(--muted);
   padding: 0;
+  position: relative;
 }
 
 .icon-rail-button:hover {
@@ -112,6 +115,21 @@ button {
 .icon-rail-button.is-active {
   background: var(--accent);
   color: var(--on-accent);
+}
+
+.icon-rail-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  border: 1px solid var(--bg-tabs);
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.icon-rail-button.is-active .icon-rail-badge {
+  background: var(--on-accent);
 }
 
 /* ---- Sidebar ---- */
@@ -557,6 +575,13 @@ button {
 .settings-row-desc {
   font-size: 11px;
   color: var(--muted);
+}
+
+.settings-update-progress {
+  width: min(220px, 100%);
+  height: 4px;
+  margin-top: 6px;
+  accent-color: var(--accent);
 }
 
 .settings-switch {

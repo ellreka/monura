@@ -6,12 +6,21 @@ interface IconRailProps {
   /** Whether the file list (sidebar) is open. Always false outside the editor view. */
   filesOpen: boolean;
   onToggleFiles: () => void;
+  updateAvailable?: boolean;
 }
 
 function FilesIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-      <rect x="2.5" y="2.75" width="13" height="12.5" rx="2" stroke="currentColor" strokeWidth="1.4" />
+      <rect
+        x="2.5"
+        y="2.75"
+        width="13"
+        height="12.5"
+        rx="2"
+        stroke="currentColor"
+        strokeWidth="1.4"
+      />
       <path d="M6.5 2.75v12.5" stroke="currentColor" strokeWidth="1.4" />
       <path
         d="M4.2 6.25h1.1M4.2 9h1.1M4.2 11.75h1.1"
@@ -46,7 +55,13 @@ function SettingsIcon() {
   );
 }
 
-export function IconRail({ view, onSelect, filesOpen, onToggleFiles }: IconRailProps) {
+export function IconRail({
+  view,
+  onSelect,
+  filesOpen,
+  onToggleFiles,
+  updateAvailable = false,
+}: IconRailProps) {
   return (
     <nav className="icon-rail" aria-label="Navigation">
       <div className="icon-rail-top">
@@ -74,10 +89,11 @@ export function IconRail({ view, onSelect, filesOpen, onToggleFiles }: IconRailP
         type="button"
         className={"icon-rail-button" + (view === "settings" ? " is-active" : "")}
         onClick={() => onSelect("settings")}
-        aria-label="Settings"
-        title="Settings"
+        aria-label={updateAvailable ? "Settings, update available" : "Settings"}
+        title={updateAvailable ? "Settings — update available" : "Settings"}
       >
         <SettingsIcon />
+        {updateAvailable && <span className="icon-rail-badge" aria-hidden="true" />}
       </button>
     </nav>
   );

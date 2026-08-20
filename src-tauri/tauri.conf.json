@@ -13,7 +13,7 @@
     "windows": [
       {
         "title": "Monura",
-        "width": 900,
+        "width": 480,
         "height": 640,
         "minWidth": 480,
         "minHeight": 360
@@ -21,6 +21,12 @@
     ],
     "security": {
       "csp": null
+    }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [],
+      "pubkey": ""
     }
   },
   "bundle": {

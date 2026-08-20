@@ -1,6 +1,17 @@
 import { useEffect, useState } from "react";
 import { captureKeyBinding, formatKeyBindingLabel } from "../lib/keybinding";
-import { MAX_PRESETS, sanitizePresetMinutes, type ShortcutTarget, type TimerShortcuts } from "../lib/timer";
+import {
+  MAX_PRESETS,
+  sanitizePresetMinutes,
+  type ShortcutTarget,
+  type TimerShortcuts,
+} from "../lib/timer";
+import {
+  updateButtonLabel,
+  updateDescription,
+  updateProgressPercent,
+  type AppUpdateState,
+} from "../lib/updater";
 
 interface SettingsViewProps {
   vimMode: boolean;
@@ -15,6 +26,10 @@ interface SettingsViewProps {
   dataDir?: string | null;
   dataDirDisabled?: boolean;
   onPickDataDir?: () => void;
+  updateState: AppUpdateState;
+  updateBlocked?: boolean;
+  onCheckForUpdates: () => void;
+  onInstallUpdate: () => void;
 }
 
 interface PresetSlotInputProps {
@@ -82,7 +97,12 @@ interface ShortcutCaptureInputProps {
  * state, CodeMirror's editor keymap, or the window-level Escape handler — regardless of
  * which element the webview actually considers focused.
  */
-function ShortcutCaptureInput({ value, onCommit, ariaLabel, disabled = false }: ShortcutCaptureInputProps) {
+function ShortcutCaptureInput({
+  value,
+  onCommit,
+  ariaLabel,
+  disabled = false,
+}: ShortcutCaptureInputProps) {
   const [recording, setRecording] = useState(false);
 
   useEffect(() => {
@@ -148,6 +168,10 @@ export function SettingsView({
   dataDir,
   dataDirDisabled = false,
   onPickDataDir,
+  updateState,
+  updateBlocked = false,
+  onCheckForUpdates,
+  onInstallUpdate,
 }: SettingsViewProps) {
   return (
     <div className="settings-view">
@@ -224,25 +248,33 @@ export function SettingsView({
             <div className="settings-row-text">
               <div className="settings-row-title">Timer presets</div>
               <div className="settings-row-desc">
-                Up to {MAX_PRESETS} quick-start durations (minutes) and their shortcuts. A preset shortcut only
-                changes the selection — it never starts the timer. Leave a slot blank to hide it.
+                Up to {MAX_PRESETS} quick-start durations (minutes) and their shortcuts. A preset
+                shortcut only changes the selection — it never starts the timer. Leave a slot blank
+                to hide it.
                 {shortcutsDisabled && " Shortcuts are disabled in this live demo."}
               </div>
             </div>
           </div>
           <div className="settings-preset-grid">
-            {Array.from({ length: MAX_PRESETS }, (_, index) => presetSlots[index] ?? null).map((minutes, index) => (
-              <div key={index} className="settings-preset-slot">
-                <span className="settings-preset-slot-label">Preset {index + 1}</span>
-                <PresetSlotInput key={minutes ?? "empty"} index={index} value={minutes} onCommit={onSetPresetSlot} />
-                <ShortcutCaptureInput
-                  value={shortcuts.presets[index] ?? null}
-                  onCommit={(key) => onSetShortcut(index, key)}
-                  ariaLabel={`Preset ${index + 1} shortcut`}
-                  disabled={shortcutsDisabled}
-                />
-              </div>
-            ))}
+            {Array.from({ length: MAX_PRESETS }, (_, index) => presetSlots[index] ?? null).map(
+              (minutes, index) => (
+                <div key={index} className="settings-preset-slot">
+                  <span className="settings-preset-slot-label">Preset {index + 1}</span>
+                  <PresetSlotInput
+                    key={minutes ?? "empty"}
+                    index={index}
+                    value={minutes}
+                    onCommit={onSetPresetSlot}
+                  />
+                  <ShortcutCaptureInput
+                    value={shortcuts.presets[index] ?? null}
+                    onCommit={(key) => onSetShortcut(index, key)}
+                    ariaLabel={`Preset ${index + 1} shortcut`}
+                    disabled={shortcutsDisabled}
+                  />
+                </div>
+              ),
+            )}
           </div>
         </section>
         {dataDir !== undefined && (
@@ -250,7 +282,10 @@ export function SettingsView({
             <div className="settings-row">
               <div className="settings-row-text">
                 <div className="settings-row-title">Data folder</div>
-                <div className="settings-row-desc">Folder where .md files and session logs are stored</div>
+                <div className="settings-row-desc">
+                  Folder containing the .md files Monura edits. Session logs are stored separately
+                  in Monura's app data.
+                </div>
               </div>
               <button
                 type="button"
@@ -265,8 +300,40 @@ export function SettingsView({
             {dataDir && <span className="settings-path">{dataDir}</span>}
           </section>
         )}
+        <section className="settings-section">
+          <div className="settings-row">
+            <div className="settings-row-text">
+              <div className="settings-row-title">Software update</div>
+              <div className="settings-row-desc" aria-live="polite">
+                {updateDescription(updateState, updateBlocked)}
+              </div>
+              {updateState.phase === "downloading" && (
+                <progress
+                  className="settings-update-progress"
+                  max={100}
+                  value={updateProgressPercent(updateState) ?? undefined}
+                  aria-label="Update download progress"
+                />
+              )}
+            </div>
+            <button
+              type="button"
+              className="settings-button"
+              onClick={updateState.phase === "available" ? onInstallUpdate : onCheckForUpdates}
+              disabled={
+                updateState.phase === "unavailable" ||
+                updateState.phase === "checking" ||
+                updateState.phase === "downloading" ||
+                updateState.phase === "installing" ||
+                (updateState.phase === "available" && updateBlocked)
+              }
+            >
+              {updateButtonLabel(updateState, updateBlocked)}
+            </button>
+          </div>
+        </section>
       </div>
-      <div className="settings-footer">The data folder is saved. Vim settings are not yet saved.</div>
+      <div className="settings-footer">Changes apply immediately.</div>
     </div>
   );
 }

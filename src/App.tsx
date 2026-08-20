@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { relaunch } from "@tauri-apps/plugin-process";
+import { check, type DownloadEvent, type Update } from "@tauri-apps/plugin-updater";
 import "./App.css";
 import { Editor, type EditorHandle } from "./components/Editor";
 import { IconRail } from "./components/IconRail";
@@ -66,6 +68,7 @@ import {
   type TimerShortcuts,
   type TimerState,
 } from "./lib/timer";
+import type { AppUpdateState } from "./lib/updater";
 
 /**
  * Pending record for when a session ends with the tracked line lost.
@@ -73,6 +76,8 @@ import {
  * (log only / add to another line).
  */
 type PendingResolution = Omit<CreateSessionRecordInput, "lineDeleted">;
+const UPDATER_ENABLED =
+  isTauri() && import.meta.env.PROD && import.meta.env.VITE_UPDATER_ENABLED === "true";
 
 /** Task title for display: strips the checklist marker (`- [ ]`), spent:, and +project — no markdown. */
 function toTrackingLabel(text: string): string {
@@ -101,7 +106,9 @@ function App() {
   const [vimMode, setVimMode] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
   /** Preset 1 (the first slot) is the startup selection — guarantees a preset is always highlighted, even if slot 3 (default 1h) was customized away. */
-  const [presetMinutes, setPresetMinutes] = useState<number>(() => compactPresets(DEFAULT_PRESETS)[0] ?? DEFAULT_PRESET_MINUTES);
+  const [presetMinutes, setPresetMinutes] = useState<number>(
+    () => compactPresets(DEFAULT_PRESETS)[0] ?? DEFAULT_PRESET_MINUTES,
+  );
   const [presetSlots, setPresetSlots] = useState<(number | null)[]>(() => [...DEFAULT_PRESETS]);
   const [shortcuts, setShortcuts] = useState<TimerShortcuts>(createDefaultTimerShortcuts);
   const [timerState, setTimerState] = useState<TimerState>(() => createIdleTimer(presetMinutes));
@@ -115,16 +122,25 @@ function App() {
   const [view, setView] = useState<AppView>("editor");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [logRefreshKey, setLogRefreshKey] = useState(0);
+  const [updateState, setUpdateState] = useState<AppUpdateState>(() =>
+    UPDATER_ENABLED ? { phase: "idle" } : { phase: "unavailable" },
+  );
 
   const editorRef = useRef<EditorHandle>(null);
   const sessionLogRef = useRef(createInitialSessionLog());
   const saveTimerRef = useRef<number | undefined>(undefined);
   const pendingSaveRef = useRef<MdFile | null>(null);
+  const saveInFlightRef = useRef<Promise<void>>(Promise.resolve());
   /** While replacing the doc from disk, suppress the local save path (handleDocChange). */
   const applyingExternalRef = useRef(false);
   /** Last whole-second remaining value sent to the tray (throttles tray_tick to ~1/s). */
   const lastTraySecRef = useRef<number | null>(null);
+  const updateRef = useRef<Update | null>(null);
+  const checkInFlightRef = useRef(false);
+  const installInFlightRef = useRef(false);
 
+  const updateInProgress =
+    updateState.phase === "downloading" || updateState.phase === "installing";
   const isRunning = timerState.status === "running";
   const isCursorOnTask = focusedTaskLabel !== null;
   const activeFile = files[activeIndex];
@@ -156,30 +172,108 @@ function App() {
 
   // ---- Persistence (immediate .md save; debounced to coalesce rapid edits) ----
 
-  const flushSave = useCallback(() => {
+  const flushSave = useCallback((): Promise<void> => {
     clearTimeout(saveTimerRef.current);
     saveTimerRef.current = undefined;
     const pending = pendingSaveRef.current;
     pendingSaveRef.current = null;
-    if (pending && dataDir) {
-      void writeMdFile(dataDir, pending).catch((e) => console.error("save failed:", e));
-    }
+    if (!pending || !dataDir) return saveInFlightRef.current;
+
+    const save = saveInFlightRef.current
+      .catch(() => undefined)
+      .then(() => writeMdFile(dataDir, pending));
+    saveInFlightRef.current = save;
+    return save;
   }, [dataDir]);
+
+  const flushSaveBestEffort = useCallback(() => {
+    void flushSave().catch((error) => console.error("save failed:", error));
+  }, [flushSave]);
 
   const scheduleSave = useCallback(
     (file: MdFile) => {
       if (!isTauri() || !dataDir) return;
       pendingSaveRef.current = file;
       clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = window.setTimeout(flushSave, 500);
+      saveTimerRef.current = window.setTimeout(flushSaveBestEffort, 500);
     },
-    [dataDir, flushSave],
+    [dataDir, flushSaveBestEffort],
   );
 
   useEffect(() => {
-    window.addEventListener("beforeunload", flushSave);
-    return () => window.removeEventListener("beforeunload", flushSave);
-  }, [flushSave]);
+    window.addEventListener("beforeunload", flushSaveBestEffort);
+    return () => window.removeEventListener("beforeunload", flushSaveBestEffort);
+  }, [flushSaveBestEffort]);
+
+  // ---- Signed application updates (release builds only) ----
+
+  const handleCheckForUpdates = useCallback(async () => {
+    if (!UPDATER_ENABLED || checkInFlightRef.current) return;
+    checkInFlightRef.current = true;
+    setUpdateState({ phase: "checking" });
+    try {
+      const previous = updateRef.current;
+      updateRef.current = null;
+      if (previous) await previous.close();
+      const update = await check({ timeout: 30_000 });
+      updateRef.current = update;
+      setUpdateState(
+        update ? { phase: "available", version: update.version } : { phase: "up-to-date" },
+      );
+    } catch (error) {
+      console.error("update check failed:", error);
+      setUpdateState({ phase: "error" });
+    } finally {
+      checkInFlightRef.current = false;
+    }
+  }, []);
+
+  const handleInstallUpdate = useCallback(async () => {
+    const update = updateRef.current;
+    if (!update || isRunning || installInFlightRef.current) return;
+    installInFlightRef.current = true;
+    const version = update.version;
+    let downloadedBytes = 0;
+    let totalBytes: number | undefined;
+    setUpdateState({ phase: "downloading", version, downloadedBytes });
+    try {
+      await flushSave();
+      await update.downloadAndInstall((event: DownloadEvent) => {
+        switch (event.event) {
+          case "Started":
+            totalBytes = event.data.contentLength;
+            setUpdateState({ phase: "downloading", version, downloadedBytes, totalBytes });
+            break;
+          case "Progress":
+            downloadedBytes += event.data.chunkLength;
+            setUpdateState({ phase: "downloading", version, downloadedBytes, totalBytes });
+            break;
+          case "Finished":
+            setUpdateState({ phase: "installing", version });
+            break;
+          default:
+            event satisfies never;
+        }
+      });
+      await relaunch();
+    } catch (error) {
+      console.error("update installation failed:", error);
+      setUpdateState({ phase: "error" });
+    } finally {
+      installInFlightRef.current = false;
+    }
+  }, [flushSave, isRunning]);
+
+  useEffect(() => {
+    if (!UPDATER_ENABLED) return;
+    const checkTimer = window.setTimeout(() => void handleCheckForUpdates(), 0);
+    return () => {
+      clearTimeout(checkTimer);
+      const update = updateRef.current;
+      updateRef.current = null;
+      if (update) void update.close();
+    };
+  }, [handleCheckForUpdates]);
 
   // ---- Settings load (plugin-store; one-time migration from legacy localStorage) ----
 
@@ -246,11 +340,13 @@ function App() {
   const activeFileName = files[activeIndex]?.name ?? null;
   useEffect(() => {
     if (!isTauri() || !dataDir || activeFileName === null) return;
-    void saveLastFileFor(dataDir, activeFileName).catch((e) => console.error("save last file failed:", e));
+    void saveLastFileFor(dataDir, activeFileName).catch((e) =>
+      console.error("save last file failed:", e),
+    );
   }, [dataDir, activeFileName]);
 
   const applyDataDir = (dir: string) => {
-    flushSave();
+    flushSaveBestEffort();
     if (isTauri()) {
       void saveDataDir(dir).catch((e) => console.error("save dataDir failed:", e));
     }
@@ -297,7 +393,9 @@ function App() {
           if (pendingSaveRef.current !== null) return;
           const state = filesRef.current[activeIndexRef.current];
           if (state && state.name === name && disk.content !== state.content) {
-            setFiles((prev) => prev.map((f) => (f.name === name ? { ...f, content: disk.content } : f)));
+            setFiles((prev) =>
+              prev.map((f) => (f.name === name ? { ...f, content: disk.content } : f)),
+            );
             applyingExternalRef.current = true;
             try {
               editorRef.current?.reloadContent(disk.content);
@@ -367,14 +465,16 @@ function App() {
   const handleDocChange = (text: string) => {
     // Don't save back disk-originated replacements (avoid useless write-backs and watch round-trips)
     if (applyingExternalRef.current) return;
-    setFiles((prev) => prev.map((file, index) => (index === activeIndex ? { ...file, content: text } : file)));
+    setFiles((prev) =>
+      prev.map((file, index) => (index === activeIndex ? { ...file, content: text } : file)),
+    );
     const current = files[activeIndex];
     if (current) scheduleSave({ ...current, content: text });
   };
 
   const handleSelectFile = (index: number) => {
     if (isRunning) return;
-    flushSave();
+    flushSaveBestEffort();
     setActiveIndex(index);
   };
 
@@ -451,7 +551,10 @@ function App() {
     const next = presetSlots.slice();
     next[index] = minutes;
     setPresetSlots(next);
-    editorRef.current?.setTimerKeymap(compactPresetShortcuts(next, shortcuts.presets), shortcuts.toggle);
+    editorRef.current?.setTimerKeymap(
+      compactPresetShortcuts(next, shortcuts.presets),
+      shortcuts.toggle,
+    );
     if (isTauri()) {
       void savePresets(next).catch((e) => console.error("save presets failed:", e));
     }
@@ -464,7 +567,10 @@ function App() {
   const handleSetShortcut = (target: ShortcutTarget, key: string | null) => {
     const next = reassignShortcut(shortcuts, target, key);
     setShortcuts(next);
-    editorRef.current?.setTimerKeymap(compactPresetShortcuts(presetSlots, next.presets), next.toggle);
+    editorRef.current?.setTimerKeymap(
+      compactPresetShortcuts(presetSlots, next.presets),
+      next.toggle,
+    );
     if (isTauri()) {
       void saveShortcuts(next).catch((e) => console.error("save shortcuts failed:", e));
     }
@@ -475,9 +581,10 @@ function App() {
     sessionLogRef.current.append(record);
     if (isTauri()) {
       // Rotation follows the month of the start time (don't split sessions that cross month-end)
-      void appendSessionLog(sessionLogFilename(new Date(input.startedAt)), JSON.stringify(record)).catch((e) =>
-        console.error("session log append failed:", e),
-      );
+      void appendSessionLog(
+        sessionLogFilename(new Date(input.startedAt)),
+        JSON.stringify(record),
+      ).catch((e) => console.error("session log append failed:", e));
     }
     setLogRefreshKey((key) => key + 1);
   };
@@ -488,7 +595,9 @@ function App() {
 
   const trayStart = (label: string, remaining: string) => {
     if (!isTauri()) return;
-    void invoke("tray_start", { label, remaining }).catch((e) => console.error("tray start failed:", e));
+    void invoke("tray_start", { label, remaining }).catch((e) =>
+      console.error("tray start failed:", e),
+    );
   };
 
   const trayTick = (remaining: string) => {
@@ -524,7 +633,14 @@ function App() {
   };
 
   const handleStart = () => {
-    if (isRunning || !isCursorOnTask || pendingResolution !== null) return;
+    if (
+      isRunning ||
+      updateInProgress ||
+      installInFlightRef.current ||
+      !isCursorOnTask ||
+      pendingResolution !== null
+    )
+      return;
     const cursor = editorRef.current?.getCursorLine();
     if (!cursor) return;
     const label = toTrackingLabel(cursor.text);
@@ -558,7 +674,7 @@ function App() {
         lineDeleted: false,
       });
       // Immediately save the spent: that stopTracking wrote back into the editor
-      flushSave();
+      flushSaveBestEffort();
     } else {
       // Tracked line was lost: don't finalize the log until the destination is decided (no warning dialog)
       setPendingResolution({
@@ -669,7 +785,10 @@ function App() {
     if (!pendingResolution) return;
     const cursor = editorRef.current?.getCursorLine();
     if (!cursor) return;
-    const applied = editorRef.current?.applySpentToLine(cursor.lineNumber, pendingResolution.elapsedSeconds);
+    const applied = editorRef.current?.applySpentToLine(
+      cursor.lineNumber,
+      pendingResolution.elapsedSeconds,
+    );
     if (!applied) return;
     appendRecord({
       ...pendingResolution,
@@ -678,7 +797,7 @@ function App() {
       projects: applied.projects,
       lineDeleted: false,
     });
-    flushSave();
+    flushSaveBestEffort();
     setPendingResolution(null);
   };
 
@@ -687,7 +806,8 @@ function App() {
     setTimerState((state) => fastForwardToRemaining(state, Date.now(), DEBUG_FAST_FORWARD_SECONDS));
     // Re-arm the native alarm to match, or it would still fire (harmlessly late) at the
     // original preset duration instead of the fast-forwarded one.
-    if (trackingLabel) timerArm(trackingLabel, DEBUG_FAST_FORWARD_SECONDS / 60, DEBUG_FAST_FORWARD_SECONDS);
+    if (trackingLabel)
+      timerArm(trackingLabel, DEBUG_FAST_FORWARD_SECONDS / 60, DEBUG_FAST_FORWARD_SECONDS);
   };
 
   // ---- First-run setup (no data folder configured or load failed) ----
@@ -696,14 +816,14 @@ function App() {
     return <div className="app-shell" />;
   }
 
-
   if (isTauri() && (!dataDir || loadError)) {
     return (
       <div className="app-shell">
         <div className="setup-screen">
           <h1 className="setup-title">monura</h1>
           <p className="setup-desc">
-            Choose a folder for your .md files. It can also be a folder inside iCloud Drive or Dropbox.
+            Choose a folder for your .md files. It can also be a folder inside iCloud Drive or
+            Dropbox.
           </p>
           {loadError && <p className="setup-error">Could not open the folder: {loadError}</p>}
           <div className="setup-actions">
@@ -738,6 +858,7 @@ function App() {
           onSelect={handleSelectView}
           filesOpen={view === "editor" && sidebarOpen}
           onToggleFiles={handleToggleFiles}
+          updateAvailable={updateState.phase === "available"}
         />
         {view === "editor" && sidebarOpen && (
           <Sidebar
@@ -768,7 +889,9 @@ function App() {
                 vimMode={vimMode}
                 theme={theme}
                 presets={presetKeymap}
-                onCursorLineChange={(info) => setFocusedTaskLabel(info.isTask ? toTrackingLabel(info.text) : null)}
+                onCursorLineChange={(info) =>
+                  setFocusedTaskLabel(info.isTask ? toTrackingLabel(info.text) : null)
+                }
                 onTrackedLineChange={(info) => setTrackingLabel(toTrackingLabel(info.text))}
                 onTrackedLineLost={() => setTrackedLost(true)}
                 toggleKey={shortcuts.toggle}
@@ -776,7 +899,9 @@ function App() {
                 onToggle={handleToggleTracking}
               />
             ) : (
-              <div className="editor-empty">Create an .md file with “+ New file” in the sidebar</div>
+              <div className="editor-empty">
+                Create an .md file with “+ New file” in the sidebar
+              </div>
             )}
           </div>
           {view === "log" && (
@@ -811,6 +936,10 @@ function App() {
                 const dir = await pickDataDir();
                 if (dir) applyDataDir(dir);
               }}
+              updateState={updateState}
+              updateBlocked={isRunning}
+              onCheckForUpdates={handleCheckForUpdates}
+              onInstallUpdate={handleInstallUpdate}
             />
           )}
         </div>
@@ -819,7 +948,7 @@ function App() {
           focusedTaskLabel={focusedTaskLabel}
           trackedLost={trackedLost}
           isRunning={isRunning}
-          canStart={isCursorOnTask && pendingResolution === null}
+          canStart={!updateInProgress && isCursorOnTask && pendingResolution === null}
           presetMinutes={presetMinutes}
           presets={presets}
           elapsedMs={elapsedMs}
