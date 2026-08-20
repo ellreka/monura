@@ -1,0 +1,241 @@
+:root {
+  --ink: #332e26;
+  --muted: #857a68;
+  --border: #e5ddcc;
+  --bg: #fdfbf6;
+  --card-bg: #f8f4ea;
+  --max-width: 800px;
+  --radius: 6px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  color: var(--ink);
+  background: var(--bg);
+  font-family: "SF Mono", "Menlo", "Consolas", ui-monospace, "Hiragino Kaku Gothic ProN", "Hiragino Sans", sans-serif;
+  font-size: 14px;
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+}
+
+code {
+  font-family: inherit;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.05em 0.4em;
+  font-size: 0.92em;
+}
+
+a {
+  color: inherit;
+}
+
+h1,
+h2,
+h3 {
+  line-height: 1.4;
+  margin: 0;
+  font-weight: 600;
+}
+
+/* ---------- Header: plain, no glass/blur — just a thin rule ---------- */
+
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px clamp(20px, 5vw, 48px);
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 600;
+  text-decoration: none;
+  font-size: 0.95rem;
+}
+
+.site-nav {
+  display: flex;
+  gap: 20px;
+}
+
+.site-nav a {
+  text-decoration: none;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.site-nav a:hover {
+  color: var(--ink);
+}
+
+main {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 0 clamp(20px, 5vw, 48px);
+}
+
+/* ---------- Intro: one line + one paragraph, no headline theatrics ---------- */
+
+.intro {
+  padding: 40px 0 24px;
+}
+
+.tagline {
+  margin: 0 0 10px;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.lead {
+  color: var(--muted);
+  margin: 0;
+  max-width: 62ch;
+}
+
+/* ---------- Demo: a contained "terminal window", not full-bleed ---------- */
+
+.demo {
+  padding: 0 0 48px;
+}
+
+.demo-window {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.demo-window-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 12px;
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.demo-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border);
+}
+
+.demo-window-title {
+  margin-left: 6px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.demo-window-expand {
+  margin-left: auto;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.85rem;
+  line-height: 1;
+  padding: 2px 4px;
+}
+
+.demo-window-expand:hover {
+  color: var(--ink);
+}
+
+.demo-frame {
+  width: 100%;
+  height: clamp(420px, 62vh, 620px);
+  border: 0;
+  display: block;
+}
+
+.demo-note {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+/* ---------- Philosophy / Features: a plain stacked list, no card boxes ---------- */
+
+h2 {
+  font-size: 1.05rem;
+}
+
+.stack {
+  padding: 40px 0;
+  border-top: 1px solid var(--border);
+}
+
+.section-lead {
+  color: var(--muted);
+  margin: 6px 0 0;
+  font-size: 0.9rem;
+}
+
+.stack-list {
+  margin-top: 24px;
+}
+
+.stack-item {
+  padding: 18px 0;
+  border-top: 1px solid var(--border);
+}
+
+.stack-item:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+
+.stack-item h3 {
+  font-size: 0.92rem;
+  margin-bottom: 6px;
+}
+
+.stack-item p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  max-width: 68ch;
+}
+
+/* ---------- Footer ---------- */
+
+.site-footer {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 32px clamp(20px, 5vw, 48px) 56px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.footer-links {
+  display: flex;
+  gap: 16px;
+}
+
+.footer-links a {
+  text-decoration: none;
+  color: var(--muted);
+}
+
+.footer-links a:hover {
+  color: var(--ink);
+}
+
+@media (max-width: 640px) {
+  .demo-frame {
+    height: clamp(360px, 58vh, 480px);
+  }
+}

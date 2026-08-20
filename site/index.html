@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Monura is a simple app for managing tasks in Markdown. Track time spent on tasks to review your workday."
+    />
+    <meta property="og:title" content="Monura — Task management in Markdown" />
+    <meta
+      property="og:description"
+      content="Monura is a simple app for managing tasks in Markdown. Track time spent on tasks to review your workday."
+    />
+    <meta property="og:image" content="/screenshot.webp" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <title>Monura — Task management in Markdown</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="#top">
+        <img src="/icon.svg" alt="" width="35" height="35" />
+        <span>Monura</span>
+      </a>
+      <nav class="site-nav">
+        <a href="#demo">Try it</a>
+        <a href="https://github.com/ellreka/monura/releases/latest" target="_blank" rel="noopener">Download</a>
+        <a href="#about">Learn more</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="intro">
+        <p class="tagline">Markdown + TODO + Timer</p>
+        <p class="lead"></p>
+      </section>
+
+      <section id="demo" class="demo">
+        <div class="demo-window">
+          <div class="demo-window-bar">
+            <span class="demo-dot"></span>
+            <span class="demo-dot"></span>
+            <span class="demo-dot"></span>
+            <span class="demo-window-title">Monura — Browser demo</span>
+            <a
+              class="demo-window-expand"
+              href="/demo/index.html"
+              target="_blank"
+              rel="noopener"
+              title="Open in a new tab"
+            >
+              ⤢
+            </a>
+          </div>
+          <iframe
+            class="demo-frame"
+            src="/demo/index.html"
+            title="Monura live demo (runs in browser, nothing is saved)"
+          ></iframe>
+        </div>
+        <p class="demo-note">Running on sample data — nothing is saved, and it resets on reload.</p>
+      </section>
+
+      <section id="about" class="stack">
+        <p class="section-lead">Monura is a simple app for managing tasks in Markdown.</p>
+        <p class="section-lead">
+          By timing how long each task takes, you can review how your day actually went.
+        </p>
+        <p class="section-lead">
+          It aims to keep task management free-form and low-pressure, while still giving you a sustainable rhythm
+          for tracking time.
+        </p>
+
+        <p>* * *</p>
+        <div class="stack-list">
+          <div class="stack-item">
+            <h3>Timer presets</h3>
+            <p>
+              Start work with a preset duration chosen ahead of time — it clarifies what you're focused on right
+              now, similar to a Pomodoro timer.
+            </p>
+          </div>
+          <div class="stack-item">
+            <h3>Fully local</h3>
+            <p>
+              All data stays on your machine. You can point Monura at any folder, so it's easy to open
+              <code>.md</code> files you already manage in another app.
+            </p>
+          </div>
+          <div class="stack-item">
+            <h3>Vim keybindings</h3>
+            <p>Vim mode is built in, so you can drive nearly everything from the keyboard.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <nav class="footer-links">
+        <a href="https://github.com/ellreka/monura" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://x.com/ellreka" target="_blank" rel="noopener">X</a>
+      </nav>
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "name": "monura-site",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/prepare-demo.mjs && vite",
+    "build": "node scripts/prepare-demo.mjs && vite build",
+    "preview": "vite preview",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "typescript": "~5.8.3",
+    "vite": "^7.0.4",
+    "wrangler": "^4.0.0"
+  }
+}
