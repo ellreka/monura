@@ -1,6 +1,6 @@
 [package]
 name = "monura"
-version = "0.1.0"
+version = "0.0.1"
 description = "Markdown-first task management desktop app"
 authors = ["ellreka"]
 edition = "2021"
