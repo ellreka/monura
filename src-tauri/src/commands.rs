@@ -175,20 +175,6 @@ pub fn read_session_log(app: AppHandle, filename: String) -> Result<String, Stri
     fs::read_to_string(dir.join(&filename)).map_err(|e| format!("read log {filename}: {e}"))
 }
 
-/// Emit an OS notification (for timer expiry).
-/// The notification is triggered by the frontend's state transition, but permission requests
-/// and platform differences are delegated to the plugin's Rust API.
-#[tauri::command]
-pub fn send_notification(app: AppHandle, title: String, body: String) -> Result<(), String> {
-    use tauri_plugin_notification::NotificationExt;
-    app.notification()
-        .builder()
-        .title(title)
-        .body(body)
-        .show()
-        .map_err(|e| format!("notify: {e}"))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

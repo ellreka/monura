@@ -11,6 +11,7 @@ interface SettingsViewProps {
   onSetPresetSlot: (index: number, minutes: number | null) => void;
   shortcuts: TimerShortcuts;
   onSetShortcut: (target: ShortcutTarget, key: string | null) => void;
+  shortcutsDisabled?: boolean;
   dataDir?: string | null;
   dataDirDisabled?: boolean;
   onPickDataDir?: () => void;
@@ -65,6 +66,7 @@ interface ShortcutCaptureInputProps {
   value: string | null;
   onCommit: (key: string | null) => void;
   ariaLabel: string;
+  disabled?: boolean;
 }
 
 /**
@@ -80,7 +82,7 @@ interface ShortcutCaptureInputProps {
  * state, CodeMirror's editor keymap, or the window-level Escape handler — regardless of
  * which element the webview actually considers focused.
  */
-function ShortcutCaptureInput({ value, onCommit, ariaLabel }: ShortcutCaptureInputProps) {
+function ShortcutCaptureInput({ value, onCommit, ariaLabel, disabled = false }: ShortcutCaptureInputProps) {
   const [recording, setRecording] = useState(false);
 
   useEffect(() => {
@@ -114,10 +116,12 @@ function ShortcutCaptureInput({ value, onCommit, ariaLabel }: ShortcutCaptureInp
         onClick={() => setRecording(true)}
         onBlur={() => setRecording(false)}
         aria-label={ariaLabel}
+        disabled={disabled}
+        title={disabled ? "Disabled in this live demo" : undefined}
       >
         {recording ? "Press a key…" : value ? formatKeyBindingLabel(value) : "Not set"}
       </button>
-      {!recording && value !== null && (
+      {!disabled && !recording && value !== null && (
         <button
           type="button"
           className="settings-shortcut-clear"
@@ -140,6 +144,7 @@ export function SettingsView({
   onSetPresetSlot,
   shortcuts,
   onSetShortcut,
+  shortcutsDisabled = false,
   dataDir,
   dataDirDisabled = false,
   onPickDataDir,
@@ -202,12 +207,14 @@ export function SettingsView({
               <div className="settings-row-title">Start / stop shortcut</div>
               <div className="settings-row-desc">
                 Starts tracking the task under the cursor, or stops the running timer
+                {shortcutsDisabled && " (disabled in this live demo)"}
               </div>
             </div>
             <ShortcutCaptureInput
               value={shortcuts.toggle}
               onCommit={(key) => onSetShortcut("toggle", key)}
               ariaLabel="Start / stop shortcut"
+              disabled={shortcutsDisabled}
             />
           </div>
         </section>
@@ -219,6 +226,7 @@ export function SettingsView({
               <div className="settings-row-desc">
                 Up to {MAX_PRESETS} quick-start durations (minutes) and their shortcuts. A preset shortcut only
                 changes the selection — it never starts the timer. Leave a slot blank to hide it.
+                {shortcutsDisabled && " Shortcuts are disabled in this live demo."}
               </div>
             </div>
           </div>
@@ -231,6 +239,7 @@ export function SettingsView({
                   value={shortcuts.presets[index] ?? null}
                   onCommit={(key) => onSetShortcut(index, key)}
                   ariaLabel={`Preset ${index + 1} shortcut`}
+                  disabled={shortcutsDisabled}
                 />
               </div>
             ))}

@@ -1,3 +1,4 @@
+mod alarm;
 mod commands;
 mod tray;
 mod watch;
@@ -20,17 +21,19 @@ pub fn run() {
             commands::append_session_log,
             commands::list_session_logs,
             commands::read_session_log,
-            commands::send_notification,
             watch::watch_data_dir,
             tray::tray_start,
             tray::tray_tick,
             tray::tray_stop,
+            alarm::timer_arm,
+            alarm::timer_disarm,
         ])
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .manage(watch::WatcherState(std::sync::Mutex::new(None)))
+        .manage(alarm::AlarmState::default())
         .setup(|app| {
             let handle = app.handle();
 

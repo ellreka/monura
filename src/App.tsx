@@ -9,7 +9,9 @@ import { SettingsView } from "./components/SettingsView";
 import { Sidebar } from "./components/Sidebar";
 import { TimerBar } from "./components/TimerBar";
 import type { AppView } from "./view";
+import { isDemoMode } from "./lib/demoMode";
 import { SAMPLE_FILES } from "./sampleFiles";
+import { SAMPLE_SESSION_RECORDS } from "./sampleSessionLog";
 import {
   appendSessionLog,
   createMdFile,
@@ -34,7 +36,6 @@ import {
   type CreateSessionRecordInput,
   type SessionRecord,
 } from "./lib/log/session";
-import { notifyTimerExpired } from "./lib/notify";
 import {
   getLastFileFor,
   loadSettings,
@@ -53,6 +54,7 @@ import {
   createIdleTimer,
   fastForwardToRemaining,
   formatClock,
+  formatPresetLabel,
   isExpired,
   reassignShortcut,
   startTimer,
@@ -76,6 +78,15 @@ type PendingResolution = Omit<CreateSessionRecordInput, "lineDeleted">;
 function toTrackingLabel(text: string): string {
   const title = baseTitle(text);
   return title.length > 0 ? title : "(blank line)";
+}
+
+/** Fresh session log; pre-seeded with sample history in the browser (no Tauri) so the Log view isn't empty. */
+function createInitialSessionLog(): SessionLog {
+  const log = new SessionLog();
+  if (!isTauri()) {
+    for (const record of SAMPLE_SESSION_RECORDS) log.append(record);
+  }
+  return log;
 }
 
 function App() {
@@ -102,11 +113,11 @@ function App() {
   const [pendingResolution, setPendingResolution] = useState<PendingResolution | null>(null);
   const [focusedTaskLabel, setFocusedTaskLabel] = useState<string | null>(null);
   const [view, setView] = useState<AppView>("editor");
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [logRefreshKey, setLogRefreshKey] = useState(0);
 
   const editorRef = useRef<EditorHandle>(null);
-  const sessionLogRef = useRef(new SessionLog());
+  const sessionLogRef = useRef(createInitialSessionLog());
   const saveTimerRef = useRef<number | undefined>(undefined);
   const pendingSaveRef = useRef<MdFile | null>(null);
   /** While replacing the doc from disk, suppress the local save path (handleDocChange). */
@@ -490,6 +501,28 @@ function App() {
     void invoke("tray_stop").catch((e) => console.error("tray stop failed:", e));
   };
 
+  // ---- Native backup alarm (Tauri only) ----
+  // WKWebView throttles JS timers once the window is hidden (the tray lets the app run that
+  // way), so `isExpired()` below can no longer be trusted to fire on time in the background.
+  // Rust arms an OS-scheduled alarm in parallel that fires the OS notification and an
+  // "timer-expired-native" event on its own, independent of the WebView's event loop. It owns
+  // the notification exclusively (JS no longer sends one) to avoid a double notification when
+  // both this alarm and the JS-side isExpired() detect the same expiry.
+
+  const timerArm = (label: string, presetMinutes: number, durationSecs: number) => {
+    if (!isTauri()) return;
+    void invoke("timer_arm", {
+      label,
+      presetLabel: formatPresetLabel(presetMinutes),
+      durationSecs,
+    }).catch((e) => console.error("timer arm failed:", e));
+  };
+
+  const timerDisarm = () => {
+    if (!isTauri()) return;
+    void invoke("timer_disarm").catch((e) => console.error("timer disarm failed:", e));
+  };
+
   const handleStart = () => {
     if (isRunning || !isCursorOnTask || pendingResolution !== null) return;
     const cursor = editorRef.current?.getCursorLine();
@@ -503,21 +536,16 @@ function App() {
     setElapsedMs(0);
     lastTraySecRef.current = presetMinutes * 60;
     trayStart(label, formatClock(presetMinutes * 60 * 1000));
+    timerArm(label, presetMinutes, presetMinutes * 60);
     editorRef.current?.focus();
   };
 
-  const stopTracking = (reason: "manual" | "expired") => {
+  const stopTracking = () => {
     if (!isRunning) return;
     const now = Date.now();
     const { elapsedSeconds } = stopTimer(timerState, now);
     const startedAt = timerState.startedAt ?? now;
     const stopped = editorRef.current?.stopTracking(elapsedSeconds);
-
-    if (reason === "expired") {
-      void notifyTimerExpired(trackingLabel ?? "", timerState.presetMinutes).catch((e) =>
-        console.error("notify failed:", e),
-      );
-    }
 
     if (stopped && !stopped.deleted) {
       appendRecord({
@@ -550,11 +578,12 @@ function App() {
     setTrackedLost(false);
     lastTraySecRef.current = null;
     trayStop();
+    timerDisarm();
   };
 
   /** Mirrors the ▶/■ button for the editor's start/stop shortcut: starts if idle, stops if running. */
   const handleToggleTracking = () => {
-    if (isRunning) stopTracking("manual");
+    if (isRunning) stopTracking();
     else handleStart();
   };
 
@@ -578,11 +607,11 @@ function App() {
         lastTraySecRef.current = remainingSec;
         trayTick(formatClock(remainingMs));
       }
-      // Expiry is treated like manual stop (add the elapsed time up to now to spent:) plus an OS notification.
+      // Expiry is treated like manual stop: add the elapsed time up to now to spent:.
       // Stop the interval in place so the stop handler doesn't run again before re-render
       if (isExpired(timerState, now)) {
         window.clearInterval(id);
-        stopTrackingRef.current("expired");
+        stopTrackingRef.current();
       }
     }, 250);
     return () => window.clearInterval(id);
@@ -594,7 +623,28 @@ function App() {
     if (!isTauri()) return;
     let unlisten: (() => void) | undefined;
     let cancelled = false;
-    listen("tray-stop-requested", () => stopTrackingRef.current("manual")).then((fn) => {
+    listen("tray-stop-requested", () => stopTrackingRef.current()).then((fn) => {
+      if (cancelled) {
+        fn();
+      } else {
+        unlisten = fn;
+      }
+    });
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, []);
+
+  // Receive the guaranteed-on-time expiry signal from the native alarm (see timerArm above).
+  // In the foreground this normally loses the race to the JS isExpired() check above — that's
+  // fine, stopTracking's `if (!isRunning) return;` guard makes the second call a no-op. This is
+  // the path that actually matters once the window is hidden.
+  useEffect(() => {
+    if (!isTauri()) return;
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+    listen("timer-expired-native", () => stopTrackingRef.current()).then((fn) => {
       if (cancelled) {
         fn();
       } else {
@@ -635,6 +685,9 @@ function App() {
   /** Dev-only: jump the running timer to DEBUG_FAST_FORWARD_SECONDS remaining, to quickly verify expiry/notifications. */
   const handleDebugFastForward = () => {
     setTimerState((state) => fastForwardToRemaining(state, Date.now(), DEBUG_FAST_FORWARD_SECONDS));
+    // Re-arm the native alarm to match, or it would still fire (harmlessly late) at the
+    // original preset duration instead of the fast-forwarded one.
+    if (trackingLabel) timerArm(trackingLabel, DEBUG_FAST_FORWARD_SECONDS / 60, DEBUG_FAST_FORWARD_SECONDS);
   };
 
   // ---- First-run setup (no data folder configured or load failed) ----
@@ -751,6 +804,7 @@ function App() {
               onSetPresetSlot={handleSetPresetSlot}
               shortcuts={shortcuts}
               onSetShortcut={handleSetShortcut}
+              shortcutsDisabled={isDemoMode}
               dataDir={dataDir}
               dataDirDisabled={isRunning}
               onPickDataDir={async () => {
@@ -771,7 +825,7 @@ function App() {
           elapsedMs={elapsedMs}
           onSelectPreset={setPresetMinutes}
           onStart={handleStart}
-          onStop={() => stopTracking("manual")}
+          onStop={() => stopTracking()}
           pending={pendingResolution}
           canAssignToCursor={isCursorOnTask}
           onResolveLogOnly={handleResolveLogOnly}
