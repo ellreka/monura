@@ -1,96 +1,108 @@
-# Monura
+<p align="center">
+  <img src="./public/icon.svg" width="96" height="96" alt="Monura icon">
+</p>
 
-**Markdown + TODO + Timer**
+<h1 align="center">Monura</h1>
 
-Monuraは、Markdownでタスクを管理するシンプルなデスクトップアプリです。各タスクにかかった時間を計測し、1日の過ごし方を振り返れます。
+<p align="center">
+  <strong>Markdown + TODO + Timer.</strong>
+</p>
 
-自由で気負わないタスク管理を保ちながら、無理なく続けられる時間計測を目指しています。
+<p align="center">
+  <a href="https://monura-site.ellreka.workers.dev/">Live Demo</a> &middot;
+  <a href="https://github.com/ellreka/monura/releases">Download</a>
+</p>
 
-![Markdownタスクとプリセットタイマーを表示するMonuraのブラウザデモ](./docs/image_01.png)
+<p align="center">
+  <img src="./docs/image_01.png" width="900" alt="Monura showing Markdown tasks and a preset timer">
+</p>
 
-## 対応環境
+## Why Monura?
 
-現在のリリースワークフローが生成するバイナリは次の2種類です。
+Task management should not require an account, a database, or a proprietary format. Monura works directly with the Markdown files you already own and tracks only the time you actually spend.
 
-| OS      | アーキテクチャ             | 配布形式       |
-| ------- | -------------------------- | -------------- |
-| macOS   | Apple Silicon（`aarch64`） | DMG            |
-| Windows | 64-bit（`x86_64`）         | NSIS installer |
+Use any editor, folder structure, Git workflow, or sync tool. Monura is a focused layer on top of plain text, not a replacement for it.
 
-Intel Mac、Windows on ARM、Linux向けの配布バイナリは現在生成していません。
+## Download
 
-## インストール
+| Platform              | Package                  |
+| --------------------- | ------------------------ |
+| macOS — Apple Silicon | `Monura_*_aarch64.dmg`   |
+| Windows — x64         | `Monura_*_x64-setup.exe` |
 
-1. [GitHub Releases](https://github.com/ellreka/monura/releases)を開きます。
-2. 使用するOSに合うファイルをダウンロードします。
-   - macOS: `Monura_*_aarch64.dmg`
-   - Windows: `Monura_*_x64-setup.exe`
-3. macOSではDMGを開いてMonuraをApplicationsへ移動します。Windowsではinstallerを実行します。
+Download the latest build from [GitHub Releases](https://github.com/ellreka/monura/releases). Intel Macs, Windows on ARM, and Linux are not currently packaged.
 
-### 初回起動時のOS警告
+The builds are not code-signed by Apple or Microsoft:
 
-現在の配布物には、Apple Developer IDおよびWindows AuthenticodeによるOSコード署名を付けていません。そのため、初回起動時にOSの警告が表示されます。
+- **macOS:** Try to open Monura once, then go to **System Settings → Privacy & Security → Open Anyway**.
+- **Windows:** In Microsoft Defender SmartScreen, choose **More info → Run anyway** after verifying that you downloaded it from this repository's GitHub Releases page.
 
-#### macOS
+## Getting Started
 
-1. ApplicationsのMonuraを一度起動し、警告を閉じます。
-2. `システム設定` → `プライバシーとセキュリティ`を開きます。
-3. Monuraの項目に表示される`このまま開く`を選びます。
-4. 確認後、もう一度Monuraを起動します。
-
-#### Windows
-
-Microsoft Defender SmartScreenが表示された場合は、配布元とファイル名を確認したうえで`詳細情報` → `実行`を選びます。
-
-## 基本的な使い方
-
-1. 起動後、Markdownファイルを保存するフォルダを選びます。
-2. 既存の`.md`ファイルを選択するか、新しいファイルを作成します。
-3. Markdownのチェックリストとして作業項目を書きます。
-4. 計測する行へカーソルを置き、時間プリセットを選んでタイマーを開始します。
-5. タイマーを停止すると、その行へ実績時間が`spent:`として追記されます。
+1. Choose a folder containing your Markdown files.
+2. Open an existing `.md` file or create one.
+3. Write tasks as Markdown checklists.
+4. Place the cursor on a task line, choose a timer preset, and start tracking.
+5. Stop the timer to append the tracked duration as `spent:`.
 
 ```markdown
-- [ ] 親タスク +monura spent:20m
-  - [ ] 子タスクA spent:15m
-  - [x] 子タスクB spent:10m
+- [ ] Ship the next release +monura spent:20m
+  - [ ] Test the updater spent:15m
+  - [x] Write release notes spent:5m
 ```
 
-- タスクとして認識するのは`- [ ]`または`- [x]`形式の行だけです。
-- `+project`はセッションログのプロジェクト別集計に使います。
-- 子タスクを含む集計時間は画面上だけで計算し、親行へは自動書き込みしません。
-- プリセット時間、ショートカット、Vimモード、テーマ等はSettingsから変更できます。
+## Features
 
-## データの保存
+**Plain Markdown.** Tasks are standard `- [ ]` and `- [x]` lines. No hidden IDs or separate task database.
 
-| データ         | 保存先                          | 扱い                                |
-| -------------- | ------------------------------- | ----------------------------------- |
-| Markdown       | ユーザーが選択したフォルダ      | 現在の作業状態のマスターデータ      |
-| セッションログ | Tauriのアプリデータディレクトリ | 月単位のJSONLへ追記                 |
-| アプリ設定     | Tauriのアプリデータディレクトリ | 選択フォルダ、テーマ、Vimモードなど |
+**Preset timers.** Work in deliberate 10-minute, 30-minute, or 1-hour blocks. Presets and shortcuts are customizable.
 
-## 開発
+**Task hierarchy.** Indented checklists form parent and child tasks. Aggregate time is calculated for display without modifying parent task lines.
+
+**Session history.** Review tracked time by month, day, or `+project` tag.
+
+**Keyboard-first.** CodeMirror editing, configurable shortcuts, and built-in Vim mode.
+
+**Fully local.** Task data stays on your machine, and changes made in external editors are detected automatically. There is no account, sync backend, or telemetry.
+
+## Data
+
+| Data            | Location                                            |
+| --------------- | --------------------------------------------------- |
+| Markdown        | The folder you choose; this is the source of truth  |
+| Session history | Monthly JSONL files in the Tauri app data directory |
+| Settings        | The Tauri app data directory                        |
+
+## Build from Source
+
+Requires Node.js 24, pnpm 10, stable Rust, and the [Tauri system prerequisites](https://v2.tauri.app/start/prerequisites/).
 
 ```bash
+git clone https://github.com/ellreka/monura.git
+cd monura
 pnpm install --frozen-lockfile
 pnpm tauri dev
 ```
 
-## リリース
+Useful commands:
 
-`v*.*.*`形式のGit tagをpushすると、`.github/workflows/release.yml`が起動します。
+```bash
+pnpm test
+pnpm lint
+pnpm build
+pnpm tauri build
+pnpm --dir site build
+```
 
-### 1. バージョンを更新する
+Built with React 19, TypeScript, CodeMirror 6, Rust, and Tauri 2.
 
-次の3ファイルを同じSemantic Versionへ更新します。
+## Release
 
-- `package.json`
-- `src-tauri/tauri.conf.json`
-- `src-tauri/Cargo.toml`
+Pushing a `v*.*.*` tag triggers `.github/workflows/release.yml` and creates a draft release for macOS and Windows.
 
-### 2. tagをpushする
-
-例として`0.0.2`をリリースする場合:
+1. Set the same version in `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml`.
+2. Run `cargo check --manifest-path src-tauri/Cargo.toml` to update Cargo metadata.
+3. Commit the version change, then push the matching tag.
 
 ```bash
 git tag v0.0.2
