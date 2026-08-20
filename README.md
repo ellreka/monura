@@ -1,65 +1,98 @@
 # Monura
 
-Monuraは、Markdownをそのまま作業空間として使うローカルファーストのタスク管理デスクトップアプリです。チェックリスト行にタイマーで計測した実績時間を追記し、作業履歴をセッションログで振り返れます。
+**Markdown + TODO + Timer**
+
+Monuraは、Markdownでタスクを管理するシンプルなデスクトップアプリです。各タスクにかかった時間を計測し、1日の過ごし方を振り返れます。
+
+自由で気負わないタスク管理を保ちながら、無理なく続けられる時間計測を目指しています。
+
+![Markdownタスクとプリセットタイマーを表示するMonuraのブラウザデモ](./docs/image_01.png)
+
+## 対応環境
+
+現在のリリースワークフローが生成するバイナリは次の2種類です。
+
+| OS      | アーキテクチャ             | 配布形式       |
+| ------- | -------------------------- | -------------- |
+| macOS   | Apple Silicon（`aarch64`） | DMG            |
+| Windows | 64-bit（`x86_64`）         | NSIS installer |
+
+Intel Mac、Windows on ARM、Linux向けの配布バイナリは現在生成していません。
+
+## インストール
+
+1. [GitHub Releases](https://github.com/ellreka/monura/releases)を開きます。
+2. 使用するOSに合うファイルをダウンロードします。
+   - macOS: `Monura_*_aarch64.dmg`
+   - Windows: `Monura_*_x64-setup.exe`
+3. macOSではDMGを開いてMonuraをApplicationsへ移動します。Windowsではinstallerを実行します。
+
+### 初回起動時のOS警告
+
+現在の配布物には、Apple Developer IDおよびWindows AuthenticodeによるOSコード署名を付けていません。そのため、初回起動時にOSの警告が表示されます。
+
+#### macOS
+
+1. ApplicationsのMonuraを一度起動し、警告を閉じます。
+2. `システム設定` → `プライバシーとセキュリティ`を開きます。
+3. Monuraの項目に表示される`このまま開く`を選びます。
+4. 確認後、もう一度Monuraを起動します。
+
+#### Windows
+
+Microsoft Defender SmartScreenが表示された場合は、配布元とファイル名を確認したうえで`詳細情報` → `実行`を選びます。
+
+## 基本的な使い方
+
+1. 起動後、Markdownファイルを保存するフォルダを選びます。
+2. 既存の`.md`ファイルを選択するか、新しいファイルを作成します。
+3. Markdownのチェックリストとして作業項目を書きます。
+4. 計測する行へカーソルを置き、時間プリセットを選んでタイマーを開始します。
+5. タイマーを停止すると、その行へ実績時間が`spent:`として追記されます。
 
 ```markdown
-- [ ] APIのエラーハンドリングを直す +backend spent:25m
+- [ ] 親タスク +monura spent:20m
+  - [ ] 子タスクA spent:15m
+  - [x] 子タスクB spent:10m
 ```
 
-## 特徴
+- タスクとして認識するのは`- [ ]`または`- [x]`形式の行だけです。
+- `+project`はセッションログのプロジェクト別集計に使います。
+- 子タスクを含む集計時間は画面上だけで計算し、親行へは自動書き込みしません。
+- プリセット時間、ショートカット、Vimモード、テーマ等はSettingsから変更できます。
 
-- `.md` ファイルを直接編集し、独自のタスクDBや不可視IDを持たない
-- インデントされたチェックリストを親子タスクとして表示・集計する
-- プリセットタイマー、Vimキーバインド、キーボードショートカットに対応する
-- 外部エディタによる変更をファイルウォッチで反映する
-- 月別・日別・プロジェクト別にセッションログを振り返る
-- Tauriのシステムトレイとネイティブ通知でバックグラウンド計測を支える
-- 起動時に署名済みアップデートを確認し、Settingsからインストールできる
+## データの保存
 
-## データの保存先
-
-- Markdownファイル: ユーザーが選択したフォルダ。現在の作業状態の唯一のマスターデータ
-- セッションログ: Tauriのアプリデータディレクトリに月次JSONLとして追記
-- アプリ設定: Tauriのアプリデータディレクトリに保存
-
-MarkdownファイルはMonura以外のエディタでも自由に編集できます。セッションログや設定がなくても、Markdownファイル自体の意味は失われません。
-
-詳細な設計方針は [CLAUDE.md](./CLAUDE.md) を参照してください。
-
-## 配布状況
-
-初回公開リリースの準備中です。現時点ではソースから起動・ビルドしてください。
-
-### 自動更新用の署名
-
-Releaseワークフローは、macOSとWindowsの両方が成功した後に署名済みUpdater成果物と`latest.json`を同じDraft GitHub Releaseへ添付します。
-
-Updater署名用のGitHub Actions Secrets:
-
-- `TAURI_UPDATER_PUBLIC_KEY`: Tauri signerが生成した公開鍵
-- `TAURI_SIGNING_PRIVATE_KEY`: 対応する秘密鍵の内容
-- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`: 秘密鍵のパスワード
-
-鍵は `pnpm tauri signer generate -- -w ~/.tauri/monura.key` で生成できます。秘密鍵を失うと、既存ユーザーへ同じ更新経路で新しいバージョンを配布できません。リポジトリには保存せず、安全な保管先にもバックアップしてください。
-
-プラットフォーム署名・公証用のGitHub Actions Secrets:
-
-- macOS: `APPLE_CERTIFICATE`（Developer ID Application証明書のBase64 P12）、`APPLE_CERTIFICATE_PASSWORD`、`KEYCHAIN_PASSWORD`、`APPLE_ID`、`APPLE_PASSWORD`、`APPLE_TEAM_ID`
-- Windows: `WINDOWS_CERTIFICATE`（コード署名証明書のBase64 PFX）、`WINDOWS_CERTIFICATE_PASSWORD`
-
-WindowsのRFC 3161タイムスタンプURLはRepository Variable `WINDOWS_TIMESTAMP_URL`にHTTPS URLとして設定します。
-
-リリース時は`package.json`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml`のバージョンを一致させ、そのバージョンの`v`付きタグをpushします。両OSのビルド後に作成されるDraft ReleaseでDMG、NSIS、Updater成果物、署名、`latest.json`を確認してから手動公開します。公開するまで自動更新には配信されません。
+| データ         | 保存先                          | 扱い                                |
+| -------------- | ------------------------------- | ----------------------------------- |
+| Markdown       | ユーザーが選択したフォルダ      | 現在の作業状態のマスターデータ      |
+| セッションログ | Tauriのアプリデータディレクトリ | 月単位のJSONLへ追記                 |
+| アプリ設定     | Tauriのアプリデータディレクトリ | 選択フォルダ、テーマ、Vimモードなど |
 
 ## 開発
 
 ```bash
-pnpm install
-pnpm tauri dev       # デスクトップアプリを開発起動
-pnpm tauri build     # デスクトップアプリをビルド
-pnpm test            # Vitest
-pnpm lint            # ESLint
-pnpm --dir site build # 紹介サイトとブラウザデモをビルド
+pnpm install --frozen-lockfile
+pnpm tauri dev
 ```
 
-推奨環境: [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+## リリース
+
+`v*.*.*`形式のGit tagをpushすると、`.github/workflows/release.yml`が起動します。
+
+### 1. バージョンを更新する
+
+次の3ファイルを同じSemantic Versionへ更新します。
+
+- `package.json`
+- `src-tauri/tauri.conf.json`
+- `src-tauri/Cargo.toml`
+
+### 2. tagをpushする
+
+例として`0.0.2`をリリースする場合:
+
+```bash
+git tag v0.0.2
+git push origin v0.0.2
+```
