@@ -110,6 +110,10 @@ jobs:
 
   build-windows:
     name: Build unsigned Windows artifact
+    # Windows support is paused for the v1 release. Delete this "if: false" line and
+    # restore "build-windows" to the "publish" job's needs/downloads/asset-count below
+    # to re-enable Windows releases.
+    if: false
     needs: validate
     runs-on: windows-latest
     timeout-minutes: 45
@@ -176,7 +180,6 @@ jobs:
     name: Create draft GitHub Release
     needs:
       - build-macos
-      - build-windows
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -200,25 +203,19 @@ jobs:
           name: monura-macos-release
           path: release-assets
 
-      - name: Download Windows artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          name: monura-windows-release
-          path: release-assets
-
       - name: Prepare updater manifest and release assets
         env:
           RELEASE_VERSION: ${{ github.ref_name }}
         run: node scripts/create-updater-release.mjs release-assets release-upload
 
-      - name: Create draft release with both platforms
+      - name: Create draft release for the current platforms
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: |
           assets=(release-upload/*)
-          if (( ${#assets[@]} != 6 )); then
-            echo "Expected exactly six release assets, found ${#assets[@]}." >&2
+          if (( ${#assets[@]} != 3 )); then
+            echo "Expected exactly three release assets, found ${#assets[@]}." >&2
             exit 1
           fi
           gh release create "$GITHUB_REF_NAME" "${assets[@]}" \

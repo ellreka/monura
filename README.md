@@ -25,17 +25,15 @@ Use any editor, folder structure, Git workflow, or sync tool. Monura is a focuse
 
 ## Download
 
-| Platform              | Package                  |
-| --------------------- | ------------------------ |
-| macOS — Apple Silicon | `Monura_*_aarch64.dmg`   |
-| Windows — x64         | `Monura_*_x64-setup.exe` |
+| Platform              | Package                |
+| ---------------------- | ----------------------- |
+| macOS — Apple Silicon | `Monura_*_aarch64.dmg` |
 
-Download the latest build from [GitHub Releases](https://github.com/ellreka/monura/releases). Intel Macs, Windows on ARM, and Linux are not currently packaged.
+Download the latest build from [GitHub Releases](https://github.com/ellreka/monura/releases). Windows support is paused for the first release (build pipeline stays in the repo and can be re-enabled anytime; see `.github/workflows/release.yml`). Intel Macs, Windows on ARM, and Linux are not currently packaged.
 
-The builds are not code-signed by Apple or Microsoft:
+The build is not code-signed by Apple:
 
 - **macOS:** Try to open Monura once, then go to **System Settings → Privacy & Security → Open Anyway**.
-- **Windows:** In Microsoft Defender SmartScreen, choose **More info → Run anyway** after verifying that you downloaded it from this repository's GitHub Releases page.
 
 ## Getting Started
 
@@ -98,7 +96,7 @@ Built with React 19, TypeScript, CodeMirror 6, Rust, and Tauri 2.
 
 ## Release
 
-Pushing a `v*.*.*` tag triggers `.github/workflows/release.yml` and creates a draft release for macOS and Windows.
+Pushing a `v*.*.*` tag triggers `.github/workflows/release.yml` and creates a draft release for macOS.
 
 1. Set the same version in `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml`.
 2. Run `cargo check --manifest-path src-tauri/Cargo.toml` to update Cargo metadata.
