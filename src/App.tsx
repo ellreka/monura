@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { relaunch } from "@tauri-apps/plugin-process";
@@ -139,14 +139,6 @@ function App() {
   const checkInFlightRef = useRef(false);
   const installInFlightRef = useRef(false);
 
-  const updateInProgress =
-    updateState.phase === "downloading" || updateState.phase === "installing";
-  const isRunning = timerState.status === "running";
-  const isCursorOnTask = focusedTaskLabel !== null;
-  const activeFile = files[activeIndex];
-  const presets = compactPresets(presetSlots);
-  const presetKeymap = compactPresetShortcuts(presetSlots, shortcuts.presets);
-
   // Mirror to read the latest state from async callbacks (watch refresh)
   const filesRef = useRef(files);
   const activeIndexRef = useRef(activeIndex);
@@ -154,6 +146,14 @@ function App() {
     filesRef.current = files;
     activeIndexRef.current = activeIndex;
   });
+
+  const updateInProgress =
+    updateState.phase === "downloading" || updateState.phase === "installing";
+  const isRunning = timerState.status === "running";
+  const isCursorOnTask = focusedTaskLabel !== null;
+  const activeFile = files[activeIndex];
+  const presets = compactPresets(presetSlots);
+  const presetKeymap = compactPresetShortcuts(presetSlots, shortcuts.presets);
 
   // Log and settings are toggles. Pressing the active button again returns to the editor (base view).
   const handleSelectView = (next: AppView) => {
@@ -589,9 +589,7 @@ function App() {
     setLogRefreshKey((key) => key + 1);
   };
 
-  // ---- Tray icon (Tauri only; no-ops in the browser) ----
-  // The tray is a lens on an active session only — hidden while idle, shown with the tracked
-  // task's title and a live "mm:ss" countdown the moment a timer starts, hidden again on stop.
+  // ---- Tray icon (Tauri only; no-ops in the browser) — a lens on the active session only ----
 
   const trayStart = (label: string, remaining: string) => {
     if (!isTauri()) return;
@@ -611,12 +609,9 @@ function App() {
   };
 
   // ---- Native backup alarm (Tauri only) ----
-  // WKWebView throttles JS timers once the window is hidden (the tray lets the app run that
-  // way), so `isExpired()` below can no longer be trusted to fire on time in the background.
-  // Rust arms an OS-scheduled alarm in parallel that fires the OS notification and an
-  // "timer-expired-native" event on its own, independent of the WebView's event loop. It owns
-  // the notification exclusively (JS no longer sends one) to avoid a double notification when
-  // both this alarm and the JS-side isExpired() detect the same expiry.
+  // WKWebView throttles JS timers in hidden windows, so Rust arms an OS-scheduled alarm that
+  // fires the notification and "timer-expired-native" on its own. It owns the notification
+  // exclusively to avoid a double notification alongside isExpired() below.
 
   const timerArm = (label: string, presetMinutes: number, durationSecs: number) => {
     if (!isTauri()) return;
@@ -703,11 +698,8 @@ function App() {
     else handleStart();
   };
 
-  // Always call the latest stop handler from the interval (expiry detection)
-  const stopTrackingRef = useRef(stopTracking);
-  useEffect(() => {
-    stopTrackingRef.current = stopTracking;
-  });
+  // Always call the latest stop handler from event listeners and the timer interval.
+  const requestStop = useEffectEvent(() => stopTracking());
 
   // ---- Timer (display update every 250ms and expiry detection) ----
 
@@ -727,49 +719,28 @@ function App() {
       // Stop the interval in place so the stop handler doesn't run again before re-render
       if (isExpired(timerState, now)) {
         window.clearInterval(id);
-        stopTrackingRef.current();
+        requestStop();
       }
     }, 250);
     return () => window.clearInterval(id);
   }, [timerState]);
 
-  // Receive the Stop click from the tray menu (frontend owns the timer's domain logic — the
-  // tray only asks it to stop, same as clicking ■ in the timer bar).
+  // Tray "Stop" click and the native alarm's expiry signal (see timerArm) both just ask the
+  // frontend to stop; requestStop's `if (!isRunning)` guard makes duplicates a no-op. The
+  // alarm is the path that matters once WKWebView throttles JS timers in a hidden window.
   useEffect(() => {
     if (!isTauri()) return;
-    let unlisten: (() => void) | undefined;
+    const unlistens: (() => void)[] = [];
     let cancelled = false;
-    listen("tray-stop-requested", () => stopTrackingRef.current()).then((fn) => {
-      if (cancelled) {
-        fn();
-      } else {
-        unlisten = fn;
-      }
-    });
+    for (const event of ["tray-stop-requested", "timer-expired-native"] as const) {
+      listen(event, () => requestStop()).then((fn) => {
+        if (cancelled) fn();
+        else unlistens.push(fn);
+      });
+    }
     return () => {
       cancelled = true;
-      unlisten?.();
-    };
-  }, []);
-
-  // Receive the guaranteed-on-time expiry signal from the native alarm (see timerArm above).
-  // In the foreground this normally loses the race to the JS isExpired() check above — that's
-  // fine, stopTracking's `if (!isRunning) return;` guard makes the second call a no-op. This is
-  // the path that actually matters once the window is hidden.
-  useEffect(() => {
-    if (!isTauri()) return;
-    let unlisten: (() => void) | undefined;
-    let cancelled = false;
-    listen("timer-expired-native", () => stopTrackingRef.current()).then((fn) => {
-      if (cancelled) {
-        fn();
-      } else {
-        unlisten = fn;
-      }
-    });
-    return () => {
-      cancelled = true;
-      unlisten?.();
+      for (const fn of unlistens) fn();
     };
   }, []);
 

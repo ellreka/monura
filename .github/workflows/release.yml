@@ -110,6 +110,7 @@ jobs:
 
   build-windows:
     name: Build unsigned Windows artifact
+    if: ${{ vars.RELEASE_WINDOWS == 'true' }}
     needs: validate
     runs-on: windows-latest
     timeout-minutes: 45
@@ -177,6 +178,7 @@ jobs:
     needs:
       - build-macos
       - build-windows
+    if: ${{ always() && needs.build-macos.result == 'success' && (needs.build-windows.result == 'success' || needs.build-windows.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -201,6 +203,7 @@ jobs:
           path: release-assets
 
       - name: Download Windows artifacts
+        if: ${{ needs.build-windows.result == 'success' }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: monura-windows-release
@@ -211,14 +214,15 @@ jobs:
           RELEASE_VERSION: ${{ github.ref_name }}
         run: node scripts/create-updater-release.mjs release-assets release-upload
 
-      - name: Create draft release with both platforms
+      - name: Create draft release
         env:
+          EXPECTED_ASSET_COUNT: ${{ needs.build-windows.result == 'success' && 6 || 4 }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: |
           assets=(release-upload/*)
-          if (( ${#assets[@]} != 6 )); then
-            echo "Expected exactly six release assets, found ${#assets[@]}." >&2
+          if (( ${#assets[@]} != EXPECTED_ASSET_COUNT )); then
+            echo "Expected exactly $EXPECTED_ASSET_COUNT release assets, found ${#assets[@]}." >&2
             exit 1
           fi
           gh release create "$GITHUB_REF_NAME" "${assets[@]}" \

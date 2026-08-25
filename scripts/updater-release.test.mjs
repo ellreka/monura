@@ -100,6 +100,42 @@ describe("latest.json generation", () => {
     });
   });
 
+  it("omits the Windows platform from latest.json when no Windows artifacts are supplied", () => {
+    const manifest = createUpdaterManifest({
+      repository: "ellreka/monura",
+      tag: "v1.2.3",
+      version: "v1.2.3",
+      publishedAt: "2026-08-20T00:00:00.000Z",
+      macUpdaterName: "Monura.app.tar.gz",
+      macSignature: "mac-signature\n",
+    });
+
+    expect(manifest).toEqual({
+      version: "1.2.3",
+      pub_date: "2026-08-20T00:00:00.000Z",
+      platforms: {
+        "darwin-aarch64": {
+          signature: "mac-signature",
+          url: "https://github.com/ellreka/monura/releases/download/v1.2.3/Monura.app.tar.gz",
+        },
+      },
+    });
+  });
+
+  it("rejects a Windows updater filename supplied without its signature", () => {
+    expect(() =>
+      createUpdaterManifest({
+        repository: "ellreka/monura",
+        tag: "v1.2.3",
+        version: "v1.2.3",
+        publishedAt: "2026-08-20T00:00:00.000Z",
+        macUpdaterName: "Monura.app.tar.gz",
+        macSignature: "mac-signature\n",
+        windowsUpdaterName: "Monura_1.2.3_x64-setup.exe",
+      }),
+    ).toThrow("must be supplied together");
+  });
+
   it("flattens exactly five signed inputs and adds latest.json", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "monura-updater-"));
     temporaryDirectories.push(root);
@@ -135,5 +171,37 @@ describe("latest.json generation", () => {
     ]);
     const manifest = JSON.parse(await readFile(path.join(output, "latest.json"), "utf8"));
     expect(manifest.platforms["windows-x86_64"].signature).toBe("windows-signature");
+  });
+
+  it("flattens macOS-only inputs and omits the Windows platform", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "monura-updater-"));
+    temporaryDirectories.push(root);
+    const input = path.join(root, "input");
+    const output = path.join(root, "output");
+    await mkdir(path.join(input, "macos"), { recursive: true });
+    const files = [
+      ["macos/Monura_1.2.3_aarch64.dmg", "dmg"],
+      ["macos/Monura.app.tar.gz", "archive"],
+      ["macos/Monura.app.tar.gz.sig", "mac-signature"],
+    ];
+    await Promise.all(files.map(([name, content]) => writeFile(path.join(input, name), content)));
+
+    await createUpdaterRelease({
+      inputDirectory: input,
+      outputDirectory: output,
+      repository: "ellreka/monura",
+      tag: "v1.2.3",
+      version: "1.2.3",
+      publishedAt: "2026-08-20T00:00:00.000Z",
+    });
+
+    expect((await readdir(output)).sort()).toEqual([
+      "Monura.app.tar.gz",
+      "Monura.app.tar.gz.sig",
+      "Monura_1.2.3_aarch64.dmg",
+      "latest.json",
+    ]);
+    const manifest = JSON.parse(await readFile(path.join(output, "latest.json"), "utf8"));
+    expect(manifest.platforms).not.toHaveProperty("windows-x86_64");
   });
 });

@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import { useEffect, useImperativeHandle, useRef, type Ref } from "react";
 import { Annotation, EditorState, MapMode } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { getCM, vim } from "@replit/codemirror-vim";
@@ -71,6 +71,7 @@ export interface EditorHandle {
 }
 
 interface EditorProps {
+  ref?: Ref<EditorHandle>;
   initialContent: string;
   onChange: (text: string) => void;
   vimMode?: boolean;
@@ -89,23 +90,7 @@ interface EditorProps {
   onToggle?: () => void;
 }
 
-export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
-  {
-    initialContent,
-    onChange,
-    vimMode = false,
-    theme = "light",
-    presets,
-    toggleKey = null,
-    onVimStatusChange,
-    onCursorLineChange,
-    onTrackedLineChange,
-    onTrackedLineLost,
-    onSelectPreset,
-    onToggle,
-  },
-  ref,
-) {
+export function Editor({ ref, initialContent, onChange, vimMode = false, theme = "light", presets, toggleKey = null, onVimStatusChange, onCursorLineChange, onTrackedLineChange, onTrackedLineLost, onSelectPreset, onToggle }: EditorProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
   const trackedAnchorRef = useRef<number | null>(null);
@@ -114,25 +99,16 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   const trackedTextRef = useRef<string | null>(null);
   const vimListenerCleanupRef = useRef<(() => void) | null>(null);
 
-  const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
-  const onVimStatusChangeRef = useRef(onVimStatusChange);
-  onVimStatusChangeRef.current = onVimStatusChange;
-  const onCursorLineChangeRef = useRef(onCursorLineChange);
-  onCursorLineChangeRef.current = onCursorLineChange;
-  const onTrackedLineChangeRef = useRef(onTrackedLineChange);
-  onTrackedLineChangeRef.current = onTrackedLineChange;
-  const onTrackedLineLostRef = useRef(onTrackedLineLost);
-  onTrackedLineLostRef.current = onTrackedLineLost;
-  const onSelectPresetRef = useRef(onSelectPreset);
-  onSelectPresetRef.current = onSelectPreset;
-  const onToggleRef = useRef(onToggle);
-  onToggleRef.current = onToggle;
+  // Latest callbacks for the mount-time effect and the imperative handle below.
+  const latest = useRef({ onChange, onVimStatusChange, onCursorLineChange, onTrackedLineChange, onTrackedLineLost, onSelectPreset, onToggle });
+  useEffect(() => {
+    latest.current = { onChange, onVimStatusChange, onCursorLineChange, onTrackedLineChange, onTrackedLineLost, onSelectPreset, onToggle };
+  });
 
   function notifyCursorLine(view: EditorView): void {
     const line = view.state.doc.lineAt(view.state.selection.main.head);
     const lines = parseLines(view.state.doc.toString());
-    onCursorLineChangeRef.current?.({
+    latest.current.onCursorLineChange?.({
       lineNumber: line.number,
       text: line.text,
       isTask: lines[line.number - 1]?.isTask ?? false,
@@ -143,12 +119,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     const cm = getCM(view);
     if (!cm) return null;
     const handler = (e: { mode: string }) => {
-      onVimStatusChangeRef.current?.(e.mode);
-      // Defer: dispatching synchronously from within vim's own mode-change signal corrupts its
-      // internal operation state (observed: Vim gets stuck unresponsive after Escape from
-      // visual-line mode, e.g. Shift-V then Escape). Queueing a microtask lets vim's current
-      // operation finish first — matches the fix documented on the CodeMirror forum for this
-      // exact editable-toggle pattern.
+      latest.current.onVimStatusChange?.(e.mode);
       queueMicrotask(() => {
         if (viewRef.current !== view) return;
         view.dispatch({
@@ -157,7 +128,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       });
     };
     cm.on("vim-mode-change", handler);
-    onVimStatusChangeRef.current?.(cm.state.vim?.mode ?? "normal");
+    latest.current.onVimStatusChange?.(cm.state.vim?.mode ?? "normal");
     return () => cm.off("vim-mode-change", handler);
   }
 
@@ -169,13 +140,13 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         doc: initialContent,
         extensions: [
           createMonuraExtensions({
-            onDocChange: (text) => onChangeRef.current(text),
+            onDocChange: (text) => latest.current.onChange(text),
             vimMode,
             dark: theme === "dark",
             presets,
             toggleKey,
-            onSelectPreset: (presetMinutes) => onSelectPresetRef.current?.(presetMinutes),
-            onToggle: () => onToggleRef.current?.(),
+            onSelectPreset: (presetMinutes) => latest.current.onSelectPreset?.(presetMinutes),
+            onToggle: () => latest.current.onToggle?.(),
           }),
           // Keep the tracked line following position shifts caused by edits (in-memory tracking only; not persisted)
           EditorView.updateListener.of((update) => {
@@ -192,11 +163,11 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
               }
               if (nextLine === null) {
                 // Line deletion is not blocking; the user picks the recording target when tracking ends
-                onTrackedLineLostRef.current?.();
+                latest.current.onTrackedLineLost?.();
               } else {
                 const trackedLine = update.state.doc.line(nextLine);
                 trackedTextRef.current = trackedLine.text;
-                onTrackedLineChangeRef.current?.({ lineNumber: nextLine, text: trackedLine.text });
+                latest.current.onTrackedLineChange?.({ lineNumber: nextLine, text: trackedLine.text });
               }
             }
             if (update.docChanged || update.selectionSet) {
@@ -303,13 +274,13 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
           trackedAnchorRef.current = null;
           trackedTextRef.current = null;
           view.dispatch({ effects: setUiStateEffect.of({ activeLine: null }) });
-          onTrackedLineLostRef.current?.();
+          latest.current.onTrackedLineLost?.();
           return;
         }
         trackedAnchorRef.current = found.from;
         trackedTextRef.current = found.text;
         view.dispatch({ effects: setUiStateEffect.of({ activeLine: found.number }) });
-        onTrackedLineChangeRef.current?.({ lineNumber: found.number, text: found.text });
+        latest.current.onTrackedLineChange?.({ lineNumber: found.number, text: found.text });
       },
 
       applySpentToLine(lineNumber, elapsedSeconds) {
@@ -343,7 +314,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         if (enabled) {
           vimListenerCleanupRef.current = subscribeVimMode(view);
         } else {
-          onVimStatusChangeRef.current?.(null);
+          latest.current.onVimStatusChange?.(null);
           view.contentDOM.removeAttribute("tabindex");
         }
       },
@@ -364,8 +335,8 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
             createTimerKeymap({
               presets: nextPresets,
               toggleKey: nextToggleKey,
-              onSelectPreset: (minutes) => onSelectPresetRef.current?.(minutes),
-              onToggle: () => onToggleRef.current?.(),
+              onSelectPreset: (minutes) => latest.current.onSelectPreset?.(minutes),
+              onToggle: () => latest.current.onToggle?.(),
             }),
           ),
         });
@@ -373,6 +344,5 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     }),
     [],
   );
-
   return <div className="monura-editor" ref={containerRef} />;
-});
+}
