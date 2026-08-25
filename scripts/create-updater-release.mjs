@@ -32,24 +32,27 @@ export function createUpdaterManifest({
   if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(releaseVersion)) {
     throw new Error("RELEASE_VERSION must be a semantic version.");
   }
+  if (Boolean(windowsUpdaterName) !== Boolean(windowsSignature)) {
+    throw new Error("Windows updater filename and signature must be supplied together.");
+  }
+
+  const platforms = {
+    "darwin-aarch64": {
+      signature: required(macSignature, "macOS updater signature"),
+      url: releaseAssetUrl(repo, releaseTag, required(macUpdaterName, "macOS updater filename")),
+    },
+  };
+  if (windowsUpdaterName) {
+    platforms["windows-x86_64"] = {
+      signature: required(windowsSignature, "Windows updater signature"),
+      url: releaseAssetUrl(repo, releaseTag, windowsUpdaterName),
+    };
+  }
 
   return {
     version: releaseVersion,
     pub_date: new Date(publishedAt).toISOString(),
-    platforms: {
-      "darwin-aarch64": {
-        signature: required(macSignature, "macOS updater signature"),
-        url: releaseAssetUrl(repo, releaseTag, required(macUpdaterName, "macOS updater filename")),
-      },
-      "windows-x86_64": {
-        signature: required(windowsSignature, "Windows updater signature"),
-        url: releaseAssetUrl(
-          repo,
-          releaseTag,
-          required(windowsUpdaterName, "Windows updater filename"),
-        ),
-      },
-    },
+    platforms,
   };
 }
 
@@ -72,6 +75,14 @@ function exactlyOne(files, predicate, label) {
   return matches[0];
 }
 
+function atMostOne(files, predicate, label) {
+  const matches = files.filter(predicate);
+  if (matches.length > 1) {
+    throw new Error(`Expected at most one ${label}, found ${matches.length}.`);
+  }
+  return matches[0];
+}
+
 export async function createUpdaterRelease({
   inputDirectory,
   outputDirectory,
@@ -81,9 +92,6 @@ export async function createUpdaterRelease({
   publishedAt = new Date(),
 }) {
   const files = await listFiles(inputDirectory);
-  if (files.length !== 5) {
-    throw new Error(`Expected five signed release files, found ${files.length}.`);
-  }
 
   const macInstaller = exactlyOne(files, (file) => file.endsWith(".dmg"), "macOS DMG");
   const macUpdater = exactlyOne(
@@ -96,16 +104,14 @@ export async function createUpdaterRelease({
     (file) => file === `${macUpdater}.sig`,
     "macOS updater signature",
   );
-  const windowsInstaller = exactlyOne(
+  const windowsInstaller = atMostOne(
     files,
     (file) => file.endsWith("-setup.exe"),
     "Windows NSIS installer",
   );
-  const windowsSignature = exactlyOne(
-    files,
-    (file) => file === `${windowsInstaller}.sig`,
-    "Windows updater signature",
-  );
+  const windowsSignature = windowsInstaller
+    ? exactlyOne(files, (file) => file === `${windowsInstaller}.sig`, "Windows updater signature")
+    : undefined;
 
   const selectedFiles = [
     macInstaller,
@@ -113,7 +119,12 @@ export async function createUpdaterRelease({
     macSignature,
     windowsInstaller,
     windowsSignature,
-  ];
+  ].filter(Boolean);
+  if (selectedFiles.length !== files.length) {
+    throw new Error(
+      `Expected ${selectedFiles.length} signed release files, found ${files.length}.`,
+    );
+  }
   const names = selectedFiles.map((file) => path.basename(file));
   if (new Set(names).size !== names.length)
     throw new Error("Release asset filenames must be unique.");
@@ -131,8 +142,8 @@ export async function createUpdaterRelease({
     publishedAt,
     macUpdaterName: path.basename(macUpdater),
     macSignature: await readFile(macSignature, "utf8"),
-    windowsUpdaterName: path.basename(windowsInstaller),
-    windowsSignature: await readFile(windowsSignature, "utf8"),
+    windowsUpdaterName: windowsInstaller ? path.basename(windowsInstaller) : undefined,
+    windowsSignature: windowsSignature ? await readFile(windowsSignature, "utf8") : undefined,
   });
   await writeFile(
     path.join(outputDirectory, "latest.json"),
