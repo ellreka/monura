@@ -54,12 +54,6 @@ export function localDateKey(r: SessionRecord): string {
   return format(recordDate(r), "yyyy-MM-dd");
 }
 
-/** Local start time of a record (minutes since midnight). */
-export function localMinutesOfDay(r: SessionRecord): number {
-  const d = recordDate(r);
-  return d.getHours() * 60 + d.getMinutes();
-}
-
 /** Extracts just the title from a line's text (removes checkbox, spent:, and +project). */
 export function baseTitle(lineText: string): string {
   const parsed = parseLine(lineText, 1);
@@ -80,28 +74,28 @@ export function formatDuration(seconds: number): string {
 
 export interface DayBucket {
   day: string;
-  sessions: SessionRecord[];
-  /** project name → seconds. "" means "no project". */
-  byProject: Map<string, number>;
+  records: SessionRecord[];
   totalSeconds: number;
 }
 
-/** Daily buckets (ascending date). */
+/** Daily groups (ascending date). */
 export function groupByDay(records: SessionRecord[]): DayBucket[] {
   const map = new Map<string, DayBucket>();
   for (const r of records) {
     const day = localDateKey(r);
     let bucket = map.get(day);
     if (!bucket) {
-      bucket = { day, sessions: [], byProject: new Map(), totalSeconds: 0 };
+      bucket = { day, records: [], totalSeconds: 0 };
       map.set(day, bucket);
     }
-    bucket.sessions.push(r);
-    const project = r.projects[0] ?? "";
-    bucket.byProject.set(project, (bucket.byProject.get(project) ?? 0) + r.elapsedSeconds);
+    bucket.records.push(r);
     bucket.totalSeconds += r.elapsedSeconds;
   }
-  return [...map.values()].sort((a, b) => a.day.localeCompare(b.day));
+  const groups = [...map.values()];
+  for (const bucket of groups) {
+    bucket.records.sort((a, b) => recordDate(a).getTime() - recordDate(b).getTime());
+  }
+  return groups.sort((a, b) => a.day.localeCompare(b.day));
 }
 
 export interface ProjectTotal {

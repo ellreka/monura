@@ -1,17 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { addMonths, format, isSameMonth, parseISO, startOfMonth } from "date-fns";
 import type { SessionRecord } from "../lib/log/session";
-import { baseTitle, formatDuration, localDateKey, projectTotals, recordDate } from "../lib/log/analytics";
+import { baseTitle, formatDuration, groupByDay, projectTotals, recordDate } from "../lib/log/analytics";
 import { sessionLogFilename } from "../lib/log/session";
 
 const NO_PROJECT = "";
 const PALETTE = ["var(--accent)", "var(--project)", "#4f8fbb", "#b05c8a", "#8a6fc9"];
-
-interface RunningSession {
-  label: string;
-  startedAt: number;
-  projects: string[];
-}
 
 interface LogViewProps {
   loadRecords: () => Promise<SessionRecord[]>;
@@ -21,38 +15,19 @@ interface LogViewProps {
   running?: RunningSession | null;
 }
 
-interface DayGroup {
-  day: string;
-  records: SessionRecord[];
-  totalSec: number;
-}
-
-/** Groups records (assumed already scoped to one month) by day, newest day first. */
-function groupByDay(records: SessionRecord[]): DayGroup[] {
-  const byDay = new Map<string, SessionRecord[]>();
-  for (const r of records) {
-    const key = localDateKey(r);
-    const list = byDay.get(key);
-    if (list) list.push(r);
-    else byDay.set(key, [r]);
-  }
-  const groups: DayGroup[] = [];
-  for (const [day, list] of byDay) {
-    const sorted = [...list].sort((a, b) => recordDate(a).getTime() - recordDate(b).getTime());
-    const totalSec = sorted.reduce((sum, r) => sum + r.elapsedSeconds, 0);
-    groups.push({ day, records: sorted, totalSec });
-  }
-  return groups.sort((a, b) => b.day.localeCompare(a.day));
-}
-
-/** "YYYY-MM-DD" (a `localDateKey`-shaped day key) → "MM-dd Weekday". */
-function dayLabel(day: string): string {
-  return format(parseISO(day), "MM-dd EEE");
+interface RunningSession {
+  label: string;
+  startedAt: number;
+  projects: string[];
 }
 
 /** Local date key of the in-progress session (browser local time is fine). */
 function runningDayKey(running: RunningSession): string {
   return format(new Date(running.startedAt), "yyyy-MM-dd");
+}
+/** "YYYY-MM-DD" day key → "MM-dd Weekday". */
+function dayLabel(day: string): string {
+  return format(parseISO(day), "MM-dd EEE");
 }
 
 function RunningRow({ running }: { running: RunningSession }) {
@@ -95,7 +70,7 @@ export function LogView({ loadRecords, refreshKey, running = null }: LogViewProp
     [records, activeMonth],
   );
 
-  const days = useMemo(() => groupByDay(filtered), [filtered]);
+  const days = useMemo(() => groupByDay(filtered).reverse(), [filtered]);
   const projects = useMemo(() => projectTotals(filtered), [filtered]);
   const totalSec = useMemo(() => filtered.reduce((sum, r) => sum + r.elapsedSeconds, 0), [filtered]);
   const maxProjectSec = projects[0]?.seconds ?? 0;
@@ -170,7 +145,7 @@ export function LogView({ loadRecords, refreshKey, running = null }: LogViewProp
           <section key={group.day} className="log-day-group">
             <header className="log-day-header">
               <span className="log-day-label">{dayLabel(group.day)}</span>
-              <span className="log-day-total">Tracked {formatDuration(group.totalSec)}</span>
+              <span className="log-day-total">Tracked {formatDuration(group.totalSeconds)}</span>
             </header>
             {running && isCurrentMonth && group.day === runningDayKey(running) && <RunningRow running={running} />}
             {group.records.map((r, i) => (
