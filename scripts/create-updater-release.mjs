@@ -104,8 +104,6 @@ export async function createUpdaterRelease({
     (file) => file === `${macUpdater}.sig`,
     "macOS updater signature",
   );
-  // Windows artifacts are optional so this script keeps working while Windows releases
-  // are paused; supply both nsis installer and .sig to include Windows in the manifest.
   const windowsInstaller = atMostOne(
     files,
     (file) => file.endsWith("-setup.exe"),

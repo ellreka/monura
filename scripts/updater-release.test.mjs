@@ -173,7 +173,7 @@ describe("latest.json generation", () => {
     expect(manifest.platforms["windows-x86_64"].signature).toBe("windows-signature");
   });
 
-  it("flattens macOS-only inputs and omits the Windows platform when Windows is paused", async () => {
+  it("flattens macOS-only inputs and omits the Windows platform", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "monura-updater-"));
     temporaryDirectories.push(root);
     const input = path.join(root, "input");

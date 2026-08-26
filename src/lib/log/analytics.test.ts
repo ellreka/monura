@@ -4,7 +4,6 @@ import {
   formatDuration,
   groupByDay,
   localDateKey,
-  localMinutesOfDay,
   parseSessionLines,
   projectTotals,
   taskGroups,
@@ -42,12 +41,11 @@ describe("parseSessionLines", () => {
   });
 });
 
-describe("local date helpers", () => {
-  it("interprets date/time with the JST offset", () => {
+describe("localDateKey", () => {
+  it("interprets the date with the JST offset", () => {
     // UTC 2026-08-14 16:30 = JST 2026-08-15 01:30
     const r = record({ startedAt: "2026-08-14T16:30:00.000Z" });
     expect(localDateKey(r)).toBe("2026-08-15");
-    expect(localMinutesOfDay(r)).toBe(90);
   });
 });
 
@@ -60,17 +58,20 @@ describe("baseTitle", () => {
 });
 
 describe("groupByDay", () => {
-  it("aggregates per-project seconds per day", () => {
+  it("groups records by day and orders days and records chronologically", () => {
     const records = [
-      record({ startedAt: "2026-08-14T01:00:00.000Z" }),
       record({ startedAt: "2026-08-14T05:00:00.000Z", projects: [], elapsedSeconds: 600 }),
+      record({ startedAt: "2026-08-14T01:00:00.000Z" }),
       record({ startedAt: "2026-08-15T01:00:00.000Z", elapsedSeconds: 300 }),
     ];
     const days = groupByDay(records);
     expect(days.map((d) => d.day)).toEqual(["2026-08-14", "2026-08-15"]);
-    expect(days[0].byProject.get("backend")).toBe(1800);
-    expect(days[0].byProject.get("")).toBe(600);
+    expect(days[0].records.map((r) => r.startedAt)).toEqual([
+      "2026-08-14T01:00:00.000Z",
+      "2026-08-14T05:00:00.000Z",
+    ]);
     expect(days[0].totalSeconds).toBe(2400);
+    expect(days[1].totalSeconds).toBe(300);
   });
 });
 
