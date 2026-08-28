@@ -16,7 +16,6 @@ import type { PresetKeymapEntry } from "../timer";
 export interface CreateMonuraExtensionsOptions {
   onDocChange?: (text: string) => void;
   vimMode?: boolean;
-  dark?: boolean;
   presets?: readonly PresetKeymapEntry[];
   toggleKey?: string | null;
   onSelectPreset?: (presetMinutes: number) => void;
@@ -32,7 +31,7 @@ export const vimModeCompartment = new Compartment();
  * workaround documented on the CodeMirror forum for this exact bug.
  */
 export const vimEditableCompartment = new Compartment();
-export const themeCompartment = new Compartment();
+
 export const timerKeymapCompartment = new Compartment();
 
 // Disable the `:`-triggered Ex commands (:w, :q, etc.), because they don't mesh with this
@@ -63,7 +62,7 @@ export function createMonuraExtensions(options: CreateMonuraExtensionsOptions = 
     uiStateField,
     taskDecorationsField,
     activeLineField,
-    themeCompartment.of([editorTheme(!!options.dark), markdownHighlighting(!!options.dark)]),
+    [editorTheme(), markdownHighlighting()],
     EditorView.lineWrapping,
     // Keep the tracked line clear of the floating timer bar when scrolling into
     // view (e.g. Vim's G), since CodeMirror ignores CSS scroll-padding here.

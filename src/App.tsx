@@ -45,7 +45,6 @@ import {
   saveLastFileFor,
   savePresets,
   saveShortcuts,
-  saveTheme,
   saveVimMode,
 } from "./lib/settings";
 import {
@@ -104,7 +103,6 @@ function App() {
   const [settingsReady, setSettingsReady] = useState(() => !isTauri());
   const [loadError, setLoadError] = useState<string | null>(null);
   const [vimMode, setVimMode] = useState(false);
-  const [theme, setTheme] = useState<"light" | "dark">("light");
   /** Preset 1 (the first slot) is the startup selection — guarantees a preset is always highlighted, even if slot 3 (default 1h) was customized away. */
   const [presetMinutes, setPresetMinutes] = useState<number>(
     () => compactPresets(DEFAULT_PRESETS)[0] ?? DEFAULT_PRESET_MINUTES,
@@ -131,6 +129,16 @@ function App() {
   const saveTimerRef = useRef<number | undefined>(undefined);
   const pendingSaveRef = useRef<MdFile | null>(null);
   const saveInFlightRef = useRef<Promise<void>>(Promise.resolve());
+  /**
+   * Count of writes currently being committed to disk (incremented when a write starts,
+   * decremented once it settles). `pendingSaveRef` alone only tracks edits not yet *scheduled*
+   * to flush — it's nulled the instant a flush *starts*, before the write actually lands on
+   * disk. Without this counter, the watcher's debounced `refreshFromDisk` can read disk while
+   * our own write is still in flight (more likely with higher-latency folders like iCloud
+   * Drive/Dropbox), see stale content, and wrongly treat it as an authoritative external edit —
+   * reloading the editor with pre-edit content and failing to re-identify the tracked line.
+   */
+  const activeWritesRef = useRef(0);
   /** While replacing the doc from disk, suppress the local save path (handleDocChange). */
   const applyingExternalRef = useRef(false);
   /** Last whole-second remaining value sent to the tray (throttles tray_tick to ~1/s). */
@@ -179,9 +187,13 @@ function App() {
     pendingSaveRef.current = null;
     if (!pending || !dataDir) return saveInFlightRef.current;
 
+    activeWritesRef.current += 1;
     const save = saveInFlightRef.current
       .catch(() => undefined)
-      .then(() => writeMdFile(dataDir, pending));
+      .then(() => writeMdFile(dataDir, pending))
+      .finally(() => {
+        activeWritesRef.current -= 1;
+      });
     saveInFlightRef.current = save;
     return save;
   }, [dataDir]);
@@ -286,7 +298,6 @@ function App() {
         if (cancelled) return;
         setDataDir(settings.dataDir);
         setVimMode(settings.vimMode);
-        setTheme(settings.theme);
         setPresetSlots(settings.presets);
         setPresetMinutes(compactPresets(settings.presets)[0] ?? DEFAULT_PRESET_MINUTES);
         setShortcuts(settings.shortcuts);
@@ -300,12 +311,6 @@ function App() {
       cancelled = true;
     };
   }, []);
-
-  // ---- Theme reflection (data-theme attribute drives the CSS palette in App.css) ----
-
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-  }, [theme]);
 
   // ---- Initial data folder load (subsequent tracking is handled by the watcher) ----
 
@@ -369,7 +374,9 @@ function App() {
   // Coalesce raw events from Rust over 300ms, then reload the list and active file.
   // Events caused by our own saves become no-ops via content comparison.
   // Reload even during a session (Editor re-identifies the tracked line by exact text match).
-  // Only during the save debounce do we hold off, since local edits not yet on disk are newer.
+  // Hold off while a local edit is scheduled to flush OR a flush is currently writing to disk
+  // (activeWritesRef) — otherwise a concurrent disk read can return pre-write content while our
+  // own save is still landing, and get wrongly treated as a newer external edit.
 
   const refreshFromDisk = useCallback(async () => {
     if (!dataDir) return;
@@ -390,7 +397,7 @@ function App() {
         } else {
           setActiveIndex(newIndex);
           const disk = await readMdFile(dataDir, name);
-          if (pendingSaveRef.current !== null) return;
+          if (pendingSaveRef.current !== null || activeWritesRef.current > 0) return;
           const state = filesRef.current[activeIndexRef.current];
           if (state && state.name === name && disk.content !== state.content) {
             setFiles((prev) =>
@@ -536,14 +543,6 @@ function App() {
     editorRef.current?.setVimMode(next);
     if (isTauri()) {
       void saveVimMode(next).catch((e) => console.error("save vimMode failed:", e));
-    }
-  };
-
-  const handleSetTheme = (next: "light" | "dark") => {
-    setTheme(next);
-    editorRef.current?.setTheme(next === "dark");
-    if (isTauri()) {
-      void saveTheme(next).catch((e) => console.error("save theme failed:", e));
     }
   };
 
@@ -781,15 +780,23 @@ function App() {
       timerArm(trackingLabel, DEBUG_FAST_FORWARD_SECONDS / 60, DEBUG_FAST_FORWARD_SECONDS);
   };
 
+  const showNativeTitlebar = isTauri() && navigator.userAgent.includes("Macintosh");
+  const nativeTitlebar = showNativeTitlebar ? (
+    <div className="window-titlebar" data-tauri-drag-region>
+      <span className="window-titlebar-label">{activeFile?.name ?? "Monura"}</span>
+    </div>
+  ) : null;
+
   // ---- First-run setup (no data folder configured or load failed) ----
   // Don't show the setup screen while settings are still loading (it would flash briefly)
   if (isTauri() && !settingsReady) {
-    return <div className="app-shell" />;
+    return <div className="app-shell">{nativeTitlebar}</div>;
   }
 
   if (isTauri() && (!dataDir || loadError)) {
     return (
       <div className="app-shell">
+        {nativeTitlebar}
         <div className="setup-screen">
           <h1 className="setup-title">monura</h1>
           <p className="setup-desc">
@@ -823,6 +830,7 @@ function App() {
 
   return (
     <div className="app-shell">
+      {nativeTitlebar}
       <div className="app-body">
         <IconRail
           view={view}
@@ -858,7 +866,6 @@ function App() {
                 initialContent={activeFile.content}
                 onChange={handleDocChange}
                 vimMode={vimMode}
-                theme={theme}
                 presets={presetKeymap}
                 onCursorLineChange={(info) =>
                   setFocusedTaskLabel(info.isTask ? toTrackingLabel(info.text) : null)
@@ -894,8 +901,6 @@ function App() {
             <SettingsView
               vimMode={vimMode}
               onToggleVimMode={handleToggleVimMode}
-              theme={theme}
-              onSetTheme={handleSetTheme}
               presetSlots={presetSlots}
               onSetPresetSlot={handleSetPresetSlot}
               shortcuts={shortcuts}

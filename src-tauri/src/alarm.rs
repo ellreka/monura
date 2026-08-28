@@ -3,6 +3,11 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_notification::NotificationExt;
 
+/// System sound (`/System/Library/Sounds/Glass.aiff`) played when the timer expires.
+/// Sent as part of the notification itself so it obeys the user's notification
+/// settings for monura and can't double up with a separate audio player.
+const EXPIRY_SOUND: &str = "Glass";
+
 /// Monotonically increasing token guarding the pending native alarm: arming a new timer or
 /// disarming the current one bumps the token, so an in-flight sleep whose token has gone stale
 /// silently becomes a no-op when it wakes.
@@ -41,6 +46,7 @@ pub fn timer_arm(
             .builder()
             .title(format!("{preset_label} elapsed"))
             .body(label)
+            .sound(EXPIRY_SOUND)
             .show();
         let _ = handle.emit("timer-expired-native", ());
     });

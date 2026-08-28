@@ -4,11 +4,8 @@ import { EditorView } from "@codemirror/view";
 import { getCM, vim } from "@replit/codemirror-vim";
 import {
   createMonuraExtensions,
-  editorTheme,
-  markdownHighlighting,
   timerKeymapCompartment,
   setUiStateEffect,
-  themeCompartment,
   uiStateField,
   vimEditableCompartment,
   vimModeCompartment,
@@ -66,7 +63,6 @@ export interface EditorHandle {
   /** Moves DOM focus into the editor (e.g. after a click on a chrome button, like starting the timer). */
   focus(): void;
   setVimMode(enabled: boolean): void;
-  setTheme(dark: boolean): void;
   setTimerKeymap(presets: readonly PresetKeymapEntry[], toggleKey: string | null): void;
 }
 
@@ -75,7 +71,6 @@ interface EditorProps {
   initialContent: string;
   onChange: (text: string) => void;
   vimMode?: boolean;
-  theme?: "light" | "dark";
   presets: readonly PresetKeymapEntry[];
   /** null = no shortcut assigned. */
   toggleKey?: string | null;
@@ -90,7 +85,7 @@ interface EditorProps {
   onToggle?: () => void;
 }
 
-export function Editor({ ref, initialContent, onChange, vimMode = false, theme = "light", presets, toggleKey = null, onVimStatusChange, onCursorLineChange, onTrackedLineChange, onTrackedLineLost, onSelectPreset, onToggle }: EditorProps) {
+export function Editor({ ref, initialContent, onChange, vimMode = false, presets, toggleKey = null, onVimStatusChange, onCursorLineChange, onTrackedLineChange, onTrackedLineLost, onSelectPreset, onToggle }: EditorProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
   const trackedAnchorRef = useRef<number | null>(null);
@@ -142,7 +137,6 @@ export function Editor({ ref, initialContent, onChange, vimMode = false, theme =
           createMonuraExtensions({
             onDocChange: (text) => latest.current.onChange(text),
             vimMode,
-            dark: theme === "dark",
             presets,
             toggleKey,
             onSelectPreset: (presetMinutes) => latest.current.onSelectPreset?.(presetMinutes),
@@ -317,14 +311,6 @@ export function Editor({ ref, initialContent, onChange, vimMode = false, theme =
           latest.current.onVimStatusChange?.(null);
           view.contentDOM.removeAttribute("tabindex");
         }
-      },
-
-      setTheme(dark) {
-        const view = viewRef.current;
-        if (!view) return;
-        view.dispatch({
-          effects: themeCompartment.reconfigure([editorTheme(dark), markdownHighlighting(dark)]),
-        });
       },
 
       setTimerKeymap(nextPresets, nextToggleKey) {

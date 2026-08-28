@@ -32,8 +32,6 @@ function renderSettings(updateState: AppUpdateState, updateBlocked = false) {
       <SettingsView
         vimMode={false}
         onToggleVimMode={vi.fn()}
-        theme="light"
-        onSetTheme={vi.fn()}
         presetSlots={[...DEFAULT_PRESETS]}
         onSetPresetSlot={vi.fn()}
         shortcuts={createDefaultTimerShortcuts()}

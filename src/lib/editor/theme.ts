@@ -1,6 +1,6 @@
 import type { Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { defaultHighlightStyle, HighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
 
 /**
@@ -24,34 +24,22 @@ interface EditorPalette {
   sumBadgeInk: string;
 }
 
-const lightPalette: EditorPalette = {
-  ink: "#332e26",
-  muted: "#9a9184",
-  accent: "#dd9292",
-  accentSoft: "#f8e7e7",
-  project: "#4f8f72",
-  bg: "#fdfbf6",
-  gutterInk: "#c7bfae",
-  activeLineWash: "rgba(221, 146, 146, 0.06)",
-  sumBadgeBg: "#f1ece0",
-  sumBadgeInk: "#948c7c",
+
+const palette: EditorPalette = {
+  ink: "var(--ink)",
+  muted: "var(--muted)",
+  accent: "var(--accent)",
+  accentSoft: "var(--accent-soft)",
+  project: "var(--project)",
+  bg: "transparent",
+  gutterInk: "var(--gutter-ink)",
+  activeLineWash: "var(--active-line-wash)",
+  sumBadgeBg: "var(--sum-badge-bg)",
+  sumBadgeInk: "var(--sum-badge-ink)",
 };
 
-const darkPalette: EditorPalette = {
-  ink: "#ece7df",
-  muted: "#9a9184",
-  accent: "#dd9292",
-  accentSoft: "#4a3232",
-  project: "#4f8f72",
-  bg: "#201c17",
-  gutterInk: "#857a68",
-  activeLineWash: "rgba(221, 146, 146, 0.1)",
-  sumBadgeBg: "#332c24",
-  sumBadgeInk: "#b3a996",
-};
-
-export function editorTheme(dark: boolean): Extension {
-  const p = dark ? darkPalette : lightPalette;
+export function editorTheme(): Extension {
+  const p = palette;
   return EditorView.theme(
     {
       "&": {
@@ -141,19 +129,25 @@ export function editorTheme(dark: boolean): Extension {
         borderLeft: `3px solid ${p.accent}`,
       },
     },
-    { dark },
+    { dark: true },
   );
 }
 
 /**
  * `defaultHighlightStyle` (from @codemirror/language) hardcodes dark, low-luminance colors
- * (headings' `#` marker at #404740, comments at #940, …) designed for a light background —
- * on a dark background they drop to near-unreadable contrast. Markdown headings/emphasis/
- * strong/links carry no explicit color in either style (they inherit `editorTheme`'s ink,
- * which already flips per theme), so only the tags with hardcoded colors need a dark variant.
+ * (e.g. comments at #940) designed for a light background — unreadable on this app's
+ * dark-only background. Markdown headings/emphasis/strong/links carry no explicit color
+ * here (they inherit `editorTheme`'s ink), so only the tags with hardcoded colors need
+ * an override.
+ *
+ * Note: `@lezer/markdown` tags every syntax marker (`#`, `-`/`*` list bullets, `>` quote,
+ * `[]`/`()` link brackets, `*`/`_` emphasis, `` ` `` code fences) as `tags.processingInstruction`
+ * — NOT `tags.meta`. Styling `tags.meta` here would be a no-op for markdown.
  */
-const darkHighlightStyle = HighlightStyle.define([
-  { tag: tags.meta, color: "#8fa38f" },
+const markdownHighlightStyle = HighlightStyle.define([
+  // Dims the raw markup characters (#, -, *, >, [], (), `) so document content reads
+  // more prominently than its syntax — mirrors muted UI chrome like the gutter/spent: tokens.
+  { tag: tags.processingInstruction, color: palette.muted },
   { tag: tags.link, textDecoration: "underline" },
   { tag: tags.heading, textDecoration: "underline", fontWeight: "bold" },
   { tag: tags.emphasis, fontStyle: "italic" },
@@ -174,6 +168,6 @@ const darkHighlightStyle = HighlightStyle.define([
   { tag: tags.invalid, color: "#ff6b6b" },
 ]);
 
-export function markdownHighlighting(dark: boolean): Extension {
-  return syntaxHighlighting(dark ? darkHighlightStyle : defaultHighlightStyle, { fallback: true });
+export function markdownHighlighting(): Extension {
+  return syntaxHighlighting(markdownHighlightStyle, { fallback: true });
 }

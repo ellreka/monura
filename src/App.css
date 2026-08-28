@@ -1,43 +1,39 @@
 :root {
-  --ink: #332e26;
-  --muted: #a39b8b;
-  --accent: #dd9292;
-  --accent-rgb: 221, 146, 146;
-  --accent-soft: #f8e7e7;
-  --on-accent: #3a2420;
-  --project: #4f8f72;
-  --border: #e8e0d0;
-  --bg: #fdfbf6;
-  --bg-tabs: #f6f1e6;
-  --pill: #ffffff;
-  --wash-rgb: 51, 46, 38;
-  --shadow-rgb: 51, 46, 38;
+  --ink: #f2f0f6;
+  --muted: #aaa6b5;
+  --accent: #ec9ca9;
+  --accent-rgb: 236, 156, 169;
+  --accent-soft: rgba(236, 156, 169, 0.16);
+  --on-accent: #28161c;
+  --project: #72d8aa;
+  --gutter-ink: #716d7d;
+  --active-line-wash: rgba(255, 255, 255, 0.045);
+  --sum-badge-bg: rgba(255, 255, 255, 0.08);
+  --sum-badge-ink: #b8b4c2;
+  --border: rgba(255, 255, 255, 0.1);
+  --bg: rgba(18, 17, 24, 0);
+  --bg-tabs: rgba(28, 27, 37, 0);
+  --pill: #2b2a36;
+  --timer-bg: #1b1a22;
+  --main-bg: rgba(7, 7, 12, 0.12);
+  --wash-rgb: 255, 255, 255;
+  --shadow-rgb: 0, 0, 0;
+  --glass-noise-opacity: 0.07;
   --rail-width: 44px;
   /* Reserves space below scrollable views (log/settings) so their content never sits under the floating timer bar (74px tall, 16px off the bottom). */
   --timer-bar-clearance: 110px;
 
+  color-scheme: dark;
   font-family:
     "SF Mono", "Menlo", "Consolas", ui-monospace, "Hiragino Kaku Gothic ProN", "Hiragino Sans",
     sans-serif;
   color: var(--ink);
-  background-color: var(--bg);
+  background-color: transparent;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
-}
-
-:root[data-theme="dark"] {
-  --ink: #ece7df;
-  --muted: #9a9184;
-  --accent-soft: #4a3232;
-  --border: #3a352c;
-  --bg: #201c17;
-  --bg-tabs: #2a251d;
-  --pill: #332d24;
-  --wash-rgb: 255, 255, 255;
-  --shadow-rgb: 0, 0, 0;
 }
 
 * {
@@ -49,6 +45,7 @@ body,
 #root {
   height: 100%;
   margin: 0;
+  background: transparent;
 }
 
 button {
@@ -56,14 +53,58 @@ button {
   cursor: pointer;
 }
 
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .app-shell {
   position: relative;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background-color: var(--bg);
-  border: 1px solid var(--border);
+  background: var(--bg);
   overflow: hidden;
+}
+
+.app-shell::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  pointer-events: none;
+  opacity: var(--glass-noise-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='.82'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+  mix-blend-mode: soft-light;
+}
+
+.app-shell > * {
+  position: relative;
+  z-index: 1;
+}
+
+.window-titlebar {
+  display: grid;
+  place-items: center;
+  height: 32px;
+  flex: none;
+  padding: 0 76px;
+  background: transparent;
+  color: var(--muted);
+  user-select: none;
+}
+
+.window-titlebar-label {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .app-body {
@@ -110,11 +151,13 @@ button {
 
 .icon-rail-button:hover {
   color: var(--ink);
+  background: rgba(var(--wash-rgb), 0.07);
 }
 
 .icon-rail-button.is-active {
-  background: var(--accent);
-  color: var(--on-accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .icon-rail-badge {
@@ -129,7 +172,7 @@ button {
 }
 
 .icon-rail-button.is-active .icon-rail-badge {
-  background: var(--on-accent);
+  background: var(--accent);
 }
 
 /* ---- Sidebar ---- */
@@ -200,11 +243,12 @@ button {
 }
 
 .sidebar-file:hover:not(:disabled):not(.is-active) {
-  background: rgba(var(--wash-rgb), 0.05);
+  background: rgba(var(--wash-rgb), 0.06);
 }
 
 .sidebar-file.is-active {
   background: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .sidebar-file:disabled {
@@ -269,7 +313,7 @@ button {
 
 .sidebar-add:hover:not(:disabled) {
   color: var(--ink);
-  background: rgba(var(--wash-rgb), 0.05);
+  background: rgba(var(--wash-rgb), 0.06);
 }
 
 .sidebar-add:disabled {
@@ -284,7 +328,7 @@ button {
   background: var(--pill);
   border: 1px solid var(--border);
   border-radius: 8px;
-  box-shadow: 0 6px 20px rgba(var(--shadow-rgb), 0.18);
+  box-shadow: 0 12px 28px rgba(var(--shadow-rgb), 0.3);
   padding: 4px;
   display: flex;
   flex-direction: column;
@@ -321,6 +365,7 @@ button {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: var(--main-bg);
 }
 
 .editor-holder {
@@ -357,6 +402,7 @@ button {
 
 .timer-bar {
   position: absolute;
+  z-index: 10;
   left: calc(50% + var(--rail-width) / 2);
   bottom: 16px;
   transform: translateX(-50%);
@@ -366,10 +412,10 @@ button {
   flex-direction: column;
   gap: 8px;
   padding: 10px 16px;
-  background-color: var(--bg-tabs);
-  border: 1px solid var(--border);
+  background-color: var(--timer-bg);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 14px;
-  box-shadow: 0 6px 20px rgba(var(--shadow-rgb), 0.14);
+  box-shadow: 0 12px 28px rgba(var(--shadow-rgb), 0.34);
   overflow: hidden;
 }
 
@@ -402,7 +448,7 @@ button {
 .timer-bar-presets {
   display: flex;
   gap: 4px;
-  background-color: var(--pill);
+  background-color: rgba(255, 255, 255, 0.06);
   border-radius: 8px;
   padding: 2px;
 }
@@ -434,7 +480,7 @@ button {
   width: 30px;
   height: 30px;
   border-radius: 999px;
-  border: none;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   background-color: var(--pill);
   color: var(--ink);
   font-size: 12px;
@@ -610,34 +656,6 @@ button {
   box-shadow: 0 1px 2px rgba(var(--shadow-rgb), 0.2);
 }
 
-.settings-segmented {
-  flex: none;
-  display: flex;
-  gap: 4px;
-  background-color: var(--bg-tabs);
-  border-radius: 8px;
-  padding: 2px;
-}
-
-.settings-segmented button {
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  font-size: 12px;
-  padding: 5px 10px;
-  border-radius: 6px;
-}
-
-.settings-segmented button.is-active {
-  background-color: var(--pill);
-  color: var(--ink);
-  font-weight: 600;
-}
-
-.settings-segmented button:disabled {
-  cursor: not-allowed;
-}
-
 .settings-button {
   border: 1px solid var(--border);
   background: var(--pill);
@@ -696,8 +714,9 @@ button {
   border-radius: 6px;
 }
 
-.settings-preset-input:focus {
-  outline: none;
+.settings-preset-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
   border-color: var(--accent);
 }
 
