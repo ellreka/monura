@@ -123,7 +123,7 @@
 
 ```
 src/              # フロントエンド (TypeScript)
-  components/     # React ビュー（Editor, Sidebar, LogView, TimerBar, SettingsView, IconRail）
+  components/     # React ビュー（Editor, Launcher, LogView, TimerBar, SettingsView）
   lib/            # 非UIモジュール（ロジック・Tauri IPC 境界層）
     editor/       # CodeMirror拡張（タスク認識、spentパース、装飾、計測中行の追跡）
     files/        # .md ファイルI/O（Tauri IPC の境界層。改行コード保持などの純粋関数を含む）
