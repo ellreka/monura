@@ -59,6 +59,12 @@ export function editorTheme(): Extension {
         borderLeftColor: p.accent,
         borderLeftWidth: "2px",
       },
+      ".cm-selectionBackground": {
+        backgroundColor: "rgba(var(--accent-rgb), 0.35) !important",
+      },
+      "&.cm-focused .cm-selectionBackground": {
+        backgroundColor: "rgba(var(--accent-rgb), 0.4) !important",
+      },
       "&.cm-focused": {
         outline: "none",
       },
@@ -107,6 +113,11 @@ export function editorTheme(): Extension {
         borderWidth: "0 1.5px 1.5px 0",
         transform: "rotate(45deg)",
       },
+      ".cm-task-checked": {
+        textDecoration: "line-through",
+        color: p.muted,
+        opacity: "0.65",
+      },
       ".cm-spent-token": {
         color: p.muted,
         fontSize: "0.92em",
@@ -114,6 +125,18 @@ export function editorTheme(): Extension {
       ".cm-project-tag": {
         color: p.project,
         fontWeight: "600",
+      },
+      ".cm-md-link": {
+        color: p.accent,
+        textDecoration: "underline",
+        textUnderlineOffset: "2px",
+        cursor: "pointer",
+      },
+      ".cm-md-link:hover": {
+        textDecoration: "none",
+      },
+      ".cm-md-link-focused": {
+        color: p.accent,
       },
       ".cm-sum-badge": {
         marginLeft: "10px",
@@ -148,13 +171,13 @@ const markdownHighlightStyle = HighlightStyle.define([
   // Dims the raw markup characters (#, -, *, >, [], (), `) so document content reads
   // more prominently than its syntax — mirrors muted UI chrome like the gutter/spent: tokens.
   { tag: tags.processingInstruction, color: palette.muted },
-  { tag: tags.link, textDecoration: "underline" },
   { tag: tags.heading, textDecoration: "underline", fontWeight: "bold" },
   { tag: tags.emphasis, fontStyle: "italic" },
   { tag: tags.strong, fontWeight: "bold" },
   { tag: tags.strikethrough, textDecoration: "line-through" },
   { tag: tags.keyword, color: "#d68fc9" },
-  { tag: [tags.atom, tags.bool, tags.url, tags.contentSeparator, tags.labelName], color: "#7aa6d6" },
+  { tag: [tags.atom, tags.bool, tags.contentSeparator, tags.labelName], color: "#7aa6d6" },
+  { tag: tags.url, color: palette.accent },
   { tag: [tags.literal, tags.inserted], color: "#7dbf8e" },
   { tag: [tags.string, tags.deleted], color: "#e08a8a" },
   { tag: [tags.regexp, tags.escape, tags.special(tags.string)], color: "#e0a06a" },

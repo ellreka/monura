@@ -146,6 +146,7 @@ function App() {
   const updateRef = useRef<Update | null>(null);
   const checkInFlightRef = useRef(false);
   const installInFlightRef = useRef(false);
+  const stoppingRef = useRef(false);
 
   // Mirror to read the latest state from async callbacks (watch refresh)
   const filesRef = useRef(files);
@@ -635,6 +636,7 @@ function App() {
       pendingResolution !== null
     )
       return;
+    stoppingRef.current = false;
     const cursor = editorRef.current?.getCursorLine();
     if (!cursor) return;
     const label = toTrackingLabel(cursor.text);
@@ -651,7 +653,8 @@ function App() {
   };
 
   const stopTracking = () => {
-    if (!isRunning) return;
+    if (!isRunning || stoppingRef.current) return;
+    stoppingRef.current = true;
     const now = Date.now();
     const { elapsedSeconds } = stopTimer(timerState, now);
     const startedAt = timerState.startedAt ?? now;

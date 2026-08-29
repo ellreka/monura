@@ -1,3 +1,5 @@
+import { isTauri } from "@tauri-apps/api/core";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { EditorView, WidgetType } from "@codemirror/view";
 import { formatDurationMinutes } from "../parser";
 
@@ -76,5 +78,51 @@ export class SpentWidget extends WidgetType {
     el.className = "cm-spent-token";
     el.textContent = `spent:${formatDurationMinutes(this.seconds)}`;
     return el;
+  }
+}
+
+export class LinkWidget extends WidgetType {
+  constructor(
+    private readonly text: string,
+    private readonly url: string,
+  ) {
+    super();
+  }
+
+  eq(other: LinkWidget): boolean {
+    return other.text === this.text && other.url === this.url;
+  }
+
+  toDOM(): HTMLElement {
+    const el = document.createElement("span");
+    el.className = "cm-md-link";
+    el.setAttribute("role", "link");
+    el.title = this.url;
+    el.textContent = this.text;
+    el.onmousedown = (event) => {
+      event.preventDefault();
+    };
+    el.onclick = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      void openLink(this.url);
+    };
+    return el;
+  }
+
+  ignoreEvent(): boolean {
+    return false;
+  }
+}
+
+async function openLink(url: string): Promise<void> {
+  try {
+    if (isTauri()) {
+      await openUrl(url);
+    } else {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+  } catch (e) {
+    console.error("open link failed:", e);
   }
 }

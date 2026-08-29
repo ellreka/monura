@@ -1,7 +1,8 @@
 import { EditorState, RangeSetBuilder, StateField } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView } from "@codemirror/view";
 import { computeTaskMeta, fencedCodeLineNumbers, matchProjectTokens, matchSpentTokens, parseLines } from "../parser";
-import { CheckboxWidget, SpentWidget, SumBadgeWidget } from "./widgets";
+import { collectLinkMatches } from "./links";
+import { CheckboxWidget, LinkWidget, SpentWidget, SumBadgeWidget } from "./widgets";
 import { setUiStateEffect, uiStateField } from "./uiState";
 
 interface Item {
@@ -26,9 +27,14 @@ function buildDecorations(state: EditorState): DecorationSet {
     if (fenced.has(line.lineNumber)) continue;
     const lineInfo = doc.line(line.lineNumber);
 
-    if (line.isTask && line.lineNumber !== cursorLine) {
+    if (line.isTask) {
       const checkboxMatch = /\[( |x|X)\]/.exec(lineInfo.text);
-      if (checkboxMatch && checkboxMatch.index !== undefined) {
+      const checkboxEnd =
+        checkboxMatch && checkboxMatch.index !== undefined
+          ? lineInfo.from + checkboxMatch.index + checkboxMatch[0].length
+          : lineInfo.from;
+
+      if (checkboxMatch && checkboxMatch.index !== undefined && line.lineNumber !== cursorLine) {
         const from = lineInfo.from + checkboxMatch.index;
         const to = from + checkboxMatch[0].length;
         items.push({
@@ -36,6 +42,15 @@ function buildDecorations(state: EditorState): DecorationSet {
           to,
           side: 0,
           deco: Decoration.replace({ widget: new CheckboxWidget(line.checked, line.lineNumber) }),
+        });
+      }
+
+      if (line.checked && checkboxEnd < lineInfo.to) {
+        items.push({
+          from: checkboxEnd,
+          to: lineInfo.to,
+          side: 0,
+          deco: Decoration.mark({ class: "cm-task-checked" }),
         });
       }
     }
@@ -69,6 +84,18 @@ function buildDecorations(state: EditorState): DecorationSet {
         deco: Decoration.widget({ widget: new SumBadgeWidget(lineMeta.aggregateSeconds), side: 1 }),
       });
     }
+  }
+
+  for (const link of collectLinkMatches(state)) {
+    const isFocusedLink = doc.lineAt(link.from).number === cursorLine;
+    items.push({
+      from: link.from,
+      to: link.to,
+      side: 0,
+      deco: isFocusedLink
+        ? Decoration.mark({ class: "cm-md-link-focused" })
+        : Decoration.replace({ widget: new LinkWidget(link.text, link.url) }),
+    });
   }
 
   items.sort((a, b) => a.from - b.from || a.to - b.to || a.side - b.side);

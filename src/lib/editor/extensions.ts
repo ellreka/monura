@@ -1,6 +1,7 @@
 import type { Extension } from "@codemirror/state";
 import { Compartment } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
+import { Autolink } from "@lezer/markdown";
 import { EditorView, keymap } from "@codemirror/view";
 import { indentWithTab } from "@codemirror/commands";
 import { editorBaseSetup } from "./baseSetup";
@@ -58,7 +59,7 @@ export function createMonuraExtensions(options: CreateMonuraExtensionsOptions = 
         onToggle: () => options.onToggle?.(),
       }),
     ),
-    markdown({ addKeymap: false }),
+    markdown({ addKeymap: false, extensions: [Autolink] }),
     uiStateField,
     taskDecorationsField,
     activeLineField,
