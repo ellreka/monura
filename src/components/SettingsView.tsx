@@ -65,7 +65,10 @@ function ShortcutCaptureButton({
       onCommit(captured);
     };
     document.addEventListener("keydown", handleKeyDown, { capture: true });
-    return () => document.removeEventListener("keydown", handleKeyDown, { capture: true });
+    return () =>
+      document.removeEventListener("keydown", handleKeyDown, {
+        capture: true,
+      });
   }, [recording, onCommit, requireModifier]);
 
   return (
@@ -122,7 +125,15 @@ interface PresetCardProps {
   disabled?: boolean;
 }
 
-function PresetCard({ index, preset, onSetMinutes, onSetShortcut, onRemove, canRemove, disabled = false }: PresetCardProps) {
+function PresetCard({
+  index,
+  preset,
+  onSetMinutes,
+  onSetShortcut,
+  onRemove,
+  canRemove,
+  disabled = false,
+}: PresetCardProps) {
   const [minutesDraft, setMinutesDraft] = useState(String(preset.minutes));
 
   const commitMinutes = () => {
@@ -183,7 +194,9 @@ interface SectionProps {
 function Section({ title, children }: SectionProps) {
   return (
     <section className="py-4">
-      <h3 className="m-0 mb-3 text-[11px] font-semibold tracking-wide text-muted uppercase">{title}</h3>
+      <h3 className="m-0 mb-3 text-[11px] font-semibold tracking-wide text-muted uppercase">
+        {title}
+      </h3>
       <div className="divide-y divide-border">{children}</div>
     </section>
   );
@@ -241,7 +254,9 @@ export function SettingsView({
                 >
                   Change…
                 </button>
-                {dataDir && <span className="max-w-[280px] truncate text-[11px] text-muted">{dataDir}</span>}
+                {dataDir && (
+                  <span className="max-w-[280px] truncate text-[11px] text-muted">{dataDir}</span>
+                )}
               </div>
             </Row>
           </Section>
@@ -282,8 +297,11 @@ export function SettingsView({
           </div>
         </Section>
 
-        <Section title="Keys & editor">
-          <Row label="Start / stop" description="Starts tracking the task under the cursor, or stops the running timer.">
+        <Section title="Shortcuts">
+          <Row
+            label="Start / stop"
+            description="Starts tracking the task under the cursor, or stops the running timer."
+          >
             <ShortcutCaptureButton
               value={startStopShortcut}
               onCommit={onSetStartStopShortcut}
@@ -291,7 +309,10 @@ export function SettingsView({
               disabled={shortcutsDisabled}
             />
           </Row>
-          <Row label="Global hotkey" description="Works from anywhere, even while Monura isn't focused. Must include Cmd, Ctrl, or Option.">
+          <Row
+            label="Global hotkey"
+            description="Works from anywhere, even while Monura isn't focused. Must include Cmd, Ctrl, or Option."
+          >
             <ShortcutCaptureButton
               value={globalHotkey}
               onCommit={onSetGlobalHotkey}
@@ -300,6 +321,8 @@ export function SettingsView({
               requireModifier
             />
           </Row>
+        </Section>
+        <Section title="Editor">
           <Row label="Vim key bindings" description="Enable Vim-style editing in the editor.">
             <button
               type="button"

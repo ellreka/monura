@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+} from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import "./App.css";
@@ -80,16 +87,40 @@ function createInitialSessionLog(): SessionLog {
 
 function SearchGlyph() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M17 17L21 21" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
-      <path d="M19 11C19 6.58172 15.4183 3 11 3C6.58172 3 3 6.58172 3 11C3 15.4183 6.58172 19 11 19C15.4183 19 19 15.4183 19 11Z" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M17 17L21 21"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M19 11C19 6.58172 15.4183 3 11 3C6.58172 3 3 6.58172 3 11C3 15.4183 6.58172 19 11 19C15.4183 19 19 15.4183 19 11Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.5"
+      />
     </svg>
   );
 }
 
 function NoteGlyph() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
       <path
         d="M17 2V4M12 2V4M7 2V4"
         stroke="currentColor"
@@ -104,26 +135,94 @@ function NoteGlyph() {
         strokeLinejoin="round"
         strokeWidth="1.5"
       />
-      <path d="M8 15H12M8 10H16" stroke="currentColor" strokeLinecap="round" strokeWidth="1.5" />
+      <path
+        d="M8 15H12M8 10H16"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="1.5"
+      />
     </svg>
   );
 }
 
 function ClockGlyph() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
       <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M12 8V12L14 14" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
+      <path
+        d="M12 8V12L14 14"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.5"
+      />
     </svg>
   );
 }
 
 function GearGlyph() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M21.3175 7.14139L20.8239 6.28479C20.4506 5.63696 20.264 5.31305 19.9464 5.18388C19.6288 5.05472 19.2696 5.15664 18.5513 5.36048L17.3311 5.70418C16.8725 5.80994 16.3913 5.74994 15.9726 5.53479L15.6357 5.34042C15.2766 5.11043 15.0004 4.77133 14.8475 4.37274L14.5136 3.37536C14.294 2.71534 14.1842 2.38533 13.9228 2.19657C13.6615 2.00781 13.3143 2.00781 12.6199 2.00781H11.5051C10.8108 2.00781 10.4636 2.00781 10.2022 2.19657C9.94085 2.38533 9.83106 2.71534 9.61149 3.37536L9.27753 4.37274C9.12465 4.77133 8.84845 5.11043 8.48937 5.34042L8.15249 5.53479C7.73374 5.74994 7.25259 5.80994 6.79398 5.70418L5.57375 5.36048C4.85541 5.15664 4.49625 5.05472 4.17867 5.18388C3.86109 5.31305 3.67445 5.63696 3.30115 6.28479L2.80757 7.14139C2.45766 7.74864 2.2827 8.05227 2.31666 8.37549C2.35061 8.69871 2.58483 8.95918 3.05326 9.48012L4.0843 10.6328C4.3363 10.9518 4.51521 11.5078 4.51521 12.0077C4.51521 12.5078 4.33636 13.0636 4.08433 13.3827L3.05326 14.5354C2.58483 15.0564 2.35062 15.3168 2.31666 15.6401C2.2827 15.9633 2.45766 16.2669 2.80757 16.8741L3.30114 17.7307C3.67443 18.3785 3.86109 18.7025 4.17867 18.8316C4.49625 18.9608 4.85542 18.8589 5.57377 18.655L6.79394 18.3113C7.25263 18.2055 7.73387 18.2656 8.15267 18.4808L8.4895 18.6752C8.84851 18.9052 9.12464 19.2442 9.2775 19.6428L9.61149 20.6403C9.83106 21.3003 9.94085 21.6303 10.2022 21.8191C10.4636 22.0078 10.8108 22.0078 11.5051 22.0078H12.6199C13.3143 22.0078 13.6615 22.0078 13.9228 21.8191C14.1842 21.6303 14.294 21.3003 14.5136 20.6403L14.8476 19.6428C15.0004 19.2442 15.2765 18.9052 15.6356 18.6752L15.9724 18.4808C16.3912 18.2656 16.8724 18.2055 17.3311 18.3113L18.5513 18.655C19.2696 18.8589 19.6288 18.9608 19.9464 18.8316C20.264 18.7025 20.4506 18.3785 20.8239 17.7307L21.3175 16.8741C21.6674 16.2669 21.8423 15.9633 21.8084 15.6401C21.7744 15.3168 21.5402 15.0564 21.0718 14.5354L20.0407 13.3827C19.7887 13.0636 19.6098 12.5078 19.6098 12.0077C19.6098 11.5078 19.7888 10.9518 20.0407 10.6328L21.0718 9.48012C21.5402 8.95918 21.7744 8.69871 21.8084 8.37549C21.8423 8.05227 21.6674 7.74864 21.3175 7.14139Z" stroke="currentColor" strokeLinecap="round" strokeWidth="1.5" />
-      <path d="M15.5195 12C15.5195 13.933 13.9525 15.5 12.0195 15.5C10.0865 15.5 8.51953 13.933 8.51953 12C8.51953 10.067 10.0865 8.5 12.0195 8.5C13.9525 8.5 15.5195 10.067 15.5195 12Z" stroke="currentColor" strokeWidth="1.5" />
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M21.3175 7.14139L20.8239 6.28479C20.4506 5.63696 20.264 5.31305 19.9464 5.18388C19.6288 5.05472 19.2696 5.15664 18.5513 5.36048L17.3311 5.70418C16.8725 5.80994 16.3913 5.74994 15.9726 5.53479L15.6357 5.34042C15.2766 5.11043 15.0004 4.77133 14.8475 4.37274L14.5136 3.37536C14.294 2.71534 14.1842 2.38533 13.9228 2.19657C13.6615 2.00781 13.3143 2.00781 12.6199 2.00781H11.5051C10.8108 2.00781 10.4636 2.00781 10.2022 2.19657C9.94085 2.38533 9.83106 2.71534 9.61149 3.37536L9.27753 4.37274C9.12465 4.77133 8.84845 5.11043 8.48937 5.34042L8.15249 5.53479C7.73374 5.74994 7.25259 5.80994 6.79398 5.70418L5.57375 5.36048C4.85541 5.15664 4.49625 5.05472 4.17867 5.18388C3.86109 5.31305 3.67445 5.63696 3.30115 6.28479L2.80757 7.14139C2.45766 7.74864 2.2827 8.05227 2.31666 8.37549C2.35061 8.69871 2.58483 8.95918 3.05326 9.48012L4.0843 10.6328C4.3363 10.9518 4.51521 11.5078 4.51521 12.0077C4.51521 12.5078 4.33636 13.0636 4.08433 13.3827L3.05326 14.5354C2.58483 15.0564 2.35062 15.3168 2.31666 15.6401C2.2827 15.9633 2.45766 16.2669 2.80757 16.8741L3.30114 17.7307C3.67443 18.3785 3.86109 18.7025 4.17867 18.8316C4.49625 18.9608 4.85542 18.8589 5.57377 18.655L6.79394 18.3113C7.25263 18.2055 7.73387 18.2656 8.15267 18.4808L8.4895 18.6752C8.84851 18.9052 9.12464 19.2442 9.2775 19.6428L9.61149 20.6403C9.83106 21.3003 9.94085 21.6303 10.2022 21.8191C10.4636 22.0078 10.8108 22.0078 11.5051 22.0078H12.6199C13.3143 22.0078 13.6615 22.0078 13.9228 21.8191C14.1842 21.6303 14.294 21.3003 14.5136 20.6403L14.8476 19.6428C15.0004 19.2442 15.2765 18.9052 15.6356 18.6752L15.9724 18.4808C16.3912 18.2656 16.8724 18.2055 17.3311 18.3113L18.5513 18.655C19.2696 18.8589 19.6288 18.9608 19.9464 18.8316C20.264 18.7025 20.4506 18.3785 20.8239 17.7307L21.3175 16.8741C21.6674 16.2669 21.8423 15.9633 21.8084 15.6401C21.7744 15.3168 21.5402 15.0564 21.0718 14.5354L20.0407 13.3827C19.7887 13.0636 19.6098 12.5078 19.6098 12.0077C19.6098 11.5078 19.7888 10.9518 20.0407 10.6328L21.0718 9.48012C21.5402 8.95918 21.7744 8.69871 21.8084 8.37549C21.8423 8.05227 21.6674 7.74864 21.3175 7.14139Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M15.5195 12C15.5195 13.933 13.9525 15.5 12.0195 15.5C10.0865 15.5 8.51953 13.933 8.51953 12C8.51953 10.067 10.0865 8.5 12.0195 8.5C13.9525 8.5 15.5195 10.067 15.5195 12Z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
     </svg>
+  );
+}
+
+type NavigationButtonProps = {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+  pressed?: boolean;
+  title: string;
+  children: ReactNode;
+};
+
+function NavigationButton({
+  active,
+  label,
+  onClick,
+  pressed,
+  title,
+  children,
+}: NavigationButtonProps) {
+  return (
+    <button
+      type="button"
+      className={cn(
+        "relative flex h-[26px] w-[26px] items-center justify-center rounded-md p-0",
+        active
+          ? "bg-accent/16 text-accent"
+          : "text-muted hover:bg-white/7 hover:text-ink",
+      )}
+      onClick={onClick}
+      aria-label={label}
+      aria-pressed={pressed}
+      title={title}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -143,18 +242,24 @@ function App() {
   const [presets, setPresets] = useState<AppSettings["presets"]>(() =>
     DEFAULT_PRESETS.map((preset) => ({ ...preset })),
   );
-  const [startStopShortcut, setStartStopShortcut] = useState<string | null>(DEFAULT_START_STOP_SHORTCUT);
+  const [startStopShortcut, setStartStopShortcut] = useState<string | null>(
+    DEFAULT_START_STOP_SHORTCUT,
+  );
   const [globalHotkey, setGlobalHotkey] = useState<string | null>(null);
-  const [timerState, setTimerState] = useState<TimerState>(() => createIdleTimer(presetMinutes));
+  const [timerState, setTimerState] = useState<TimerState>(() =>
+    createIdleTimer(presetMinutes),
+  );
   const [elapsedMs, setElapsedMs] = useState(0);
   const [trackingLabel, setTrackingLabel] = useState<string | null>(null);
   const [trackingProjects, setTrackingProjects] = useState<string[]>([]);
   const [trackedLost, setTrackedLost] = useState(false);
-  const [pendingResolution, setPendingResolution] = useState<PendingResolution | null>(null);
+  const [pendingResolution, setPendingResolution] =
+    useState<PendingResolution | null>(null);
   const [focusedTaskLabel, setFocusedTaskLabel] = useState<string | null>(null);
   const [view, setView] = useState<AppView>("editor");
   const [launcherOpen, setLauncherOpen] = useState(false);
   const [logRefreshKey, setLogRefreshKey] = useState(0);
+  const [diskRefreshKey, setDiskRefreshKey] = useState(0);
 
   const editorRef = useRef<EditorHandle>(null);
   const sessionLogRef = useRef(createInitialSessionLog());
@@ -165,6 +270,8 @@ function App() {
   const applyingExternalRef = useRef(false);
   const lastTraySecRef = useRef<number | null>(null);
   const stoppingRef = useRef(false);
+  const refreshGenerationRef = useRef(0);
+  const fileOperationRef = useRef(Promise.resolve());
 
   const filesRef = useRef(files);
   const activeIndexRef = useRef(activeIndex);
@@ -188,7 +295,6 @@ function App() {
   const handleSelectView = (next: AppView) => {
     setView((current) => (current === next ? "editor" : next));
   };
-
 
   const flushSave = useCallback((): Promise<void> => {
     clearTimeout(saveTimerRef.current);
@@ -224,10 +330,9 @@ function App() {
 
   useEffect(() => {
     window.addEventListener("beforeunload", flushSaveBestEffort);
-    return () => window.removeEventListener("beforeunload", flushSaveBestEffort);
+    return () =>
+      window.removeEventListener("beforeunload", flushSaveBestEffort);
   }, [flushSaveBestEffort]);
-
-
 
   useEffect(() => {
     if (!isTauri()) return;
@@ -239,7 +344,9 @@ function App() {
         setDataDir(settings.dataDir);
         setVimMode(settings.vimMode);
         setPresets(settings.presets);
-        setPresetMinutes(settings.presets[0]?.minutes ?? DEFAULT_PRESET_MINUTES);
+        setPresetMinutes(
+          settings.presets[0]?.minutes ?? DEFAULT_PRESET_MINUTES,
+        );
         setStartStopShortcut(settings.shortcuts.startStop);
         setGlobalHotkey(settings.globalHotkey);
         void getSettingsFilePath()
@@ -248,7 +355,9 @@ function App() {
           })
           .catch((e) => console.error("settings path load failed:", e));
         void invoke("set_global_hotkey", {
-          accelerator: settings.globalHotkey ? toAccelerator(settings.globalHotkey) : null,
+          accelerator: settings.globalHotkey
+            ? toAccelerator(settings.globalHotkey)
+            : null,
         }).catch((e) => console.error("set global hotkey failed:", e));
       } catch (e) {
         console.error("settings load failed:", e);
@@ -260,7 +369,6 @@ function App() {
       cancelled = true;
     };
   }, []);
-
 
   useEffect(() => {
     if (!isTauri() || !dataDir) return;
@@ -276,18 +384,19 @@ function App() {
         const lastFile = await lastFilePromise;
         if (cancelled) return;
         setFiles(loaded);
-        const restored = lastFile !== null ? loaded.findIndex((f) => f.name === lastFile) : -1;
+        const restored =
+          lastFile !== null ? loaded.findIndex((f) => f.name === lastFile) : -1;
         setActiveIndex(restored >= 0 ? restored : 0);
         setLoadError(null);
       } catch (e) {
-        if (!cancelled) setLoadError(e instanceof Error ? e.message : String(e));
+        if (!cancelled)
+          setLoadError(e instanceof Error ? e.message : String(e));
       }
     })();
     return () => {
       cancelled = true;
     };
   }, [dataDir]);
-
 
   const activeFileName = files[activeIndex]?.name ?? null;
   useEffect(() => {
@@ -297,8 +406,14 @@ function App() {
     );
   }, [dataDir, activeFileName]);
 
-  const applyDataDir = (dir: string) => {
-    flushSaveBestEffort();
+  const applyDataDir = async (dir: string) => {
+    try {
+      await flushSave();
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : String(e));
+      return;
+    }
+    refreshGenerationRef.current += 1;
     if (isTauri()) {
       void saveSettings({ ...currentSettings, dataDir: dir }).catch((error) =>
         console.error("save settings failed:", error),
@@ -306,7 +421,6 @@ function App() {
     }
     setDataDir(dir);
   };
-
 
   const loadSessionRecords = useCallback(async (): Promise<SessionRecord[]> => {
     if (!isTauri()) return [...sessionLogRef.current.all()];
@@ -318,45 +432,51 @@ function App() {
     return parseSessionLines(lines);
   }, []);
 
-
   const refreshFromDisk = useCallback(async () => {
     if (!dataDir) return;
+    const generation = refreshGenerationRef.current;
     try {
       const names = await listMdFiles(dataDir);
-      const cur = filesRef.current;
-      const name = cur[activeIndexRef.current]?.name;
-      setFiles(
-        names.map((n) => {
-          const known = cur.find((f) => f.name === n);
-          return known ?? { name: n, content: "", eol: "\n" };
-        }),
+      const diskFiles = await Promise.all(
+        names.map((name) => readMdFile(dataDir, name)),
       );
-      if (name) {
-        const newIndex = names.indexOf(name);
-        if (newIndex < 0) {
-          setActiveIndex(0);
-        } else {
-          setActiveIndex(newIndex);
-          const disk = await readMdFile(dataDir, name);
-          if (pendingSaveRef.current !== null || activeWritesRef.current > 0) return;
-          const state = filesRef.current[activeIndexRef.current];
-          if (state && state.name === name && disk.content !== state.content) {
-            setFiles((prev) =>
-              prev.map((f) => (f.name === name ? { ...f, content: disk.content } : f)),
-            );
-            applyingExternalRef.current = true;
-            try {
-              editorRef.current?.reloadContent(disk.content);
-            } finally {
-              applyingExternalRef.current = false;
-            }
-          }
+      if (generation !== refreshGenerationRef.current) return;
+      if (pendingSaveRef.current !== null || activeWritesRef.current > 0) {
+        window.setTimeout(() => setDiskRefreshKey((key) => key + 1), 300);
+        return;
+      }
+      const current = filesRef.current;
+      const activeName = current[activeIndexRef.current]?.name;
+      const nextIndex = activeName
+        ? diskFiles.findIndex((file) => file.name === activeName)
+        : -1;
+      const activeDiskFile = nextIndex >= 0 ? diskFiles[nextIndex] : undefined;
+      const activeStateFile = current[activeIndexRef.current];
+      setFiles(diskFiles);
+      setActiveIndex(nextIndex >= 0 ? nextIndex : 0);
+      if (
+        activeDiskFile &&
+        activeStateFile?.name === activeDiskFile.name &&
+        activeStateFile.content !== activeDiskFile.content
+      ) {
+        applyingExternalRef.current = true;
+        try {
+          editorRef.current?.reloadContent(activeDiskFile.content);
+        } finally {
+          applyingExternalRef.current = false;
         }
       }
     } catch (e) {
-      console.error("watch refresh failed:", e);
+      if (generation === refreshGenerationRef.current)
+        console.error("watch refresh failed:", e);
     }
   }, [dataDir]);
+
+  useEffect(() => {
+    if (!isTauri() || !dataDir || diskRefreshKey === 0) return;
+    const timer = window.setTimeout(() => void refreshFromDisk(), 0);
+    return () => clearTimeout(timer);
+  }, [dataDir, diskRefreshKey, refreshFromDisk]);
 
   useEffect(() => {
     if (!isTauri() || !dataDir) return;
@@ -384,16 +504,11 @@ function App() {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setLauncherOpen(false);
-        setView((v) => (v === "editor" ? v : "editor"));
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        setView("editor");
+      } else if (
+        (event.metaKey || event.ctrlKey) &&
+        event.key.toLowerCase() === "k"
+      ) {
         event.preventDefault();
         setLauncherOpen((open) => !open);
       }
@@ -422,7 +537,9 @@ function App() {
   const handleDocChange = (text: string) => {
     if (applyingExternalRef.current) return;
     setFiles((prev) =>
-      prev.map((file, index) => (index === activeIndex ? { ...file, content: text } : file)),
+      prev.map((file, index) =>
+        index === activeIndex ? { ...file, content: text } : file,
+      ),
     );
     const current = files[activeIndex];
     if (current) scheduleSave({ ...current, content: text });
@@ -434,59 +551,93 @@ function App() {
     setActiveIndex(index);
   };
 
-  const handleCreateFile = async (name: string) => {
-    if (isRunning) return;
-    if (isTauri() && dataDir) {
-      try {
-        await createMdFile(dataDir, name);
-      } catch (e) {
-        setLoadError(e instanceof Error ? e.message : String(e));
-        return;
-      }
-    }
-    setFiles((prev) => [{ name, content: "", eol: "\n" as Eol }, ...prev]);
-    setActiveIndex(0);
+  const runFileOperation = (operation: () => Promise<void>) => {
+    const next = fileOperationRef.current
+      .catch(() => undefined)
+      .then(operation);
+    fileOperationRef.current = next;
+    return next;
   };
 
-  const handleRenameFile = async (from: string, to: string) => {
-    if (isRunning) return;
-    if (isTauri() && dataDir) {
-      try {
-        await renameMdFile(dataDir, from, to);
-      } catch (e) {
-        setLoadError(e instanceof Error ? e.message : String(e));
-        return;
+  const handleCreateFile = (name: string) => {
+    if (isRunning) return Promise.resolve();
+    return runFileOperation(async () => {
+      if (isTauri() && dataDir) {
+        try {
+          await createMdFile(dataDir, name);
+        } catch (e) {
+          setLoadError(e instanceof Error ? e.message : String(e));
+          return;
+        }
       }
-    }
-    setFiles((prev) => prev.map((f) => (f.name === from ? { ...f, name: to } : f)));
+      setFiles((prev) => [{ name, content: "", eol: "\n" as Eol }, ...prev]);
+      setActiveIndex(0);
+    });
   };
 
-  const handleDeleteFile = async (name: string) => {
-    if (isRunning) return;
-    if (pendingSaveRef.current?.name === name) {
-      pendingSaveRef.current = null;
-      clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = undefined;
-    }
-    if (isTauri() && dataDir) {
+  const handleRenameFile = (from: string, to: string) => {
+    if (isRunning) return Promise.resolve();
+    return runFileOperation(async () => {
       try {
-        await deleteMdFile(dataDir, name);
+        await flushSave();
       } catch (e) {
         setLoadError(e instanceof Error ? e.message : String(e));
         return;
       }
-    }
-    const idx = files.findIndex((f) => f.name === name);
-    setFiles((prev) => prev.filter((f) => f.name !== name));
-    setActiveIndex((cur) => {
-      if (idx < 0 || idx > cur) return cur;
-      if (idx === cur) return Math.max(0, Math.min(cur, files.length - 2));
-      return cur - 1;
+      if (isTauri() && dataDir) {
+        try {
+          await renameMdFile(dataDir, from, to);
+        } catch (e) {
+          setLoadError(e instanceof Error ? e.message : String(e));
+          return;
+        }
+      }
+      if (pendingSaveRef.current?.name === from)
+        pendingSaveRef.current = { ...pendingSaveRef.current, name: to };
+      setFiles((prev) =>
+        prev.map((file) => (file.name === from ? { ...file, name: to } : file)),
+      );
+    });
+  };
+
+  const handleDeleteFile = (name: string) => {
+    if (isRunning) return Promise.resolve();
+    return runFileOperation(async () => {
+      try {
+        await flushSave();
+      } catch (e) {
+        setLoadError(e instanceof Error ? e.message : String(e));
+        return;
+      }
+      if (pendingSaveRef.current?.name === name) {
+        pendingSaveRef.current = null;
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = undefined;
+      }
+      if (isTauri() && dataDir) {
+        try {
+          await deleteMdFile(dataDir, name);
+        } catch (e) {
+          setLoadError(e instanceof Error ? e.message : String(e));
+          return;
+        }
+      }
+      const index = filesRef.current.findIndex((file) => file.name === name);
+      setFiles((prev) => prev.filter((file) => file.name !== name));
+      setActiveIndex((current) => {
+        if (index < 0 || index > current) return current;
+        if (index === current)
+          return Math.max(0, Math.min(current, filesRef.current.length - 2));
+        return current - 1;
+      });
     });
   };
 
   const persistSettings = (next: AppSettings) => {
-    if (isTauri()) void saveSettings(next).catch((e) => console.error("save settings failed:", e));
+    if (isTauri())
+      void saveSettings(next).catch((e) =>
+        console.error("save settings failed:", e),
+      );
   };
 
   const handleToggleVimMode = () => {
@@ -506,19 +657,32 @@ function App() {
 
   const handleSetPresetMinutes = (index: number, minutes: number) => {
     const previousMinutes = presets[index]?.minutes;
-    const next = presets.map((preset, i) => (i === index ? { ...preset, minutes } : preset));
+    const next = presets.map((preset, i) =>
+      i === index ? { ...preset, minutes } : preset,
+    );
     setPresets(next);
     editorRef.current?.setTimerKeymap(next, startStopShortcut);
-    setPresetMinutes((current) => (current === previousMinutes ? minutes : current));
+    setPresetMinutes((current) =>
+      current === previousMinutes ? minutes : current,
+    );
     persistSettings({ ...currentSettings, presets: next });
   };
 
   const handleSetPresetShortcut = (index: number, key: string | null) => {
-    const { presets: next, startStop } = reassignShortcut(presets, startStopShortcut, index, key);
+    const { presets: next, startStop } = reassignShortcut(
+      presets,
+      startStopShortcut,
+      index,
+      key,
+    );
     setPresets(next);
     setStartStopShortcut(startStop);
     editorRef.current?.setTimerKeymap(next, startStop);
-    persistSettings({ ...currentSettings, presets: next, shortcuts: { startStop } });
+    persistSettings({
+      ...currentSettings,
+      presets: next,
+      shortcuts: { startStop },
+    });
   };
 
   const handleRemovePreset = (index: number) => {
@@ -528,25 +692,36 @@ function App() {
     setPresets(next);
     editorRef.current?.setTimerKeymap(next, startStopShortcut);
     setPresetMinutes((current) =>
-      current === removedMinutes ? (next[0]?.minutes ?? DEFAULT_PRESET_MINUTES) : current,
+      current === removedMinutes
+        ? (next[0]?.minutes ?? DEFAULT_PRESET_MINUTES)
+        : current,
     );
     persistSettings({ ...currentSettings, presets: next });
   };
 
   const handleSetStartStopShortcut = (key: string | null) => {
-    const { presets: next, startStop } = reassignShortcut(presets, startStopShortcut, "startStop", key);
+    const { presets: next, startStop } = reassignShortcut(
+      presets,
+      startStopShortcut,
+      "startStop",
+      key,
+    );
     setPresets(next);
     setStartStopShortcut(startStop);
     editorRef.current?.setTimerKeymap(next, startStop);
-    persistSettings({ ...currentSettings, presets: next, shortcuts: { startStop } });
+    persistSettings({
+      ...currentSettings,
+      presets: next,
+      shortcuts: { startStop },
+    });
   };
 
   const handleSetGlobalHotkey = (key: string | null) => {
     setGlobalHotkey(key);
     if (isTauri()) {
-      void invoke("set_global_hotkey", { accelerator: key ? toAccelerator(key) : null }).catch((e) =>
-        console.error("set global hotkey failed:", e),
-      );
+      void invoke("set_global_hotkey", {
+        accelerator: key ? toAccelerator(key) : null,
+      }).catch((e) => console.error("set global hotkey failed:", e));
     }
     persistSettings({ ...currentSettings, globalHotkey: key });
   };
@@ -563,7 +738,6 @@ function App() {
     setLogRefreshKey((key) => key + 1);
   };
 
-
   const trayStart = (label: string, remaining: string) => {
     if (!isTauri()) return;
     void invoke("tray_start", { label, remaining }).catch((e) =>
@@ -573,16 +747,23 @@ function App() {
 
   const trayTick = (remaining: string) => {
     if (!isTauri()) return;
-    void invoke("tray_tick", { remaining }).catch((e) => console.error("tray tick failed:", e));
+    void invoke("tray_tick", { remaining }).catch((e) =>
+      console.error("tray tick failed:", e),
+    );
   };
 
   const trayStop = () => {
     if (!isTauri()) return;
-    void invoke("tray_stop").catch((e) => console.error("tray stop failed:", e));
+    void invoke("tray_stop").catch((e) =>
+      console.error("tray stop failed:", e),
+    );
   };
 
-
-  const timerArm = (label: string, presetMinutes: number, durationSecs: number) => {
+  const timerArm = (
+    label: string,
+    presetMinutes: number,
+    durationSecs: number,
+  ) => {
     if (!isTauri()) return;
     void invoke("timer_arm", {
       label,
@@ -593,16 +774,13 @@ function App() {
 
   const timerDisarm = () => {
     if (!isTauri()) return;
-    void invoke("timer_disarm").catch((e) => console.error("timer disarm failed:", e));
+    void invoke("timer_disarm").catch((e) =>
+      console.error("timer disarm failed:", e),
+    );
   };
 
   const handleStart = () => {
-    if (
-      isRunning ||
-      !isCursorOnTask ||
-      pendingResolution !== null
-    )
-      return;
+    if (isRunning || !isCursorOnTask || pendingResolution !== null) return;
     stoppingRef.current = false;
     const cursor = editorRef.current?.getCursorLine();
     if (!cursor) return;
@@ -666,14 +844,16 @@ function App() {
 
   const requestStop = useEffectEvent(() => stopTracking());
 
-
   useEffect(() => {
     if (timerState.status !== "running") return;
     const id = window.setInterval(() => {
       const now = Date.now();
       const elapsed = computeElapsedMs(timerState, now);
       setElapsedMs(elapsed);
-      const remainingMs = Math.max(0, timerState.presetMinutes * 60000 - elapsed);
+      const remainingMs = Math.max(
+        0,
+        timerState.presetMinutes * 60000 - elapsed,
+      );
       const remainingSec = Math.floor(remainingMs / 1000);
       if (lastTraySecRef.current !== remainingSec) {
         lastTraySecRef.current = remainingSec;
@@ -691,7 +871,10 @@ function App() {
     if (!isTauri()) return;
     const unlistens: (() => void)[] = [];
     let cancelled = false;
-    for (const event of ["tray-stop-requested", "timer-expired-native"] as const) {
+    for (const event of [
+      "tray-stop-requested",
+      "timer-expired-native",
+    ] as const) {
       listen(event, () => requestStop()).then((fn) => {
         if (cancelled) fn();
         else unlistens.push(fn);
@@ -730,12 +913,19 @@ function App() {
   };
 
   const handleDebugFastForward = () => {
-    setTimerState((state) => fastForwardToRemaining(state, Date.now(), DEBUG_FAST_FORWARD_SECONDS));
+    setTimerState((state) =>
+      fastForwardToRemaining(state, Date.now(), DEBUG_FAST_FORWARD_SECONDS),
+    );
     if (trackingLabel)
-      timerArm(trackingLabel, DEBUG_FAST_FORWARD_SECONDS / 60, DEBUG_FAST_FORWARD_SECONDS);
+      timerArm(
+        trackingLabel,
+        DEBUG_FAST_FORWARD_SECONDS / 60,
+        DEBUG_FAST_FORWARD_SECONDS,
+      );
   };
 
-  const showNativeTitlebar = isTauri() && navigator.userAgent.includes("Macintosh");
+  const showNativeTitlebar =
+    isTauri() && navigator.userAgent.includes("Macintosh");
   const nativeTitlebar = showNativeTitlebar ? (
     <div
       className="relative z-[1] flex h-8 flex-none items-center gap-2 bg-transparent pl-[76px] pr-[10px] text-muted select-none"
@@ -759,55 +949,39 @@ function App() {
         {activeFile?.name ?? "Monura"}
       </span>
       <div className="flex flex-none items-center gap-[2px]">
-        <button
-          type="button"
-          className={cn(
-            "relative flex h-[26px] w-[26px] items-center justify-center rounded-md p-0",
-            launcherOpen ? "bg-accent/16 text-accent" : "text-muted hover:bg-white/7 hover:text-ink",
-          )}
+        <NavigationButton
+          active={launcherOpen}
+          label="Open launcher"
           onClick={() => setLauncherOpen((open) => !open)}
-          aria-label="Open launcher"
-          aria-pressed={launcherOpen}
+          pressed={launcherOpen}
           title="Launcher (⌘K)"
         >
           <SearchGlyph />
-        </button>
-        <button
-          type="button"
-          className={cn(
-            "relative flex h-[26px] w-[26px] items-center justify-center rounded-md p-0",
-            view === "editor" ? "bg-accent/16 text-accent" : "text-muted hover:bg-white/7 hover:text-ink",
-          )}
+        </NavigationButton>
+        <NavigationButton
+          active={view === "editor"}
+          label="Editor"
           onClick={() => handleSelectView("editor")}
-          aria-label="Editor"
           title="Editor"
         >
           <NoteGlyph />
-        </button>
-        <button
-          type="button"
-          className={cn(
-            "relative flex h-[26px] w-[26px] items-center justify-center rounded-md p-0",
-            view === "log" ? "bg-accent/16 text-accent" : "text-muted hover:bg-white/7 hover:text-ink",
-          )}
+        </NavigationButton>
+        <NavigationButton
+          active={view === "log"}
+          label="Session log"
           onClick={() => handleSelectView("log")}
-          aria-label="Session log"
           title="Session log"
         >
           <ClockGlyph />
-        </button>
-        <button
-          type="button"
-          className={cn(
-            "relative flex h-[26px] w-[26px] items-center justify-center rounded-md p-0",
-            view === "settings" ? "bg-accent/16 text-accent" : "text-muted hover:bg-white/7 hover:text-ink",
-          )}
+        </NavigationButton>
+        <NavigationButton
+          active={view === "settings"}
+          label="Settings"
           onClick={() => handleSelectView("settings")}
-          aria-label="Settings"
           title="Settings"
         >
           <GearGlyph />
-        </button>
+        </NavigationButton>
       </div>
     </div>
   );
@@ -827,8 +1001,8 @@ function App() {
         <div className="relative z-[1] flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
           <h1 className="m-0 text-[22px]">monura</h1>
           <p className="m-0 max-w-[420px] text-[13px] text-muted">
-            Choose a folder for your .md files. It can also be a folder inside iCloud Drive or
-            Dropbox.
+            Choose a folder for your .md files. It can also be a folder inside
+            iCloud Drive or Dropbox.
           </p>
           {loadError && (
             <p className="m-0 max-w-[420px] text-xs break-all text-danger">
@@ -841,7 +1015,7 @@ function App() {
               className="cursor-pointer rounded-lg border border-border bg-pill px-4 py-2 text-[13px] text-ink hover:border-accent"
               onClick={async () => {
                 const dir = await pickDataDir();
-                if (dir) applyDataDir(dir);
+                if (dir) await applyDataDir(dir);
               }}
             >
               Choose Folder…
@@ -850,7 +1024,7 @@ function App() {
               type="button"
               className="cursor-pointer rounded-lg border border-border bg-pill px-4 py-2 text-[13px] text-ink hover:border-accent"
               onClick={async () => {
-                applyDataDir(await ensureDefaultDataDir());
+                await applyDataDir(await ensureDefaultDataDir());
               }}
             >
               Create Documents/monura
@@ -876,9 +1050,13 @@ function App() {
                 vimMode={vimMode}
                 presets={presets}
                 onCursorLineChange={(info) =>
-                  setFocusedTaskLabel(info.isTask ? toTrackingLabel(info.text) : null)
+                  setFocusedTaskLabel(
+                    info.isTask ? toTrackingLabel(info.text) : null,
+                  )
                 }
-                onTrackedLineChange={(info) => setTrackingLabel(toTrackingLabel(info.text))}
+                onTrackedLineChange={(info) =>
+                  setTrackingLabel(toTrackingLabel(info.text))
+                }
                 onTrackedLineLost={() => setTrackedLost(true)}
                 startStopShortcut={startStopShortcut}
                 onSelectPreset={setPresetMinutes}
@@ -895,7 +1073,9 @@ function App() {
               loadRecords={loadSessionRecords}
               refreshKey={logRefreshKey}
               running={
-                isRunning && timerState.startedAt !== null && trackingLabel !== null
+                isRunning &&
+                timerState.startedAt !== null &&
+                trackingLabel !== null
                   ? {
                       label: trackingLabel,
                       startedAt: timerState.startedAt,
@@ -923,7 +1103,7 @@ function App() {
               dataDirDisabled={isRunning}
               onPickDataDir={async () => {
                 const dir = await pickDataDir();
-                if (dir) applyDataDir(dir);
+                if (dir) await applyDataDir(dir);
               }}
               settingsFilePath={settingsFilePath ?? undefined}
             />
