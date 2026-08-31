@@ -12,13 +12,13 @@ import { editorTheme, markdownHighlighting } from "./theme";
 import { listContinuationKeymap } from "./listContinuation";
 import { vimNormalModeGuardKeymap } from "./vimGuard";
 import { createTimerKeymap } from "./timerKeymap";
-import type { PresetKeymapEntry } from "../timer";
+import type { TimerPreset } from "../timer";
 
 export interface CreateMonuraExtensionsOptions {
   onDocChange?: (text: string) => void;
   vimMode?: boolean;
-  presets?: readonly PresetKeymapEntry[];
-  toggleKey?: string | null;
+  presets?: readonly TimerPreset[];
+  startStopShortcut?: string | null;
   onSelectPreset?: (presetMinutes: number) => void;
   onToggle?: () => void;
 }
@@ -54,7 +54,7 @@ export function createMonuraExtensions(options: CreateMonuraExtensionsOptions = 
     timerKeymapCompartment.of(
       createTimerKeymap({
         presets: options.presets ?? [],
-        toggleKey: options.toggleKey ?? null,
+        startStopShortcut: options.startStopShortcut ?? null,
         onSelectPreset: (minutes) => options.onSelectPreset?.(minutes),
         onToggle: () => options.onToggle?.(),
       }),

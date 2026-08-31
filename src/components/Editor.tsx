@@ -12,7 +12,7 @@ import {
 } from "../lib/editor";
 import { findLineByText } from "../lib/editor/lineMatch";
 import { createTimerKeymap } from "../lib/editor/timerKeymap";
-import type { PresetKeymapEntry } from "../lib/timer";
+import type { TimerPreset } from "../lib/timer";
 import { addSpentToLine, computeTaskMeta, parseLines } from "../lib/parser";
 
 /** Annotation marking a doc replacement that originates externally (from disk). Line tracking is handled by the imperative side. */
@@ -63,7 +63,7 @@ export interface EditorHandle {
   /** Moves DOM focus into the editor (e.g. after a click on a chrome button, like starting the timer). */
   focus(): void;
   setVimMode(enabled: boolean): void;
-  setTimerKeymap(presets: readonly PresetKeymapEntry[], toggleKey: string | null): void;
+  setTimerKeymap(presets: readonly TimerPreset[], startStopShortcut: string | null): void;
 }
 
 interface EditorProps {
@@ -71,9 +71,9 @@ interface EditorProps {
   initialContent: string;
   onChange: (text: string) => void;
   vimMode?: boolean;
-  presets: readonly PresetKeymapEntry[];
+  presets: readonly TimerPreset[];
   /** null = no shortcut assigned. */
-  toggleKey?: string | null;
+  startStopShortcut?: string | null;
   onVimStatusChange?: (status: string | null) => void;
   onCursorLineChange?: (info: CursorLineChangeInfo) => void;
   onTrackedLineChange?: (info: TrackedLineChangeInfo) => void;
@@ -85,7 +85,7 @@ interface EditorProps {
   onToggle?: () => void;
 }
 
-export function Editor({ ref, initialContent, onChange, vimMode = false, presets, toggleKey = null, onVimStatusChange, onCursorLineChange, onTrackedLineChange, onTrackedLineLost, onSelectPreset, onToggle }: EditorProps) {
+export function Editor({ ref, initialContent, onChange, vimMode = false, presets, startStopShortcut = null, onVimStatusChange, onCursorLineChange, onTrackedLineChange, onTrackedLineLost, onSelectPreset, onToggle }: EditorProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
   const trackedAnchorRef = useRef<number | null>(null);
@@ -138,7 +138,7 @@ export function Editor({ ref, initialContent, onChange, vimMode = false, presets
             onDocChange: (text) => latest.current.onChange(text),
             vimMode,
             presets,
-            toggleKey,
+            startStopShortcut,
             onSelectPreset: (presetMinutes) => latest.current.onSelectPreset?.(presetMinutes),
             onToggle: () => latest.current.onToggle?.(),
           }),
@@ -313,14 +313,14 @@ export function Editor({ ref, initialContent, onChange, vimMode = false, presets
         }
       },
 
-      setTimerKeymap(nextPresets, nextToggleKey) {
+      setTimerKeymap(nextPresets, nextStartStopShortcut) {
         const view = viewRef.current;
         if (!view) return;
         view.dispatch({
           effects: timerKeymapCompartment.reconfigure(
             createTimerKeymap({
               presets: nextPresets,
-              toggleKey: nextToggleKey,
+              startStopShortcut: nextStartStopShortcut,
               onSelectPreset: (minutes) => latest.current.onSelectPreset?.(minutes),
               onToggle: () => latest.current.onToggle?.(),
             }),

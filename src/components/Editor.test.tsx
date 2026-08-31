@@ -39,9 +39,9 @@ function mountEditor(initialContent: string): MountedEditor {
         initialContent={initialContent}
         onChange={() => {}}
         presets={[
-          { minutes: 10, key: null },
-          { minutes: 30, key: null },
-          { minutes: 60, key: null },
+          { minutes: 10, shortcut: null },
+          { minutes: 30, shortcut: null },
+          { minutes: 60, shortcut: null },
         ]}
         onTrackedLineChange={onTrackedLineChange}
         onTrackedLineLost={onTrackedLineLost}

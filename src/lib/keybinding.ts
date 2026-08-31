@@ -75,29 +75,46 @@ export function captureKeyBinding(event: KeyBindingEvent): string | null {
   return parts.join("-");
 }
 
-const MODIFIER_LABELS: Record<string, string> = {
-  Meta: "Cmd",
-  Ctrl: "Ctrl",
-  Alt: "Alt",
-  Shift: "Shift",
-};
-
-/** Formats a stored key-binding string for display (e.g. "Meta-Enter" -> "Cmd+Enter"). */
-export function formatKeyBindingLabel(binding: string): string {
-  // A trailing "-" is the minus/hyphen key itself, not a modifier separator.
-  const parts = binding.split(/-(?!$)/);
-  const key = parts[parts.length - 1];
-  const modifiers = parts.slice(0, -1).map((mod) => MODIFIER_LABELS[mod] ?? mod);
-  const keyLabel = key.length === 1 ? key.toUpperCase() : key;
-  return [...modifiers, keyLabel].join("+");
-}
-
 const MODIFIER_ACCELERATOR_TOKENS: Record<string, string> = {
   Meta: "Cmd",
   Ctrl: "Ctrl",
   Alt: "Alt",
   Shift: "Shift",
 };
+
+const MODIFIER_SYMBOLS: Record<string, string> = {
+  Meta: "⌘",
+  Ctrl: "⌃",
+  Alt: "⌥",
+  Shift: "⇧",
+};
+
+const KEY_SYMBOLS: Record<string, string> = {
+  Enter: "↵",
+  Escape: "⎋",
+  Space: "␣",
+  Tab: "⇥",
+  Backspace: "⌫",
+  Delete: "⌦",
+  ArrowUp: "↑",
+  ArrowDown: "↓",
+  ArrowLeft: "←",
+  ArrowRight: "→",
+};
+
+/**
+ * Splits a stored binding into individual display tokens (e.g. "Meta-Shift-G" -> ["⌘", "⇧",
+ * "G"]), one per physical key held — for rendering each as its own key-cap badge instead of a
+ * single concatenated "Cmd+Shift+G" string.
+ */
+export function formatKeyBindingParts(binding: string): string[] {
+  // A trailing "-" is the minus/hyphen key itself, not a modifier separator.
+  const parts = binding.split(/-(?!$)/);
+  const key = parts[parts.length - 1];
+  const modifiers = parts.slice(0, -1).map((mod) => MODIFIER_SYMBOLS[mod] ?? mod);
+  const keyLabel = KEY_SYMBOLS[key] ?? (key.length === 1 ? key.toUpperCase() : key);
+  return [...modifiers, keyLabel];
+}
 
 export function toAccelerator(binding: string): string {
   const parts = binding.split(/-(?!$)/);

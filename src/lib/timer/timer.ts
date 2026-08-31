@@ -12,78 +12,57 @@ export const DEBUG_FAST_FORWARD_SECONDS = 5;
 /** The preset selected at startup (minutes). */
 export const DEFAULT_PRESET_MINUTES = 60;
 
-/** Number of user-configurable preset slots (Settings screen). */
+/** At most this many quick-start presets are configurable (Settings screen). */
 export const MAX_PRESETS = 4;
 
-/** Default preset slots shipped out of the box: 3 of the 4 slots filled, the 4th left empty. */
-export const DEFAULT_PRESETS: readonly (number | null)[] = [10, 30, DEFAULT_PRESET_MINUTES, null];
-
-/** A single preset slot paired with its shortcut for building the editor keymap. */
-export interface PresetKeymapEntry {
+/**
+ * A single quick-start duration and its optional keyboard shortcut (mirrors clicking its pill
+ * — selects only, never starts tracking). null shortcut = unassigned. Between 1 and
+ * `MAX_PRESETS` presets are required.
+ */
+export interface TimerPreset {
   minutes: number;
-  /** null = no shortcut assigned to this preset. */
-  key: string | null;
+  shortcut: string | null;
 }
+
+/** Presets shipped out of the box, matching the historical Cmd-1..3 bindings. */
+export const DEFAULT_PRESETS: readonly TimerPreset[] = [
+  { minutes: 10, shortcut: "Meta-1" },
+  { minutes: 30, shortcut: "Meta-2" },
+  { minutes: DEFAULT_PRESET_MINUTES, shortcut: "Meta-3" },
+];
+
+/** Shortcut shipped out of the box for starting/stopping tracking (mirrors the play/stop button). */
+export const DEFAULT_START_STOP_SHORTCUT = "Meta-Enter";
+
+/** Validates and rounds a user-entered preset value (minutes). Returns null when out of range. */
+export function sanitizePresetMinutes(value: number): number | null {
+  if (!Number.isFinite(value)) return null;
+  const rounded = Math.round(value);
+  return rounded >= 1 && rounded <= 1440 ? rounded : null;
+}
+
+/** Which action a shortcut is being assigned to: the start/stop toggle, or a preset index. */
+export type ShortcutTarget = "startStop" | number;
 
 /**
- * User-configurable shortcuts for the timer: one to start/stop tracking (mirrors the play/stop
- * toggle button) and one per preset slot (mirrors clicking a preset pill — selects only,
- * never starts). null = unassigned.
+ * Assigns `key` to `target` (a preset index or the start/stop toggle), clearing it from
+ * whichever other action previously held the same key (last write wins — two actions can
+ * never share one shortcut). Passing `key: null` clears `target` only.
  */
-export interface TimerShortcuts {
-  toggle: string | null;
-  presets: (string | null)[];
-}
-
-/**
- * Shortcuts shipped out of the box, matching the historical Cmd-1..4 / Cmd-Enter bindings.
- * "Meta" (not CodeMirror's platform-adaptive "Mod") because matching is now literal against
- * `KeyboardEvent`'s modifier flags — see lib/keybinding.ts and lib/editor/timerKeymap.ts —
- * and this app targets macOS only (Cmd), matching the native menu's own Cmd+, convention.
- */
-export const DEFAULT_TIMER_SHORTCUTS: TimerShortcuts = {
-  toggle: "Meta-Enter",
-  presets: ["Meta-1", "Meta-2", "Meta-3", "Meta-4"],
-};
-
-/** Deep-clones the default shortcuts (the arrays inside must never be shared/mutated). */
-export function createDefaultTimerShortcuts(): TimerShortcuts {
-  return { toggle: DEFAULT_TIMER_SHORTCUTS.toggle, presets: [...DEFAULT_TIMER_SHORTCUTS.presets] };
-}
-
-/** Drops empty slots, preserving slot order. This is the effective list used for buttons and keybindings. */
-export function compactPresets(slots: readonly (number | null)[]): number[] {
-  return slots.filter((minutes): minutes is number => minutes !== null);
-}
-
-/**
- * Pairs each configured preset slot with its shortcut, dropping empty slots (same order as
- * `compactPresets`). This is what the editor keymap is built from.
- */
-export function compactPresetShortcuts(
-  slots: readonly (number | null)[],
-  shortcutKeys: readonly (string | null)[],
-): PresetKeymapEntry[] {
-  const entries: PresetKeymapEntry[] = [];
-  slots.forEach((minutes, index) => {
-    if (minutes !== null) entries.push({ minutes, key: shortcutKeys[index] ?? null });
-  });
-  return entries;
-}
-
-/** Which shortcut a key is being assigned to: the start/stop toggle, or a preset slot index. */
-export type ShortcutTarget = "toggle" | number;
-
-/**
- * Assigns `key` to `target`, clearing it from whichever other slot/toggle previously held the
- * same key (last write wins — two actions can never share one shortcut). Passing `key: null`
- * clears `target` only.
- */
-export function reassignShortcut(shortcuts: TimerShortcuts, target: ShortcutTarget, key: string | null): TimerShortcuts {
+export function reassignShortcut(
+  presets: readonly TimerPreset[],
+  startStop: string | null,
+  target: ShortcutTarget,
+  key: string | null,
+): { presets: TimerPreset[]; startStop: string | null } {
   const releaseIfTaken = (existing: string | null) => (key !== null && existing === key ? null : existing);
   return {
-    toggle: target === "toggle" ? key : releaseIfTaken(shortcuts.toggle),
-    presets: shortcuts.presets.map((existing, index) => (target === index ? key : releaseIfTaken(existing))),
+    startStop: target === "startStop" ? key : releaseIfTaken(startStop),
+    presets: presets.map((preset, index) => ({
+      ...preset,
+      shortcut: target === index ? key : releaseIfTaken(preset.shortcut),
+    })),
   };
 }
 
@@ -96,13 +75,6 @@ export function fastForwardToRemaining(state: TimerState, now: number, remaining
   const totalMs = state.presetMinutes * 60000;
   const targetElapsedMs = Math.max(0, totalMs - remainingSeconds * 1000);
   return { ...state, startedAt: now - targetElapsedMs };
-}
-
-/** Validates and rounds a user-entered preset value (minutes). Returns null when out of range. */
-export function sanitizePresetMinutes(value: number): number | null {
-  if (!Number.isFinite(value)) return null;
-  const rounded = Math.round(value);
-  return rounded >= 1 && rounded <= 1440 ? rounded : null;
 }
 
 export function createIdleTimer(presetMinutes: number = DEFAULT_PRESET_MINUTES): TimerState {

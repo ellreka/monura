@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { relaunch } from "@tauri-apps/plugin-process";
-import { check, type DownloadEvent, type Update } from "@tauri-apps/plugin-updater";
 import "./App.css";
 import { Editor, type EditorHandle } from "./components/Editor";
 import { Launcher } from "./components/Launcher";
@@ -39,19 +37,14 @@ import {
 } from "./lib/log/session";
 import {
   getLastFileFor,
+  getSettingsFilePath,
   loadSettings,
-  saveDataDir,
-  saveGlobalHotkey,
   saveLastFileFor,
-  savePresets,
-  saveShortcuts,
-  saveVimMode,
+  saveSettings,
+  type AppSettings,
 } from "./lib/settings";
 import {
-  compactPresets,
-  compactPresetShortcuts,
   computeElapsedMs,
-  createDefaultTimerShortcuts,
   createIdleTimer,
   fastForwardToRemaining,
   formatClock,
@@ -63,30 +56,20 @@ import {
   DEBUG_FAST_FORWARD_SECONDS,
   DEFAULT_PRESET_MINUTES,
   DEFAULT_PRESETS,
-  type ShortcutTarget,
-  type TimerShortcuts,
+  DEFAULT_START_STOP_SHORTCUT,
+  MAX_PRESETS,
   type TimerState,
 } from "./lib/timer";
-import type { AppUpdateState } from "./lib/updater";
 import { cn } from "./lib/cn";
 import { toAccelerator } from "./lib/keybinding";
 
-/**
- * Pending record for when a session ends with the tracked line lost.
- * The log is not finalized until the user chooses where to record it
- * (log only / add to another line).
- */
 type PendingResolution = Omit<CreateSessionRecordInput, "lineDeleted">;
-const UPDATER_ENABLED =
-  isTauri() && import.meta.env.PROD && import.meta.env.VITE_UPDATER_ENABLED === "true";
 
-/** Task title for display: strips the checklist marker (`- [ ]`), spent:, and +project — no markdown. */
 function toTrackingLabel(text: string): string {
   const title = baseTitle(text);
   return title.length > 0 ? title : "(blank line)";
 }
 
-/** Fresh session log; pre-seeded with sample history in the browser (no Tauri) so the Log view isn't empty. */
 function createInitialSessionLog(): SessionLog {
   const log = new SessionLog();
   if (!isTauri()) {
@@ -150,57 +133,39 @@ function App() {
   );
   const [activeIndex, setActiveIndex] = useState(0);
   const [dataDir, setDataDir] = useState<string | null>(null);
-  /** False until plugin-store settings are loaded (prevents a setup-screen flash). */
+  const [settingsFilePath, setSettingsFilePath] = useState<string | null>(null);
   const [settingsReady, setSettingsReady] = useState(() => !isTauri());
   const [loadError, setLoadError] = useState<string | null>(null);
   const [vimMode, setVimMode] = useState(false);
-  /** Preset 1 (the first slot) is the startup selection — guarantees a preset is always highlighted, even if slot 3 (default 1h) was customized away. */
   const [presetMinutes, setPresetMinutes] = useState<number>(
-    () => compactPresets(DEFAULT_PRESETS)[0] ?? DEFAULT_PRESET_MINUTES,
+    () => DEFAULT_PRESETS[0]?.minutes ?? DEFAULT_PRESET_MINUTES,
   );
-  const [presetSlots, setPresetSlots] = useState<(number | null)[]>(() => [...DEFAULT_PRESETS]);
-  const [shortcuts, setShortcuts] = useState<TimerShortcuts>(createDefaultTimerShortcuts);
+  const [presets, setPresets] = useState<AppSettings["presets"]>(() =>
+    DEFAULT_PRESETS.map((preset) => ({ ...preset })),
+  );
+  const [startStopShortcut, setStartStopShortcut] = useState<string | null>(DEFAULT_START_STOP_SHORTCUT);
   const [globalHotkey, setGlobalHotkey] = useState<string | null>(null);
   const [timerState, setTimerState] = useState<TimerState>(() => createIdleTimer(presetMinutes));
   const [elapsedMs, setElapsedMs] = useState(0);
   const [trackingLabel, setTrackingLabel] = useState<string | null>(null);
   const [trackingProjects, setTrackingProjects] = useState<string[]>([]);
-  /** The tracked line was lost during an active session (deleted or unidentifiable after an external edit). */
   const [trackedLost, setTrackedLost] = useState(false);
   const [pendingResolution, setPendingResolution] = useState<PendingResolution | null>(null);
   const [focusedTaskLabel, setFocusedTaskLabel] = useState<string | null>(null);
   const [view, setView] = useState<AppView>("editor");
   const [launcherOpen, setLauncherOpen] = useState(false);
   const [logRefreshKey, setLogRefreshKey] = useState(0);
-  const [updateState, setUpdateState] = useState<AppUpdateState>(() =>
-    UPDATER_ENABLED ? { phase: "idle" } : { phase: "unavailable" },
-  );
 
   const editorRef = useRef<EditorHandle>(null);
   const sessionLogRef = useRef(createInitialSessionLog());
   const saveTimerRef = useRef<number | undefined>(undefined);
   const pendingSaveRef = useRef<MdFile | null>(null);
   const saveInFlightRef = useRef<Promise<void>>(Promise.resolve());
-  /**
-   * Count of writes currently being committed to disk (incremented when a write starts,
-   * decremented once it settles). `pendingSaveRef` alone only tracks edits not yet *scheduled*
-   * to flush — it's nulled the instant a flush *starts*, before the write actually lands on
-   * disk. Without this counter, the watcher's debounced `refreshFromDisk` can read disk while
-   * our own write is still in flight (more likely with higher-latency folders like iCloud
-   * Drive/Dropbox), see stale content, and wrongly treat it as an authoritative external edit —
-   * reloading the editor with pre-edit content and failing to re-identify the tracked line.
-   */
   const activeWritesRef = useRef(0);
-  /** While replacing the doc from disk, suppress the local save path (handleDocChange). */
   const applyingExternalRef = useRef(false);
-  /** Last whole-second remaining value sent to the tray (throttles tray_tick to ~1/s). */
   const lastTraySecRef = useRef<number | null>(null);
-  const updateRef = useRef<Update | null>(null);
-  const checkInFlightRef = useRef(false);
-  const installInFlightRef = useRef(false);
   const stoppingRef = useRef(false);
 
-  // Mirror to read the latest state from async callbacks (watch refresh)
   const filesRef = useRef(files);
   const activeIndexRef = useRef(activeIndex);
   useEffect(() => {
@@ -208,20 +173,22 @@ function App() {
     activeIndexRef.current = activeIndex;
   });
 
-  const updateInProgress =
-    updateState.phase === "downloading" || updateState.phase === "installing";
   const isRunning = timerState.status === "running";
   const isCursorOnTask = focusedTaskLabel !== null;
   const activeFile = files[activeIndex];
-  const presets = compactPresets(presetSlots);
-  const presetKeymap = compactPresetShortcuts(presetSlots, shortcuts.presets);
+  const presetMinutesList = presets.map((preset) => preset.minutes);
+  const currentSettings: AppSettings = {
+    dataDir,
+    vimMode,
+    presets,
+    shortcuts: { startStop: startStopShortcut },
+    globalHotkey,
+  };
 
-  // Log and settings are toggles. Pressing the active button again returns to the editor (base view).
   const handleSelectView = (next: AppView) => {
     setView((current) => (current === next ? "editor" : next));
   };
 
-  // ---- Persistence (immediate .md save; debounced to coalesce rapid edits) ----
 
   const flushSave = useCallback((): Promise<void> => {
     clearTimeout(saveTimerRef.current);
@@ -260,77 +227,7 @@ function App() {
     return () => window.removeEventListener("beforeunload", flushSaveBestEffort);
   }, [flushSaveBestEffort]);
 
-  // ---- Signed application updates (release builds only) ----
 
-  const handleCheckForUpdates = useCallback(async () => {
-    if (!UPDATER_ENABLED || checkInFlightRef.current) return;
-    checkInFlightRef.current = true;
-    setUpdateState({ phase: "checking" });
-    try {
-      const previous = updateRef.current;
-      updateRef.current = null;
-      if (previous) await previous.close();
-      const update = await check({ timeout: 30_000 });
-      updateRef.current = update;
-      setUpdateState(
-        update ? { phase: "available", version: update.version } : { phase: "up-to-date" },
-      );
-    } catch (error) {
-      console.error("update check failed:", error);
-      setUpdateState({ phase: "error" });
-    } finally {
-      checkInFlightRef.current = false;
-    }
-  }, []);
-
-  const handleInstallUpdate = useCallback(async () => {
-    const update = updateRef.current;
-    if (!update || isRunning || installInFlightRef.current) return;
-    installInFlightRef.current = true;
-    const version = update.version;
-    let downloadedBytes = 0;
-    let totalBytes: number | undefined;
-    setUpdateState({ phase: "downloading", version, downloadedBytes });
-    try {
-      await flushSave();
-      await update.downloadAndInstall((event: DownloadEvent) => {
-        switch (event.event) {
-          case "Started":
-            totalBytes = event.data.contentLength;
-            setUpdateState({ phase: "downloading", version, downloadedBytes, totalBytes });
-            break;
-          case "Progress":
-            downloadedBytes += event.data.chunkLength;
-            setUpdateState({ phase: "downloading", version, downloadedBytes, totalBytes });
-            break;
-          case "Finished":
-            setUpdateState({ phase: "installing", version });
-            break;
-          default:
-            event satisfies never;
-        }
-      });
-      await relaunch();
-    } catch (error) {
-      console.error("update installation failed:", error);
-      setUpdateState({ phase: "error" });
-    } finally {
-      installInFlightRef.current = false;
-    }
-  }, [flushSave, isRunning]);
-
-  useEffect(() => {
-    if (!UPDATER_ENABLED) return;
-    const checkTimer = window.setTimeout(() => void handleCheckForUpdates(), 0);
-    return () => {
-      clearTimeout(checkTimer);
-      const update = updateRef.current;
-      updateRef.current = null;
-      if (update) void update.close();
-    };
-  }, [handleCheckForUpdates]);
-
-  // ---- Settings load (plugin-store; one-time migration from legacy localStorage) ----
 
   useEffect(() => {
     if (!isTauri()) return;
@@ -341,10 +238,15 @@ function App() {
         if (cancelled) return;
         setDataDir(settings.dataDir);
         setVimMode(settings.vimMode);
-        setPresetSlots(settings.presets);
-        setPresetMinutes(compactPresets(settings.presets)[0] ?? DEFAULT_PRESET_MINUTES);
-        setShortcuts(settings.shortcuts);
+        setPresets(settings.presets);
+        setPresetMinutes(settings.presets[0]?.minutes ?? DEFAULT_PRESET_MINUTES);
+        setStartStopShortcut(settings.shortcuts.startStop);
         setGlobalHotkey(settings.globalHotkey);
+        void getSettingsFilePath()
+          .then((path) => {
+            if (!cancelled) setSettingsFilePath(path);
+          })
+          .catch((e) => console.error("settings path load failed:", e));
         void invoke("set_global_hotkey", {
           accelerator: settings.globalHotkey ? toAccelerator(settings.globalHotkey) : null,
         }).catch((e) => console.error("set global hotkey failed:", e));
@@ -359,7 +261,6 @@ function App() {
     };
   }, []);
 
-  // ---- Initial data folder load (subsequent tracking is handled by the watcher) ----
 
   useEffect(() => {
     if (!isTauri() || !dataDir) return;
@@ -387,7 +288,6 @@ function App() {
     };
   }, [dataDir]);
 
-  // ---- Active file persistence (remembers the last opened file per data directory) ----
 
   const activeFileName = files[activeIndex]?.name ?? null;
   useEffect(() => {
@@ -400,12 +300,13 @@ function App() {
   const applyDataDir = (dir: string) => {
     flushSaveBestEffort();
     if (isTauri()) {
-      void saveDataDir(dir).catch((e) => console.error("save dataDir failed:", e));
+      void saveSettings({ ...currentSettings, dataDir: dir }).catch((error) =>
+        console.error("save settings failed:", error),
+      );
     }
     setDataDir(dir);
   };
 
-  // ---- Session log reading (LogView data source. Tauri = disk, browser = memory) ----
 
   const loadSessionRecords = useCallback(async (): Promise<SessionRecord[]> => {
     if (!isTauri()) return [...sessionLogRef.current.all()];
@@ -417,13 +318,6 @@ function App() {
     return parseSessionLines(lines);
   }, []);
 
-  // ---- Following external edits (file watch) ----
-  // Coalesce raw events from Rust over 300ms, then reload the list and active file.
-  // Events caused by our own saves become no-ops via content comparison.
-  // Reload even during a session (Editor re-identifies the tracked line by exact text match).
-  // Hold off while a local edit is scheduled to flush OR a flush is currently writing to disk
-  // (activeWritesRef) — otherwise a concurrent disk read can return pre-write content while our
-  // own save is still landing, and get wrongly treated as a newer external edit.
 
   const refreshFromDisk = useCallback(async () => {
     if (!dataDir) return;
@@ -486,7 +380,6 @@ function App() {
     };
   }, [dataDir, refreshFromDisk]);
 
-  // Escape returns to the editor view regardless of focus, so it's handled at the window level.
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -509,8 +402,6 @@ function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // Receive the launch from the macOS native menu bar (monura > Preferences...).
-  // In the browser (pnpm dev) Tauri's IPC doesn't exist, so guard with isTauri().
   useEffect(() => {
     if (!isTauri()) return;
     let unlisten: (() => void) | undefined;
@@ -529,7 +420,6 @@ function App() {
   }, []);
 
   const handleDocChange = (text: string) => {
-    // Don't save back disk-originated replacements (avoid useless write-backs and watch round-trips)
     if (applyingExternalRef.current) return;
     setFiles((prev) =>
       prev.map((file, index) => (index === activeIndex ? { ...file, content: text } : file)),
@@ -573,7 +463,6 @@ function App() {
 
   const handleDeleteFile = async (name: string) => {
     if (isRunning) return;
-    // Discard any pending debounced save to the deleted file (don't resurrect it after deletion).
     if (pendingSaveRef.current?.name === name) {
       pendingSaveRef.current = null;
       clearTimeout(saveTimerRef.current);
@@ -596,42 +485,60 @@ function App() {
     });
   };
 
+  const persistSettings = (next: AppSettings) => {
+    if (isTauri()) void saveSettings(next).catch((e) => console.error("save settings failed:", e));
+  };
+
   const handleToggleVimMode = () => {
     const next = !vimMode;
     setVimMode(next);
     editorRef.current?.setVimMode(next);
-    if (isTauri()) {
-      void saveVimMode(next).catch((e) => console.error("save vimMode failed:", e));
-    }
+    persistSettings({ ...currentSettings, vimMode: next });
   };
 
-  const handleSetPresetSlot = (index: number, minutes: number | null) => {
-    const next = presetSlots.slice();
-    next[index] = minutes;
-    setPresetSlots(next);
-    editorRef.current?.setTimerKeymap(
-      compactPresetShortcuts(next, shortcuts.presets),
-      shortcuts.toggle,
-    );
-    if (isTauri()) {
-      void savePresets(next).catch((e) => console.error("save presets failed:", e));
-    }
+  const handleAddPreset = () => {
+    if (presets.length >= MAX_PRESETS) return;
+    const next = [...presets, { minutes: 15, shortcut: null }];
+    setPresets(next);
+    editorRef.current?.setTimerKeymap(next, startStopShortcut);
+    persistSettings({ ...currentSettings, presets: next });
   };
 
-  /**
-   * Assigns a keyboard shortcut to the start/stop toggle or to a preset slot, clearing it from
-   * whichever other action previously held that key (see `reassignShortcut`).
-   */
-  const handleSetShortcut = (target: ShortcutTarget, key: string | null) => {
-    const next = reassignShortcut(shortcuts, target, key);
-    setShortcuts(next);
-    editorRef.current?.setTimerKeymap(
-      compactPresetShortcuts(presetSlots, next.presets),
-      next.toggle,
+  const handleSetPresetMinutes = (index: number, minutes: number) => {
+    const previousMinutes = presets[index]?.minutes;
+    const next = presets.map((preset, i) => (i === index ? { ...preset, minutes } : preset));
+    setPresets(next);
+    editorRef.current?.setTimerKeymap(next, startStopShortcut);
+    setPresetMinutes((current) => (current === previousMinutes ? minutes : current));
+    persistSettings({ ...currentSettings, presets: next });
+  };
+
+  const handleSetPresetShortcut = (index: number, key: string | null) => {
+    const { presets: next, startStop } = reassignShortcut(presets, startStopShortcut, index, key);
+    setPresets(next);
+    setStartStopShortcut(startStop);
+    editorRef.current?.setTimerKeymap(next, startStop);
+    persistSettings({ ...currentSettings, presets: next, shortcuts: { startStop } });
+  };
+
+  const handleRemovePreset = (index: number) => {
+    if (presets.length <= 1) return;
+    const removedMinutes = presets[index]?.minutes;
+    const next = presets.filter((_, i) => i !== index);
+    setPresets(next);
+    editorRef.current?.setTimerKeymap(next, startStopShortcut);
+    setPresetMinutes((current) =>
+      current === removedMinutes ? (next[0]?.minutes ?? DEFAULT_PRESET_MINUTES) : current,
     );
-    if (isTauri()) {
-      void saveShortcuts(next).catch((e) => console.error("save shortcuts failed:", e));
-    }
+    persistSettings({ ...currentSettings, presets: next });
+  };
+
+  const handleSetStartStopShortcut = (key: string | null) => {
+    const { presets: next, startStop } = reassignShortcut(presets, startStopShortcut, "startStop", key);
+    setPresets(next);
+    setStartStopShortcut(startStop);
+    editorRef.current?.setTimerKeymap(next, startStop);
+    persistSettings({ ...currentSettings, presets: next, shortcuts: { startStop } });
   };
 
   const handleSetGlobalHotkey = (key: string | null) => {
@@ -640,15 +547,14 @@ function App() {
       void invoke("set_global_hotkey", { accelerator: key ? toAccelerator(key) : null }).catch((e) =>
         console.error("set global hotkey failed:", e),
       );
-      void saveGlobalHotkey(key).catch((e) => console.error("save global hotkey failed:", e));
     }
+    persistSettings({ ...currentSettings, globalHotkey: key });
   };
 
   const appendRecord = (input: CreateSessionRecordInput) => {
     const record = createSessionRecord(input);
     sessionLogRef.current.append(record);
     if (isTauri()) {
-      // Rotation follows the month of the start time (don't split sessions that cross month-end)
       void appendSessionLog(
         sessionLogFilename(new Date(input.startedAt)),
         JSON.stringify(record),
@@ -657,7 +563,6 @@ function App() {
     setLogRefreshKey((key) => key + 1);
   };
 
-  // ---- Tray icon (Tauri only; no-ops in the browser) — a lens on the active session only ----
 
   const trayStart = (label: string, remaining: string) => {
     if (!isTauri()) return;
@@ -676,10 +581,6 @@ function App() {
     void invoke("tray_stop").catch((e) => console.error("tray stop failed:", e));
   };
 
-  // ---- Native backup alarm (Tauri only) ----
-  // WKWebView throttles JS timers in hidden windows, so Rust arms an OS-scheduled alarm that
-  // fires the notification and "timer-expired-native" on its own. It owns the notification
-  // exclusively to avoid a double notification alongside isExpired() below.
 
   const timerArm = (label: string, presetMinutes: number, durationSecs: number) => {
     if (!isTauri()) return;
@@ -698,8 +599,6 @@ function App() {
   const handleStart = () => {
     if (
       isRunning ||
-      updateInProgress ||
-      installInFlightRef.current ||
       !isCursorOnTask ||
       pendingResolution !== null
     )
@@ -738,10 +637,8 @@ function App() {
         projects: stopped.projects,
         lineDeleted: false,
       });
-      // Immediately save the spent: that stopTracking wrote back into the editor
       flushSaveBestEffort();
     } else {
-      // Tracked line was lost: don't finalize the log until the destination is decided (no warning dialog)
       setPendingResolution({
         file: activeFile?.name ?? "",
         startedAt,
@@ -762,16 +659,13 @@ function App() {
     timerDisarm();
   };
 
-  /** Mirrors the play/stop button for the editor's start/stop shortcut: starts if idle, stops if running. */
   const handleToggleTracking = () => {
     if (isRunning) stopTracking();
     else handleStart();
   };
 
-  // Always call the latest stop handler from event listeners and the timer interval.
   const requestStop = useEffectEvent(() => stopTracking());
 
-  // ---- Timer (display update every 250ms and expiry detection) ----
 
   useEffect(() => {
     if (timerState.status !== "running") return;
@@ -785,8 +679,6 @@ function App() {
         lastTraySecRef.current = remainingSec;
         trayTick(formatClock(remainingMs));
       }
-      // Expiry is treated like manual stop: add the elapsed time up to now to spent:.
-      // Stop the interval in place so the stop handler doesn't run again before re-render
       if (isExpired(timerState, now)) {
         window.clearInterval(id);
         requestStop();
@@ -795,9 +687,6 @@ function App() {
     return () => window.clearInterval(id);
   }, [timerState]);
 
-  // Tray "Stop" click and the native alarm's expiry signal (see timerArm) both just ask the
-  // frontend to stop; requestStop's `if (!isRunning)` guard makes duplicates a no-op. The
-  // alarm is the path that matters once WKWebView throttles JS timers in a hidden window.
   useEffect(() => {
     if (!isTauri()) return;
     const unlistens: (() => void)[] = [];
@@ -814,14 +703,12 @@ function App() {
     };
   }, []);
 
-  /** Let the user choose the destination: keep it only in the log and finish. */
   const handleResolveLogOnly = () => {
     if (!pendingResolution) return;
     appendRecord({ ...pendingResolution, lineDeleted: true });
     setPendingResolution(null);
   };
 
-  /** Let the user choose the destination: add the spent: to the line under the cursor and finish. */
   const handleResolveAssignToCursor = () => {
     if (!pendingResolution) return;
     const cursor = editorRef.current?.getCursorLine();
@@ -842,11 +729,8 @@ function App() {
     setPendingResolution(null);
   };
 
-  /** Dev-only: jump the running timer to DEBUG_FAST_FORWARD_SECONDS remaining, to quickly verify expiry/notifications. */
   const handleDebugFastForward = () => {
     setTimerState((state) => fastForwardToRemaining(state, Date.now(), DEBUG_FAST_FORWARD_SECONDS));
-    // Re-arm the native alarm to match, or it would still fire (harmlessly late) at the
-    // original preset duration instead of the fast-forwarded one.
     if (trackingLabel)
       timerArm(trackingLabel, DEBUG_FAST_FORWARD_SECONDS / 60, DEBUG_FAST_FORWARD_SECONDS);
   };
@@ -919,25 +803,15 @@ function App() {
             view === "settings" ? "bg-accent/16 text-accent" : "text-muted hover:bg-white/7 hover:text-ink",
           )}
           onClick={() => handleSelectView("settings")}
-          aria-label={
-            updateState.phase === "available" ? "Settings, update available" : "Settings"
-          }
-          title={updateState.phase === "available" ? "Settings — update available" : "Settings"}
+          aria-label="Settings"
+          title="Settings"
         >
           <GearGlyph />
-          {updateState.phase === "available" && (
-            <span
-              className="absolute top-[3px] right-[3px] h-[6px] w-[6px] rounded-full border border-bg bg-accent"
-              aria-hidden="true"
-            />
-          )}
         </button>
       </div>
     </div>
   );
 
-  // ---- First-run setup (no data folder configured or load failed) ----
-  // Don't show the setup screen while settings are still loading (it would flash briefly)
   if (isTauri() && !settingsReady) {
     return (
       <div className="noise-overlay relative isolate flex h-screen flex-col overflow-hidden bg-bg">
@@ -992,7 +866,6 @@ function App() {
       {mainTitlebar}
       <div className="relative z-[1] flex flex-1 min-h-0">
         <div className="flex flex-1 min-w-0 flex-col overflow-hidden bg-main-bg">
-          {/* Keep the Editor mounted but hidden while other views are shown, so an active session's tracking state isn't lost */}
           <div className={cn("h-full", view !== "editor" && "hidden")}>
             {activeFile ? (
               <Editor
@@ -1001,13 +874,13 @@ function App() {
                 initialContent={activeFile.content}
                 onChange={handleDocChange}
                 vimMode={vimMode}
-                presets={presetKeymap}
+                presets={presets}
                 onCursorLineChange={(info) =>
                   setFocusedTaskLabel(info.isTask ? toTrackingLabel(info.text) : null)
                 }
                 onTrackedLineChange={(info) => setTrackingLabel(toTrackingLabel(info.text))}
                 onTrackedLineLost={() => setTrackedLost(true)}
-                toggleKey={shortcuts.toggle}
+                startStopShortcut={startStopShortcut}
                 onSelectPreset={setPresetMinutes}
                 onToggle={handleToggleTracking}
               />
@@ -1036,24 +909,23 @@ function App() {
             <SettingsView
               vimMode={vimMode}
               onToggleVimMode={handleToggleVimMode}
-              presetSlots={presetSlots}
-              onSetPresetSlot={handleSetPresetSlot}
-              shortcuts={shortcuts}
-              onSetShortcut={handleSetShortcut}
-              shortcutsDisabled={isDemoMode}
+              presets={presets}
+              onAddPreset={handleAddPreset}
+              onSetPresetMinutes={handleSetPresetMinutes}
+              onSetPresetShortcut={handleSetPresetShortcut}
+              onRemovePreset={handleRemovePreset}
+              startStopShortcut={startStopShortcut}
+              onSetStartStopShortcut={handleSetStartStopShortcut}
               globalHotkey={globalHotkey}
               onSetGlobalHotkey={handleSetGlobalHotkey}
-              globalHotkeyDisabled={isDemoMode}
+              shortcutsDisabled={isDemoMode}
               dataDir={dataDir}
               dataDirDisabled={isRunning}
               onPickDataDir={async () => {
                 const dir = await pickDataDir();
                 if (dir) applyDataDir(dir);
               }}
-              updateState={updateState}
-              updateBlocked={isRunning}
-              onCheckForUpdates={handleCheckForUpdates}
-              onInstallUpdate={handleInstallUpdate}
+              settingsFilePath={settingsFilePath ?? undefined}
             />
           )}
         </div>
@@ -1062,9 +934,9 @@ function App() {
           focusedTaskLabel={focusedTaskLabel}
           trackedLost={trackedLost}
           isRunning={isRunning}
-          canStart={!updateInProgress && isCursorOnTask && pendingResolution === null}
+          canStart={isCursorOnTask && pendingResolution === null}
           presetMinutes={presetMinutes}
-          presets={presets}
+          presets={presetMinutesList}
           elapsedMs={elapsedMs}
           onSelectPreset={setPresetMinutes}
           onStart={handleStart}
