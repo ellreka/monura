@@ -1,5 +1,6 @@
 mod alarm;
 mod commands;
+mod hotkey;
 mod tray;
 mod watch;
 
@@ -12,6 +13,15 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(
+            tauri_plugin_window_state::Builder::new()
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::SIZE
+                        | tauri_plugin_window_state::StateFlags::POSITION,
+                )
+                .build(),
+        )
         .invoke_handler(tauri::generate_handler![
             commands::list_md_files,
             commands::read_md_file,
@@ -29,6 +39,7 @@ pub fn run() {
             tray::tray_stop,
             alarm::timer_arm,
             alarm::timer_disarm,
+            hotkey::set_global_hotkey,
         ])
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
@@ -36,6 +47,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .manage(watch::WatcherState(std::sync::Mutex::new(None)))
         .manage(alarm::AlarmState::default())
+        .manage(hotkey::HotkeyState::default())
         .setup(|app| {
             let handle = app.handle();
 

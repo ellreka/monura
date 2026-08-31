@@ -12,6 +12,7 @@ export interface AppSettings {
   presets: (number | null)[];
   /** Keyboard shortcuts for starting/stopping the timer and switching presets. */
   shortcuts: TimerShortcuts;
+  globalHotkey: string | null;
 }
 
 /** Key used before plugin-store adoption (WebView localStorage). */
@@ -37,7 +38,8 @@ export async function loadSettings(): Promise<AppSettings> {
   const vimMode = (await store.get<boolean>("vimMode")) ?? false;
   const presets = (await store.get<(number | null)[]>("presets")) ?? [...DEFAULT_PRESETS];
   const shortcuts = (await store.get<TimerShortcuts>("shortcuts")) ?? createDefaultTimerShortcuts();
-  return { dataDir, vimMode, presets, shortcuts };
+  const globalHotkey = (await store.get<string | null>("globalHotkey")) ?? null;
+  return { dataDir, vimMode, presets, shortcuts, globalHotkey };
 }
 
 export async function saveDataDir(dir: string): Promise<void> {
@@ -54,6 +56,10 @@ export async function savePresets(presets: (number | null)[]): Promise<void> {
 
 export async function saveShortcuts(shortcuts: TimerShortcuts): Promise<void> {
   await store.set("shortcuts", shortcuts);
+}
+
+export async function saveGlobalHotkey(binding: string | null): Promise<void> {
+  await store.set("globalHotkey", binding);
 }
 
 /** The last active file name for a data directory, or null when unknown. */

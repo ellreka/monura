@@ -41,6 +41,7 @@ import {
   getLastFileFor,
   loadSettings,
   saveDataDir,
+  saveGlobalHotkey,
   saveLastFileFor,
   savePresets,
   saveShortcuts,
@@ -68,6 +69,7 @@ import {
 } from "./lib/timer";
 import type { AppUpdateState } from "./lib/updater";
 import { cn } from "./lib/cn";
+import { toAccelerator } from "./lib/keybinding";
 
 /**
  * Pending record for when a session ends with the tracked line lost.
@@ -158,6 +160,7 @@ function App() {
   );
   const [presetSlots, setPresetSlots] = useState<(number | null)[]>(() => [...DEFAULT_PRESETS]);
   const [shortcuts, setShortcuts] = useState<TimerShortcuts>(createDefaultTimerShortcuts);
+  const [globalHotkey, setGlobalHotkey] = useState<string | null>(null);
   const [timerState, setTimerState] = useState<TimerState>(() => createIdleTimer(presetMinutes));
   const [elapsedMs, setElapsedMs] = useState(0);
   const [trackingLabel, setTrackingLabel] = useState<string | null>(null);
@@ -341,6 +344,10 @@ function App() {
         setPresetSlots(settings.presets);
         setPresetMinutes(compactPresets(settings.presets)[0] ?? DEFAULT_PRESET_MINUTES);
         setShortcuts(settings.shortcuts);
+        setGlobalHotkey(settings.globalHotkey);
+        void invoke("set_global_hotkey", {
+          accelerator: settings.globalHotkey ? toAccelerator(settings.globalHotkey) : null,
+        }).catch((e) => console.error("set global hotkey failed:", e));
       } catch (e) {
         console.error("settings load failed:", e);
       } finally {
@@ -624,6 +631,16 @@ function App() {
     );
     if (isTauri()) {
       void saveShortcuts(next).catch((e) => console.error("save shortcuts failed:", e));
+    }
+  };
+
+  const handleSetGlobalHotkey = (key: string | null) => {
+    setGlobalHotkey(key);
+    if (isTauri()) {
+      void invoke("set_global_hotkey", { accelerator: key ? toAccelerator(key) : null }).catch((e) =>
+        console.error("set global hotkey failed:", e),
+      );
+      void saveGlobalHotkey(key).catch((e) => console.error("save global hotkey failed:", e));
     }
   };
 
@@ -1024,6 +1041,9 @@ function App() {
               shortcuts={shortcuts}
               onSetShortcut={handleSetShortcut}
               shortcutsDisabled={isDemoMode}
+              globalHotkey={globalHotkey}
+              onSetGlobalHotkey={handleSetGlobalHotkey}
+              globalHotkeyDisabled={isDemoMode}
               dataDir={dataDir}
               dataDirDisabled={isRunning}
               onPickDataDir={async () => {

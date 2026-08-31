@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { captureKeyBinding, formatKeyBindingLabel } from "./keybinding";
+import { captureKeyBinding, formatKeyBindingLabel, toAccelerator } from "./keybinding";
 
 function keydown(code: string, mods: Partial<Record<"meta" | "ctrl" | "alt" | "shift", boolean>> = {}) {
   return {
@@ -73,5 +73,26 @@ describe("formatKeyBindingLabel", () => {
   it("renders Space and preserves a trailing literal minus key", () => {
     expect(formatKeyBindingLabel("Meta-Space")).toBe("Cmd+Space");
     expect(formatKeyBindingLabel("Meta--")).toBe("Cmd+-");
+  });
+});
+
+describe("toAccelerator", () => {
+  it("converts Meta to Cmd and joins with +", () => {
+    expect(toAccelerator("Meta-K")).toBe("Cmd+K");
+    expect(toAccelerator("Meta-1")).toBe("Cmd+1");
+  });
+
+  it("preserves literal modifier names that already match the accelerator vocabulary", () => {
+    expect(toAccelerator("Ctrl-Enter")).toBe("Ctrl+Enter");
+    expect(toAccelerator("Alt-Ctrl-Meta-Shift-1")).toBe("Alt+Ctrl+Cmd+Shift+1");
+  });
+
+  it("passes named keys through unchanged (already valid accelerator key tokens)", () => {
+    expect(toAccelerator("Meta-Space")).toBe("Cmd+Space");
+    expect(toAccelerator("Meta-Escape")).toBe("Cmd+Escape");
+  });
+
+  it("preserves a trailing literal minus key", () => {
+    expect(toAccelerator("Meta--")).toBe("Cmd+-");
   });
 });

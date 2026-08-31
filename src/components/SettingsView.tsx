@@ -17,6 +17,9 @@ interface SettingsViewProps {
   shortcuts: TimerShortcuts;
   onSetShortcut: (target: ShortcutTarget, key: string | null) => void;
   shortcutsDisabled?: boolean;
+  globalHotkey: string | null;
+  onSetGlobalHotkey: (key: string | null) => void;
+  globalHotkeyDisabled?: boolean;
   dataDir?: string | null;
   dataDirDisabled?: boolean;
   onPickDataDir?: () => void;
@@ -78,6 +81,7 @@ interface ShortcutCaptureInputProps {
   disabled?: boolean;
   /** Fills the width of its grid cell instead of using a fixed minimum width (used inside the preset grid). */
   fullWidth?: boolean;
+  requireModifier?: boolean;
 }
 
 /**
@@ -99,6 +103,7 @@ function ShortcutCaptureInput({
   ariaLabel,
   disabled = false,
   fullWidth = false,
+  requireModifier = false,
 }: ShortcutCaptureInputProps) {
   const [recording, setRecording] = useState(false);
 
@@ -118,12 +123,13 @@ function ShortcutCaptureInput({
       }
       const captured = captureKeyBinding(e);
       if (captured === null) return; // bare modifier press — keep waiting
+      if (requireModifier && !e.metaKey && !e.ctrlKey && !e.altKey) return;
       setRecording(false);
       onCommit(captured);
     };
     document.addEventListener("keydown", handleKeyDown, { capture: true });
     return () => document.removeEventListener("keydown", handleKeyDown, { capture: true });
-  }, [recording, onCommit]);
+  }, [recording, onCommit, requireModifier]);
 
   return (
     <div className="flex items-center gap-1">
@@ -164,6 +170,9 @@ export function SettingsView({
   shortcuts,
   onSetShortcut,
   shortcutsDisabled = false,
+  globalHotkey,
+  onSetGlobalHotkey,
+  globalHotkeyDisabled = false,
   dataDir,
   dataDirDisabled = false,
   onPickDataDir,
@@ -249,6 +258,27 @@ export function SettingsView({
                 </div>
               ),
             )}
+          </div>
+        </section>
+
+        <section className="py-3">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <div className="text-[13px] font-semibold">Show / hide window shortcut</div>
+              <div className="text-[11px] text-muted">
+                A global shortcut that works from anywhere, even while Monura isn't focused —
+                brings the window to the front, or hides it again if already focused. Must
+                include Cmd, Ctrl, or Option so it doesn't intercept ordinary typing.
+                {globalHotkeyDisabled && " Disabled in this live demo."}
+              </div>
+            </div>
+            <ShortcutCaptureInput
+              value={globalHotkey}
+              onCommit={onSetGlobalHotkey}
+              ariaLabel="Show / hide window shortcut"
+              disabled={globalHotkeyDisabled}
+              requireModifier
+            />
           </div>
         </section>
         {dataDir !== undefined && (

@@ -91,3 +91,17 @@ export function formatKeyBindingLabel(binding: string): string {
   const keyLabel = key.length === 1 ? key.toUpperCase() : key;
   return [...modifiers, keyLabel].join("+");
 }
+
+const MODIFIER_ACCELERATOR_TOKENS: Record<string, string> = {
+  Meta: "Cmd",
+  Ctrl: "Ctrl",
+  Alt: "Alt",
+  Shift: "Shift",
+};
+
+export function toAccelerator(binding: string): string {
+  const parts = binding.split(/-(?!$)/);
+  const key = parts[parts.length - 1];
+  const modifiers = parts.slice(0, -1).map((mod) => MODIFIER_ACCELERATOR_TOKENS[mod] ?? mod);
+  return [...modifiers, key].join("+");
+}
