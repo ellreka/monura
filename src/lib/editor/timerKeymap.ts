@@ -9,7 +9,7 @@ export interface TimerKeymapOptions {
   toggleKey: string | null;
   /** Changes the selected preset only (mirrors clicking a preset pill) — never starts tracking. */
   onSelectPreset: (presetMinutes: number) => void;
-  /** Starts tracking with the current preset when idle, stops when running (mirrors the ▶/■ button). */
+  /** Starts tracking with the current preset when idle, stops when running (mirrors the play/stop button). */
   onToggle: () => void;
 }
 

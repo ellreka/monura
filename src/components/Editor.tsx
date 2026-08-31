@@ -330,5 +330,5 @@ export function Editor({ ref, initialContent, onChange, vimMode = false, presets
     }),
     [],
   );
-  return <div className="monura-editor" ref={containerRef} />;
+  return <div className="monura-editor h-full" ref={containerRef} />;
 }

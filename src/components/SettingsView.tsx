@@ -1,17 +1,13 @@
 import { useEffect, useState } from "react";
 import { captureKeyBinding, formatKeyBindingLabel } from "../lib/keybinding";
-import {
-  MAX_PRESETS,
-  sanitizePresetMinutes,
-  type ShortcutTarget,
-  type TimerShortcuts,
-} from "../lib/timer";
+import { MAX_PRESETS, sanitizePresetMinutes, type ShortcutTarget, type TimerShortcuts } from "../lib/timer";
 import {
   updateButtonLabel,
   updateDescription,
   updateProgressPercent,
   type AppUpdateState,
 } from "../lib/updater";
+import { cn } from "../lib/cn";
 
 interface SettingsViewProps {
   vimMode: boolean;
@@ -61,7 +57,7 @@ function PresetSlotInput({ index, value, onCommit }: PresetSlotInputProps) {
       type="number"
       min={1}
       max={1440}
-      className="settings-preset-input"
+      className="w-full rounded-md border border-border bg-pill px-2 py-[5px] text-[13px] text-ink focus-visible:border-accent"
       placeholder="—"
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
@@ -80,6 +76,8 @@ interface ShortcutCaptureInputProps {
   onCommit: (key: string | null) => void;
   ariaLabel: string;
   disabled?: boolean;
+  /** Fills the width of its grid cell instead of using a fixed minimum width (used inside the preset grid). */
+  fullWidth?: boolean;
 }
 
 /**
@@ -100,6 +98,7 @@ function ShortcutCaptureInput({
   onCommit,
   ariaLabel,
   disabled = false,
+  fullWidth = false,
 }: ShortcutCaptureInputProps) {
   const [recording, setRecording] = useState(false);
 
@@ -127,10 +126,14 @@ function ShortcutCaptureInput({
   }, [recording, onCommit]);
 
   return (
-    <div className="settings-shortcut">
+    <div className="flex items-center gap-1">
       <button
         type="button"
-        className={"settings-shortcut-input" + (recording ? " is-recording" : "")}
+        className={cn(
+          "cursor-pointer rounded-md border bg-pill px-2 py-[5px] text-center text-xs disabled:cursor-not-allowed disabled:opacity-55",
+          fullWidth ? "w-full min-w-0" : "min-w-[110px]",
+          recording ? "border-accent text-accent" : "border-border text-ink enabled:hover:border-accent",
+        )}
         onClick={() => setRecording(true)}
         onBlur={() => setRecording(false)}
         aria-label={ariaLabel}
@@ -142,7 +145,7 @@ function ShortcutCaptureInput({
       {!disabled && !recording && value !== null && (
         <button
           type="button"
-          className="settings-shortcut-clear"
+          className="flex-none cursor-pointer border-none bg-transparent px-1 py-0.5 text-sm leading-none text-muted hover:text-ink"
           onClick={() => onCommit(null)}
           aria-label={`Clear ${ariaLabel}`}
         >
@@ -170,33 +173,36 @@ export function SettingsView({
   onInstallUpdate,
 }: SettingsViewProps) {
   return (
-    <div className="settings-view">
-      <h2 className="view-title">Settings</h2>
-      <div className="settings-body">
-        <section className="settings-section">
-          <div className="settings-row">
-            <div className="settings-row-text">
-              <div className="settings-row-title">Vim key bindings</div>
-              <div className="settings-row-desc">Enable Vim-style editing in the editor</div>
+    <div className="h-full overflow-y-auto px-7 pt-5 pb-[var(--timer-bar-clearance)]">
+      <h2 className="m-0 mb-3 text-sm font-bold">Settings</h2>
+      <div className="max-w-[560px] divide-y divide-border py-1">
+        <section className="py-3">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <div className="text-[13px] font-semibold">Vim key bindings</div>
+              <div className="text-[11px] text-muted">Enable Vim-style editing in the editor</div>
             </div>
             <button
               type="button"
               role="switch"
               aria-checked={vimMode}
-              className={"settings-switch" + (vimMode ? " is-on" : "")}
+              className={cn(
+                "flex h-[22px] w-[38px] flex-none items-center rounded-full p-0.5",
+                vimMode ? "justify-end bg-accent" : "justify-start bg-border",
+              )}
               onClick={onToggleVimMode}
               aria-label="Vim key bindings"
             >
-              <span className="settings-switch-knob" />
+              <span className="h-[18px] w-[18px] rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,0.2)]" />
             </button>
           </div>
         </section>
 
-        <section className="settings-section">
-          <div className="settings-row">
-            <div className="settings-row-text">
-              <div className="settings-row-title">Start / stop shortcut</div>
-              <div className="settings-row-desc">
+        <section className="py-3">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <div className="text-[13px] font-semibold">Start / stop shortcut</div>
+              <div className="text-[11px] text-muted">
                 Starts tracking the task under the cursor, or stops the running timer
                 {shortcutsDisabled && " (disabled in this live demo)"}
               </div>
@@ -210,11 +216,11 @@ export function SettingsView({
           </div>
         </section>
 
-        <section className="settings-section">
-          <div className="settings-row">
-            <div className="settings-row-text">
-              <div className="settings-row-title">Timer presets</div>
-              <div className="settings-row-desc">
+        <section className="py-3">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <div className="text-[13px] font-semibold">Timer presets</div>
+              <div className="text-[11px] text-muted">
                 Up to {MAX_PRESETS} quick-start durations (minutes) and their shortcuts. A preset
                 shortcut only changes the selection — it never starts the timer. Leave a slot blank
                 to hide it.
@@ -222,11 +228,11 @@ export function SettingsView({
               </div>
             </div>
           </div>
-          <div className="settings-preset-grid">
+          <div className="mt-[10px] grid grid-cols-4 gap-[10px]">
             {Array.from({ length: MAX_PRESETS }, (_, index) => presetSlots[index] ?? null).map(
               (minutes, index) => (
-                <div key={index} className="settings-preset-slot">
-                  <span className="settings-preset-slot-label">Preset {index + 1}</span>
+                <div key={index} className="flex flex-col gap-1">
+                  <span className="text-[11px] text-muted">Preset {index + 1}</span>
                   <PresetSlotInput
                     key={minutes ?? "empty"}
                     index={index}
@@ -238,6 +244,7 @@ export function SettingsView({
                     onCommit={(key) => onSetShortcut(index, key)}
                     ariaLabel={`Preset ${index + 1} shortcut`}
                     disabled={shortcutsDisabled}
+                    fullWidth
                   />
                 </div>
               ),
@@ -245,18 +252,18 @@ export function SettingsView({
           </div>
         </section>
         {dataDir !== undefined && (
-          <section className="settings-section">
-            <div className="settings-row">
-              <div className="settings-row-text">
-                <div className="settings-row-title">Data folder</div>
-                <div className="settings-row-desc">
+          <section className="py-3">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex min-w-0 flex-col gap-0.5">
+                <div className="text-[13px] font-semibold">Data folder</div>
+                <div className="text-[11px] text-muted">
                   Folder containing the .md files Monura edits. Session logs are stored separately
                   in Monura's app data.
                 </div>
               </div>
               <button
                 type="button"
-                className="settings-button"
+                className="flex-none cursor-pointer rounded-md border border-border bg-pill px-3 py-[5px] text-xs text-ink enabled:hover:border-accent disabled:cursor-default disabled:opacity-50"
                 onClick={onPickDataDir}
                 disabled={dataDirDisabled}
                 title={dataDirDisabled ? "Cannot change while tracking" : undefined}
@@ -264,19 +271,19 @@ export function SettingsView({
                 Change…
               </button>
             </div>
-            {dataDir && <span className="settings-path">{dataDir}</span>}
+            {dataDir && <span className="mt-2 block text-[11px] break-all text-muted">{dataDir}</span>}
           </section>
         )}
-        <section className="settings-section">
-          <div className="settings-row">
-            <div className="settings-row-text">
-              <div className="settings-row-title">Software update</div>
-              <div className="settings-row-desc" aria-live="polite">
+        <section className="py-3">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <div className="text-[13px] font-semibold">Software update</div>
+              <div className="text-[11px] text-muted" aria-live="polite">
                 {updateDescription(updateState, updateBlocked)}
               </div>
               {updateState.phase === "downloading" && (
                 <progress
-                  className="settings-update-progress"
+                  className="mt-1.5 h-1 w-[min(220px,100%)] accent-accent"
                   max={100}
                   value={updateProgressPercent(updateState) ?? undefined}
                   aria-label="Update download progress"
@@ -285,7 +292,7 @@ export function SettingsView({
             </div>
             <button
               type="button"
-              className="settings-button"
+              className="flex-none cursor-pointer rounded-md border border-border bg-pill px-3 py-[5px] text-xs text-ink enabled:hover:border-accent disabled:cursor-default disabled:opacity-50"
               onClick={updateState.phase === "available" ? onInstallUpdate : onCheckForUpdates}
               disabled={
                 updateState.phase === "unavailable" ||
@@ -300,7 +307,7 @@ export function SettingsView({
           </div>
         </section>
       </div>
-      <div className="settings-footer">Changes apply immediately.</div>
+      <div className="mt-4 max-w-[560px] text-[11px] text-muted">Changes apply immediately.</div>
     </div>
   );
 }

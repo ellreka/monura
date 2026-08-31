@@ -26,7 +26,7 @@ export interface PresetKeymapEntry {
 }
 
 /**
- * User-configurable shortcuts for the timer: one to start/stop tracking (mirrors the ▶/■
+ * User-configurable shortcuts for the timer: one to start/stop tracking (mirrors the play/stop
  * toggle button) and one per preset slot (mirrors clicking a preset pill — selects only,
  * never starts). null = unassigned.
  */

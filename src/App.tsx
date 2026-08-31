@@ -67,6 +67,7 @@ import {
   type TimerState,
 } from "./lib/timer";
 import type { AppUpdateState } from "./lib/updater";
+import { cn } from "./lib/cn";
 
 /**
  * Pending record for when a session ends with the tracked line lost.
@@ -97,6 +98,28 @@ function SearchGlyph() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path d="M17 17L21 21" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
       <path d="M19 11C19 6.58172 15.4183 3 11 3C6.58172 3 3 6.58172 3 11C3 15.4183 6.58172 19 11 19C15.4183 19 19 15.4183 19 11Z" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
+function NoteGlyph() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M17 2V4M12 2V4M7 2V4"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M3.5 10C3.5 6.70017 3.5 5.05025 4.52513 4.02513C5.55025 3 7.20017 3 10.5 3H13.5C16.7998 3 18.4497 3 19.4749 4.02513C20.5 5.05025 20.5 6.70017 20.5 10V15C20.5 18.2998 20.5 19.9497 19.4749 20.9749C18.4497 22 16.7998 22 13.5 22H10.5C7.20017 22 5.55025 22 4.52513 20.9749C3.5 19.9497 3.5 18.2998 3.5 15V10Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.5"
+      />
+      <path d="M8 15H12M8 10H16" stroke="currentColor" strokeLinecap="round" strokeWidth="1.5" />
     </svg>
   );
 }
@@ -722,7 +745,7 @@ function App() {
     timerDisarm();
   };
 
-  /** Mirrors the ▶/■ button for the editor's start/stop shortcut: starts if idle, stops if running. */
+  /** Mirrors the play/stop button for the editor's start/stop shortcut: starts if idle, stops if running. */
   const handleToggleTracking = () => {
     if (isRunning) stopTracking();
     else handleStart();
@@ -813,21 +836,34 @@ function App() {
 
   const showNativeTitlebar = isTauri() && navigator.userAgent.includes("Macintosh");
   const nativeTitlebar = showNativeTitlebar ? (
-    <div className="window-titlebar" data-tauri-drag-region>
-      <span className="window-titlebar-label">{activeFile?.name ?? "Monura"}</span>
+    <div
+      className="relative z-[1] flex h-8 flex-none items-center gap-2 bg-transparent pl-[76px] pr-[10px] text-muted select-none"
+      data-tauri-drag-region
+    >
+      <span className="pointer-events-none flex-1 min-w-0 truncate text-center text-xs font-semibold">
+        {activeFile?.name ?? "Monura"}
+      </span>
     </div>
   ) : null;
 
   const mainTitlebar = (
     <div
-      className={"window-titlebar" + (showNativeTitlebar ? " is-native" : "")}
+      className={cn(
+        "relative z-[1] flex h-8 flex-none items-center gap-2 bg-transparent pr-[10px] text-muted select-none",
+        showNativeTitlebar ? "pl-[76px]" : "pl-[14px]",
+      )}
       data-tauri-drag-region={showNativeTitlebar || undefined}
     >
-      <span className="window-titlebar-label">{activeFile?.name ?? "Monura"}</span>
-      <div className="window-titlebar-actions">
+      <span className="pointer-events-none flex-1 min-w-0 truncate text-center text-xs font-semibold">
+        {activeFile?.name ?? "Monura"}
+      </span>
+      <div className="flex flex-none items-center gap-[2px]">
         <button
           type="button"
-          className={"titlebar-icon-button" + (launcherOpen ? " is-active" : "")}
+          className={cn(
+            "relative flex h-[26px] w-[26px] items-center justify-center rounded-md p-0",
+            launcherOpen ? "bg-accent/16 text-accent" : "text-muted hover:bg-white/7 hover:text-ink",
+          )}
           onClick={() => setLauncherOpen((open) => !open)}
           aria-label="Open launcher"
           aria-pressed={launcherOpen}
@@ -837,7 +873,22 @@ function App() {
         </button>
         <button
           type="button"
-          className={"titlebar-icon-button" + (view === "log" ? " is-active" : "")}
+          className={cn(
+            "relative flex h-[26px] w-[26px] items-center justify-center rounded-md p-0",
+            view === "editor" ? "bg-accent/16 text-accent" : "text-muted hover:bg-white/7 hover:text-ink",
+          )}
+          onClick={() => handleSelectView("editor")}
+          aria-label="Editor"
+          title="Editor"
+        >
+          <NoteGlyph />
+        </button>
+        <button
+          type="button"
+          className={cn(
+            "relative flex h-[26px] w-[26px] items-center justify-center rounded-md p-0",
+            view === "log" ? "bg-accent/16 text-accent" : "text-muted hover:bg-white/7 hover:text-ink",
+          )}
           onClick={() => handleSelectView("log")}
           aria-label="Session log"
           title="Session log"
@@ -846,7 +897,10 @@ function App() {
         </button>
         <button
           type="button"
-          className={"titlebar-icon-button" + (view === "settings" ? " is-active" : "")}
+          className={cn(
+            "relative flex h-[26px] w-[26px] items-center justify-center rounded-md p-0",
+            view === "settings" ? "bg-accent/16 text-accent" : "text-muted hover:bg-white/7 hover:text-ink",
+          )}
           onClick={() => handleSelectView("settings")}
           aria-label={
             updateState.phase === "available" ? "Settings, update available" : "Settings"
@@ -855,7 +909,10 @@ function App() {
         >
           <GearGlyph />
           {updateState.phase === "available" && (
-            <span className="titlebar-icon-badge" aria-hidden="true" />
+            <span
+              className="absolute top-[3px] right-[3px] h-[6px] w-[6px] rounded-full border border-bg bg-accent"
+              aria-hidden="true"
+            />
           )}
         </button>
       </div>
@@ -865,23 +922,32 @@ function App() {
   // ---- First-run setup (no data folder configured or load failed) ----
   // Don't show the setup screen while settings are still loading (it would flash briefly)
   if (isTauri() && !settingsReady) {
-    return <div className="app-shell">{nativeTitlebar}</div>;
+    return (
+      <div className="noise-overlay relative isolate flex h-screen flex-col overflow-hidden bg-bg">
+        {nativeTitlebar}
+      </div>
+    );
   }
 
   if (isTauri() && (!dataDir || loadError)) {
     return (
-      <div className="app-shell">
+      <div className="noise-overlay relative isolate flex h-screen flex-col overflow-hidden bg-bg">
         {nativeTitlebar}
-        <div className="setup-screen">
-          <h1 className="setup-title">monura</h1>
-          <p className="setup-desc">
+        <div className="relative z-[1] flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
+          <h1 className="m-0 text-[22px]">monura</h1>
+          <p className="m-0 max-w-[420px] text-[13px] text-muted">
             Choose a folder for your .md files. It can also be a folder inside iCloud Drive or
             Dropbox.
           </p>
-          {loadError && <p className="setup-error">Could not open the folder: {loadError}</p>}
-          <div className="setup-actions">
+          {loadError && (
+            <p className="m-0 max-w-[420px] text-xs break-all text-danger">
+              Could not open the folder: {loadError}
+            </p>
+          )}
+          <div className="flex gap-2">
             <button
               type="button"
+              className="cursor-pointer rounded-lg border border-border bg-pill px-4 py-2 text-[13px] text-ink hover:border-accent"
               onClick={async () => {
                 const dir = await pickDataDir();
                 if (dir) applyDataDir(dir);
@@ -891,6 +957,7 @@ function App() {
             </button>
             <button
               type="button"
+              className="cursor-pointer rounded-lg border border-border bg-pill px-4 py-2 text-[13px] text-ink hover:border-accent"
               onClick={async () => {
                 applyDataDir(await ensureDefaultDataDir());
               }}
@@ -904,12 +971,12 @@ function App() {
   }
 
   return (
-    <div className="app-shell">
+    <div className="noise-overlay relative isolate flex h-screen flex-col overflow-hidden bg-bg">
       {mainTitlebar}
-      <div className="app-body">
-        <div className="main-area">
+      <div className="relative z-[1] flex flex-1 min-h-0">
+        <div className="flex flex-1 min-w-0 flex-col overflow-hidden bg-main-bg">
           {/* Keep the Editor mounted but hidden while other views are shown, so an active session's tracking state isn't lost */}
-          <div className={"editor-holder" + (view !== "editor" ? " is-hidden" : "")}>
+          <div className={cn("h-full", view !== "editor" && "hidden")}>
             {activeFile ? (
               <Editor
                 key={activeFile.name}
@@ -928,7 +995,7 @@ function App() {
                 onToggle={handleToggleTracking}
               />
             ) : (
-              <div className="editor-empty">
+              <div className="flex h-full flex-1 items-center justify-center text-[13px] text-muted">
                 Create an .md file with the launcher (⌘K)
               </div>
             )}

@@ -1,5 +1,7 @@
+import { Command } from "cmdk";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { nextUntitledName, normalizeMdName, stripMdSuffix } from "../lib/files/names";
+import { cn } from "../lib/cn";
 
 interface LauncherFile {
   name: string;
@@ -18,6 +20,12 @@ interface LauncherProps {
 
 type Row = { kind: "new-file" } | { kind: "file"; name: string; index: number };
 
+/** File names always end in `.md`, so this can never collide with a real row's value. */
+const NEW_FILE_VALUE = "new-file";
+
+const itemClass =
+  "flex w-full cursor-pointer items-center gap-2 rounded-md bg-transparent px-[10px] py-[7px] text-left text-xs text-ink data-[selected=true]:bg-accent/16 data-[disabled=true]:cursor-not-allowed data-[disabled=true]:text-muted";
+
 export function Launcher({
   onClose,
   files,
@@ -29,16 +37,15 @@ export function Launcher({
   onDeleteFile,
 }: LauncherProps) {
   const [query, setQuery] = useState("");
-  const [selectedRaw, setSelectedRaw] = useState(0);
   const [editing, setEditing] = useState<"create" | string | null>(null);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ name: string; x: number; y: number } | null>(null);
-  const searchRef = useRef<HTMLInputElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const editRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    const id = requestAnimationFrame(() => searchRef.current?.focus());
+    const id = requestAnimationFrame(() => inputRef.current?.focus());
     return () => cancelAnimationFrame(id);
   }, []);
 
@@ -72,8 +79,6 @@ export function Launcher({
       .filter((row) => q === "" || row.name.toLowerCase().includes(q));
     return [{ kind: "new-file" }, ...fileRows];
   }, [query, files]);
-
-  const selected = Math.max(0, Math.min(selectedRaw, rows.length - 1));
 
   const startCreate = () => {
     setDraft(nextUntitledName(files.map((f) => f.name)));
@@ -137,36 +142,18 @@ export function Launcher({
     setMenu({ name, x: event.clientX, y: event.clientY });
   };
 
-  const handleSearchKeyDown = (event: React.KeyboardEvent) => {
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      setSelectedRaw(Math.min(selected + 1, rows.length - 1));
-    } else if (event.key === "ArrowUp") {
-      event.preventDefault();
-      setSelectedRaw(Math.max(selected - 1, 0));
-    } else if (event.key === "Enter") {
-      event.preventDefault();
-      const row = rows[selected];
-      if (row) activate(row);
-    } else if (event.key === "Escape") {
-      event.stopPropagation();
-      onClose();
-    }
-  };
-
+  /** Fully isolated from the Command root: arrow/Home/End/Enter must edit text here, never drive list navigation. */
   const handleEditKeyDown = (event: React.KeyboardEvent) => {
+    event.stopPropagation();
     if (event.key === "Enter") commit();
-    if (event.key === "Escape") {
-      event.stopPropagation();
-      cancelEdit();
-    }
+    if (event.key === "Escape") cancelEdit();
   };
 
   const editingInput = (
     <>
       <input
         ref={editRef}
-        className="launcher-row-input"
+        className="w-full rounded-sm border border-accent bg-pill px-1.5 py-[3px] text-xs text-ink"
         value={draft}
         onChange={(e) => {
           setDraft(e.target.value);
@@ -175,99 +162,96 @@ export function Launcher({
         onKeyDown={handleEditKeyDown}
         onBlur={cancelEdit}
       />
-      {error && <span className="launcher-row-error">{error}</span>}
+      {error && <span className="text-[10px] text-danger">{error}</span>}
     </>
   );
 
   return (
-    <div className="launcher-backdrop" onMouseDown={onClose}>
-      <div
-        className="launcher-panel"
+    <div className="fixed inset-0 z-50 flex justify-center bg-black/30 pt-[12vh]" onMouseDown={onClose}>
+      <Command
+        label="Search files"
         role="dialog"
         aria-label="Launcher"
+        shouldFilter={false}
+        className="flex h-fit max-h-[60vh] w-[90%] flex-col overflow-hidden rounded-2xl border border-border bg-timer-bg/72 shadow-[0_24px_48px_rgba(0,0,0,0.45)] backdrop-blur-[28px] backdrop-saturate-[1.6]"
         onMouseDown={(event) => event.stopPropagation()}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.stopPropagation();
+            onClose();
+          }
+        }}
       >
-        <input
-          ref={searchRef}
-          className="launcher-input"
-          placeholder="Search files…"
+        <Command.Input
+          ref={inputRef}
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={handleSearchKeyDown}
+          onValueChange={setQuery}
+          placeholder="Search files…"
           disabled={editing !== null}
+          className="border-0 border-b border-border bg-transparent px-[14px] py-3 text-[13px] text-ink"
         />
-        <div className="launcher-list" role="listbox">
-          {rows.map((row, index) => {
-            const isSelected = index === selected && editing === null;
+        <Command.List label="Files" className="overflow-y-auto p-1.5">
+          {rows.map((row) => {
             if (row.kind === "new-file") {
               if (editing === "create") {
                 return (
-                  <div key="new-file" className="launcher-row is-editing">
+                  <div key="new-file" className="flex flex-col gap-0.5 px-[10px] py-[5px]">
                     {editingInput}
                   </div>
                 );
               }
               return (
-                <button
+                <Command.Item
                   key="new-file"
-                  type="button"
-                  role="option"
-                  aria-selected={isSelected}
-                  className={"launcher-row" + (isSelected ? " is-selected" : "")}
-                  onMouseEnter={() => setSelectedRaw(index)}
-                  onClick={() => activate(row)}
+                  value={NEW_FILE_VALUE}
                   disabled={filesDisabled}
+                  onSelect={() => activate(row)}
+                  className={itemClass}
                 >
                   + New file
-                </button>
+                </Command.Item>
               );
             }
             if (editing === row.name) {
               return (
-                <div key={row.name} className="launcher-row is-editing">
+                <div key={row.name} className="flex flex-col gap-0.5 px-[10px] py-[5px]">
                   {editingInput}
                 </div>
               );
             }
+            const isActiveFile = row.index === activeIndex;
             return (
-              <button
+              <Command.Item
                 key={row.name}
-                type="button"
-                role="option"
-                aria-selected={isSelected}
-                className={
-                  "launcher-row" +
-                  (isSelected ? " is-selected" : "") +
-                  (row.index === activeIndex ? " is-active-file" : "")
-                }
-                onMouseEnter={() => setSelectedRaw(index)}
-                onClick={() => activate(row)}
+                value={row.name}
+                disabled={filesDisabled && !isActiveFile}
+                onSelect={() => activate(row)}
                 onContextMenu={(event) => openMenu(event, row.name)}
-                disabled={filesDisabled && row.index !== activeIndex}
-                title={
-                  filesDisabled && row.index !== activeIndex
-                    ? "Cannot switch files while tracking"
-                    : row.name
-                }
+                title={filesDisabled && !isActiveFile ? "Cannot switch files while tracking" : row.name}
+                className={itemClass}
               >
-                <span className="launcher-row-dot" aria-hidden="true" />
-                <span className="launcher-row-name">{row.name}</span>
-              </button>
+                <span
+                  className={cn("h-[6px] w-[6px] flex-none rounded-full", isActiveFile ? "bg-ink" : "bg-transparent")}
+                  aria-hidden="true"
+                />
+                <span className="truncate">{row.name}</span>
+              </Command.Item>
             );
           })}
-        </div>
-      </div>
+        </Command.List>
+      </Command>
       {menu && (
         <div
-          className="launcher-menu"
+          className="fixed z-[100] flex min-w-[120px] flex-col gap-0 rounded-lg border border-border bg-pill p-1 shadow-[0_12px_28px_rgba(0,0,0,0.3)]"
           style={{ left: menu.x, top: menu.y }}
           role="menu"
           aria-label="File actions"
+          onMouseDown={(event) => event.stopPropagation()}
         >
           <button
             type="button"
             role="menuitem"
-            className="launcher-menu-item"
+            className="rounded-[5px] px-[10px] py-1.5 text-left text-xs text-ink hover:bg-white/5"
             onClick={() => {
               startRename(menu.name);
               setMenu(null);
@@ -278,7 +262,7 @@ export function Launcher({
           <button
             type="button"
             role="menuitem"
-            className="launcher-menu-item is-danger"
+            className="rounded-[5px] px-[10px] py-1.5 text-left text-xs text-danger hover:bg-danger/8"
             onClick={() => {
               onDeleteFile(menu.name);
               setMenu(null);
