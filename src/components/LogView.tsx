@@ -1,11 +1,29 @@
 import { useEffect, useMemo, useState } from "react";
-import { addMonths, format, isSameMonth, parseISO, startOfMonth } from "date-fns";
+import {
+  addMonths,
+  format,
+  isSameMonth,
+  parseISO,
+  startOfMonth,
+} from "date-fns";
 import type { SessionRecord } from "../lib/log/session";
-import { baseTitle, formatDuration, groupByDay, projectTotals, recordDate } from "../lib/log/analytics";
+import {
+  baseTitle,
+  formatDuration,
+  groupByDay,
+  projectTotals,
+  recordDate,
+} from "../lib/log/analytics";
 import { sessionLogFilename } from "../lib/log/session";
 
 const NO_PROJECT = "";
-const PALETTE = ["var(--accent)", "var(--project)", "#4f8fbb", "#b05c8a", "#8a6fc9"];
+const PALETTE = [
+  "var(--accent)",
+  "var(--project)",
+  "#4f8fbb",
+  "#b05c8a",
+  "#8a6fc9",
+];
 
 interface LogViewProps {
   loadRecords: () => Promise<SessionRecord[]>;
@@ -39,19 +57,30 @@ function RunningRow({ running }: { running: RunningSession }) {
       <span className="min-w-0 flex-1 truncate">
         {baseTitle(running.label)}
         {running.projects.map((p) => (
-          <span key={p} className="ml-1.5 inline-block text-[10px] text-project">
+          <span
+            key={p}
+            className="ml-1.5 inline-block text-[10px] text-project"
+          >
             {p}
           </span>
         ))}
       </span>
-      <span className="flex-none tabular-nums text-[11px] font-semibold text-accent">Tracking</span>
+      <span className="flex-none tabular-nums text-[11px] font-semibold text-accent">
+        Tracking
+      </span>
     </div>
   );
 }
 
-export function LogView({ loadRecords, refreshKey, running = null }: LogViewProps) {
+export function LogView({
+  loadRecords,
+  refreshKey,
+  running = null,
+}: LogViewProps) {
   const [records, setRecords] = useState<SessionRecord[]>([]);
-  const [activeMonth, setActiveMonth] = useState<Date>(() => startOfMonth(new Date()));
+  const [activeMonth, setActiveMonth] = useState<Date>(() =>
+    startOfMonth(new Date()),
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -74,20 +103,25 @@ export function LogView({ loadRecords, refreshKey, running = null }: LogViewProp
 
   const days = useMemo(() => groupByDay(filtered).reverse(), [filtered]);
   const projects = useMemo(() => projectTotals(filtered), [filtered]);
-  const totalSec = useMemo(() => filtered.reduce((sum, r) => sum + r.elapsedSeconds, 0), [filtered]);
+  const totalSec = useMemo(
+    () => filtered.reduce((sum, r) => sum + r.elapsedSeconds, 0),
+    [filtered],
+  );
   const maxProjectSec = projects[0]?.seconds ?? 0;
   const activeMonthLabel = format(activeMonth, "yyyy/MM");
 
   if (records.length === 0 && !running) {
     return (
-      <div className="h-full overflow-y-auto px-7 pt-5 pb-[var(--timer-bar-clearance)]">
-        <div className="p-8 text-center text-[13px] text-muted">No session log yet</div>
+      <div className="h-full overflow-y-auto px-7 py-5">
+        <div className="p-8 text-center text-[13px] text-muted">
+          No session log yet
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="h-full overflow-y-auto px-7 pt-5 pb-[var(--timer-bar-clearance)]">
+    <div className="h-full overflow-y-auto px-7 py-5">
       <h2 className="m-0 mb-3 text-sm font-bold">Session log</h2>
       <div className="mb-[14px] flex items-center justify-between gap-3">
         <div className="flex items-center gap-1">
@@ -99,7 +133,9 @@ export function LogView({ loadRecords, refreshKey, running = null }: LogViewProp
           >
             ◁
           </button>
-          <span className="px-2 py-1 text-sm font-bold text-ink">{activeMonthLabel}</span>
+          <span className="px-2 py-1 text-sm font-bold text-ink">
+            {activeMonthLabel}
+          </span>
           <button
             type="button"
             className="rounded-md border-none bg-transparent px-1.5 py-1 text-[13px] leading-none text-muted hover:bg-bg-tabs hover:text-ink"
@@ -109,7 +145,9 @@ export function LogView({ loadRecords, refreshKey, running = null }: LogViewProp
             ▷
           </button>
         </div>
-        <div className="text-[13px] font-semibold tabular-nums">{formatDuration(totalSec)}</div>
+        <div className="text-[13px] font-semibold tabular-nums">
+          {formatDuration(totalSec)}
+        </div>
       </div>
 
       {projects.length > 0 && (
@@ -117,13 +155,20 @@ export function LogView({ loadRecords, refreshKey, running = null }: LogViewProp
           {projects.map((p, i) => (
             <div key={p.project} className="max-w-[240px] min-w-[120px] flex-1">
               <div className="mb-1 flex justify-between gap-2 text-[11px]">
-                <span className="text-ink">{p.project === NO_PROJECT ? "Untagged" : p.project}</span>
-                <span className="tabular-nums text-muted">{formatDuration(p.seconds)}</span>
+                <span className="text-ink">
+                  {p.project === NO_PROJECT ? "Untagged" : p.project}
+                </span>
+                <span className="tabular-nums text-muted">
+                  {formatDuration(p.seconds)}
+                </span>
               </div>
               <div className="h-[3px] overflow-hidden rounded-[2px] bg-border">
                 <div
                   className="h-full rounded-[2px]"
-                  style={{ width: `${(p.seconds / maxProjectSec) * 100}%`, background: PALETTE[i % PALETTE.length] }}
+                  style={{
+                    width: `${(p.seconds / maxProjectSec) * 100}%`,
+                    background: PALETTE[i % PALETTE.length],
+                  }}
                 />
               </div>
             </div>
@@ -133,23 +178,38 @@ export function LogView({ loadRecords, refreshKey, running = null }: LogViewProp
 
       <div className="flex flex-col">
         {filtered.length === 0 && !running && (
-          <div className="p-8 text-center text-[13px] text-muted">No sessions in {activeMonthLabel}</div>
+          <div className="p-8 text-center text-[13px] text-muted">
+            No sessions in {activeMonthLabel}
+          </div>
         )}
-        {running && isCurrentMonth && !days.some((g) => g.day === runningDayKey(running)) && (
-          <section className="border-t border-border pt-2 pb-[10px]">
-            <header className="flex items-baseline gap-3 pt-0.5 px-1 pb-1.5 text-[11px] text-muted">
-              <span className="font-semibold tabular-nums text-ink">{dayLabel(runningDayKey(running))}</span>
-            </header>
-            <RunningRow running={running} />
-          </section>
-        )}
+        {running &&
+          isCurrentMonth &&
+          !days.some((g) => g.day === runningDayKey(running)) && (
+            <section className="border-t border-border pt-2 pb-[10px]">
+              <header className="flex items-baseline gap-3 pt-0.5 px-1 pb-1.5 text-[11px] text-muted">
+                <span className="font-semibold tabular-nums text-ink">
+                  {dayLabel(runningDayKey(running))}
+                </span>
+              </header>
+              <RunningRow running={running} />
+            </section>
+          )}
         {days.map((group) => (
-          <section key={group.day} className="border-t border-border pt-2 pb-[10px]">
+          <section
+            key={group.day}
+            className="border-t border-border pt-2 pb-[10px]"
+          >
             <header className="flex items-baseline gap-3 pt-0.5 px-1 pb-1.5 text-[11px] text-muted">
-              <span className="font-semibold tabular-nums text-ink">{dayLabel(group.day)}</span>
+              <span className="font-semibold tabular-nums text-ink">
+                {dayLabel(group.day)}
+              </span>
               <span>Tracked {formatDuration(group.totalSeconds)}</span>
             </header>
-            {running && isCurrentMonth && group.day === runningDayKey(running) && <RunningRow running={running} />}
+            {running &&
+              isCurrentMonth &&
+              group.day === runningDayKey(running) && (
+                <RunningRow running={running} />
+              )}
             {group.records.map((r, i) => (
               <SessionRow key={`s-${i}`} record={r} />
             ))}
@@ -158,7 +218,8 @@ export function LogView({ loadRecords, refreshKey, running = null }: LogViewProp
       </div>
 
       <p className="mt-[18px] border-t border-border pt-3 text-[11px] text-muted">
-        {sessionLogFilename(activeMonth)} (append-only). Line text and tags are snapshots from tracking time.
+        {sessionLogFilename(activeMonth)} (append-only). Line text and tags are
+        snapshots from tracking time.
       </p>
     </div>
   );
@@ -167,17 +228,28 @@ export function LogView({ loadRecords, refreshKey, running = null }: LogViewProp
 function SessionRow({ record: r }: { record: SessionRecord }) {
   return (
     <div className="flex items-baseline gap-3 rounded-sm p-1 text-xs">
-      <span className="w-[42px] flex-none tabular-nums text-muted">{format(recordDate(r), "H:mm")}</span>
+      <span className="w-[42px] flex-none tabular-nums text-muted">
+        {format(recordDate(r), "H:mm")}
+      </span>
       <span className="min-w-0 flex-1 truncate">
         {baseTitle(r.lineText)}
         {r.projects.map((p) => (
-          <span key={p} className="ml-1.5 inline-block text-[10px] text-project">
+          <span
+            key={p}
+            className="ml-1.5 inline-block text-[10px] text-project"
+          >
             {p}
           </span>
         ))}
-        {r.lineDeleted && <span className="ml-1.5 inline-block text-[10px] text-danger">line deleted</span>}
+        {r.lineDeleted && (
+          <span className="ml-1.5 inline-block text-[10px] text-danger">
+            line deleted
+          </span>
+        )}
       </span>
-      <span className="flex-none tabular-nums">{formatDuration(r.elapsedSeconds)}</span>
+      <span className="flex-none tabular-nums">
+        {formatDuration(r.elapsedSeconds)}
+      </span>
     </div>
   );
 }

@@ -1109,25 +1109,25 @@ function App() {
             />
           )}
         </div>
-        <TimerBar
-          trackingLabel={trackingLabel}
-          focusedTaskLabel={focusedTaskLabel}
-          trackedLost={trackedLost}
-          isRunning={isRunning}
-          canStart={isCursorOnTask && pendingResolution === null}
-          presetMinutes={presetMinutes}
-          presets={presetMinutesList}
-          elapsedMs={elapsedMs}
-          onSelectPreset={setPresetMinutes}
-          onStart={handleStart}
-          onStop={() => stopTracking()}
-          pending={pendingResolution}
-          canAssignToCursor={isCursorOnTask}
-          onResolveLogOnly={handleResolveLogOnly}
-          onResolveAssignToCursor={handleResolveAssignToCursor}
-          onDebugFastForward={handleDebugFastForward}
-        />
       </div>
+      <TimerBar
+        trackingLabel={trackingLabel}
+        focusedTaskLabel={focusedTaskLabel}
+        trackedLost={trackedLost}
+        isRunning={isRunning}
+        canStart={isCursorOnTask && pendingResolution === null}
+        presetMinutes={presetMinutes}
+        presets={presetMinutesList}
+        elapsedMs={elapsedMs}
+        onSelectPreset={setPresetMinutes}
+        onStart={handleStart}
+        onStop={() => stopTracking()}
+        pending={pendingResolution}
+        canAssignToCursor={isCursorOnTask}
+        onResolveLogOnly={handleResolveLogOnly}
+        onResolveAssignToCursor={handleResolveAssignToCursor}
+        onDebugFastForward={handleDebugFastForward}
+      />
       {launcherOpen && (
         <Launcher
           onClose={() => setLauncherOpen(false)}

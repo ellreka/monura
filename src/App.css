@@ -18,8 +18,6 @@
   --sum-badge-bg: rgba(255, 255, 255, 0.08);
   --sum-badge-ink: #b8b4c2;
   --glass-noise-opacity: 0.07;
-  /* Reserves space below scrollable views (log/settings) so their content never sits under the floating timer bar (74px tall, 16px off the bottom). */
-  --timer-bar-clearance: 110px;
 }
 
 @theme inline {
