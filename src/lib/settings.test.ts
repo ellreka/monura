@@ -12,7 +12,6 @@ vi.mock("@tauri-apps/api/path", () => ({
   join: mocks.join,
 }));
 
-
 vi.mock("@tauri-apps/plugin-store", () => ({
   LazyStore: class {
     save = mocks.save;
@@ -68,7 +67,10 @@ describe("validateAppSettings", () => {
   });
 
   it("keeps globalHotkey outside the shortcuts group", () => {
-    const misplaced = { ...settings, shortcuts: { startStop: settings.shortcuts.startStop, global: "Meta-K" } };
+    const misplaced = {
+      ...settings,
+      shortcuts: { startStop: settings.shortcuts.startStop, global: "Meta-K" },
+    };
 
     const result = validateAppSettings(misplaced);
 
@@ -87,7 +89,9 @@ describe("validateAppSettings", () => {
 
   it("rejects non-integer and out-of-range preset durations", () => {
     for (const minutes of [0, 1441, 10.5]) {
-      expect(validateAppSettings({ ...settings, presets: [{ minutes, shortcut: null }] })).toMatchObject({
+      expect(
+        validateAppSettings({ ...settings, presets: [{ minutes, shortcut: null }] }),
+      ).toMatchObject({
         success: false,
       });
     }
@@ -95,7 +99,9 @@ describe("validateAppSettings", () => {
 
   it("rejects more than the maximum number of presets", () => {
     const tooMany = Array.from({ length: 5 }, (_, i) => ({ minutes: i + 1, shortcut: null }));
-    expect(validateAppSettings({ ...settings, presets: tooMany })).toMatchObject({ success: false });
+    expect(validateAppSettings({ ...settings, presets: tooMany })).toMatchObject({
+      success: false,
+    });
   });
 
   it("rejects a renamed preset field", () => {
@@ -138,7 +144,9 @@ describe("validateAppSettings", () => {
 describe("getSettingsFilePath", () => {
   it("returns settings.json in the app data directory", async () => {
     mocks.appDataDir.mockResolvedValue("/Users/example/Library/Application Support/dev.monura.app");
-    mocks.join.mockResolvedValue("/Users/example/Library/Application Support/dev.monura.app/settings.json");
+    mocks.join.mockResolvedValue(
+      "/Users/example/Library/Application Support/dev.monura.app/settings.json",
+    );
 
     await expect(getSettingsFilePath()).resolves.toBe(
       "/Users/example/Library/Application Support/dev.monura.app/settings.json",

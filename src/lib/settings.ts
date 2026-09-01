@@ -39,9 +39,10 @@ function formatIssuePath(issue: v.BaseIssue<unknown>): string {
 
 function validateSettingsRules(settings: AppSettings): string[] {
   const errors: string[] = [];
-  const assigned = [settings.shortcuts.startStop, ...settings.presets.map((preset) => preset.shortcut)].filter(
-    (shortcut): shortcut is string => shortcut !== null,
-  );
+  const assigned = [
+    settings.shortcuts.startStop,
+    ...settings.presets.map((preset) => preset.shortcut),
+  ].filter((shortcut): shortcut is string => shortcut !== null);
   if (new Set(assigned).size !== assigned.length) {
     errors.push("/: Each action must have a unique shortcut.");
   }
@@ -65,7 +66,9 @@ export function validateAppSettings(value: unknown): SettingsValidationResult {
     };
   }
   const errors = validateSettingsRules(result.output);
-  return errors.length === 0 ? { success: true, settings: result.output } : { success: false, errors };
+  return errors.length === 0
+    ? { success: true, settings: result.output }
+    : { success: false, errors };
 }
 
 const LEGACY_DATA_DIR_KEY = "monura.dataDir";

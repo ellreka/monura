@@ -56,7 +56,8 @@ export function reassignShortcut(
   target: ShortcutTarget,
   key: string | null,
 ): { presets: TimerPreset[]; startStop: string | null } {
-  const releaseIfTaken = (existing: string | null) => (key !== null && existing === key ? null : existing);
+  const releaseIfTaken = (existing: string | null) =>
+    key !== null && existing === key ? null : existing;
   return {
     startStop: target === "startStop" ? key : releaseIfTaken(startStop),
     presets: presets.map((preset, index) => ({
@@ -70,7 +71,11 @@ export function reassignShortcut(
  * Rewinds `startedAt` so only `remainingSeconds` remain until expiry (preset duration unchanged).
  * No-op while idle.
  */
-export function fastForwardToRemaining(state: TimerState, now: number, remainingSeconds: number): TimerState {
+export function fastForwardToRemaining(
+  state: TimerState,
+  now: number,
+  remainingSeconds: number,
+): TimerState {
   if (state.status !== "running" || state.startedAt === null) return state;
   const totalMs = state.presetMinutes * 60000;
   const targetElapsedMs = Math.max(0, totalMs - remainingSeconds * 1000);

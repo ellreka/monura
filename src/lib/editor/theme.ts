@@ -24,7 +24,6 @@ interface EditorPalette {
   sumBadgeInk: string;
 }
 
-
 const palette: EditorPalette = {
   ink: "var(--ink)",
   muted: "var(--muted)",
@@ -52,8 +51,7 @@ export function editorTheme(): Extension {
         fontFamily:
           "'SF Mono', 'Menlo', 'Consolas', ui-monospace, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', sans-serif",
         caretColor: p.accent,
-        // Reserve padding so the final line isn't hidden by the floating timer bar at the bottom
-        padding: "12px 0 90px 0",
+        padding: "12px 0",
       },
       ".cm-cursor": {
         borderLeftColor: p.accent,
@@ -176,11 +174,17 @@ const markdownHighlightStyle = HighlightStyle.define([
   { tag: tags.strong, fontWeight: "bold" },
   { tag: tags.strikethrough, textDecoration: "line-through" },
   { tag: tags.keyword, color: "#d68fc9" },
-  { tag: [tags.atom, tags.bool, tags.contentSeparator, tags.labelName], color: "#7aa6d6" },
+  {
+    tag: [tags.atom, tags.bool, tags.contentSeparator, tags.labelName],
+    color: "#7aa6d6",
+  },
   { tag: tags.url, color: palette.accent },
   { tag: [tags.literal, tags.inserted], color: "#7dbf8e" },
   { tag: [tags.string, tags.deleted], color: "#e08a8a" },
-  { tag: [tags.regexp, tags.escape, tags.special(tags.string)], color: "#e0a06a" },
+  {
+    tag: [tags.regexp, tags.escape, tags.special(tags.string)],
+    color: "#e0a06a",
+  },
   { tag: tags.definition(tags.variableName), color: "#7aa6ff" },
   { tag: tags.local(tags.variableName), color: "#b58cf0" },
   { tag: [tags.typeName, tags.namespace], color: "#5fc1a0" },

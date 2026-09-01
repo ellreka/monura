@@ -85,7 +85,20 @@ interface EditorProps {
   onToggle?: () => void;
 }
 
-export function Editor({ ref, initialContent, onChange, vimMode = false, presets, startStopShortcut = null, onVimStatusChange, onCursorLineChange, onTrackedLineChange, onTrackedLineLost, onSelectPreset, onToggle }: EditorProps) {
+export function Editor({
+  ref,
+  initialContent,
+  onChange,
+  vimMode = false,
+  presets,
+  startStopShortcut = null,
+  onVimStatusChange,
+  onCursorLineChange,
+  onTrackedLineChange,
+  onTrackedLineLost,
+  onSelectPreset,
+  onToggle,
+}: EditorProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
   const trackedAnchorRef = useRef<number | null>(null);
@@ -95,9 +108,25 @@ export function Editor({ ref, initialContent, onChange, vimMode = false, presets
   const vimListenerCleanupRef = useRef<(() => void) | null>(null);
 
   // Latest callbacks for the mount-time effect and the imperative handle below.
-  const latest = useRef({ onChange, onVimStatusChange, onCursorLineChange, onTrackedLineChange, onTrackedLineLost, onSelectPreset, onToggle });
+  const latest = useRef({
+    onChange,
+    onVimStatusChange,
+    onCursorLineChange,
+    onTrackedLineChange,
+    onTrackedLineLost,
+    onSelectPreset,
+    onToggle,
+  });
   useEffect(() => {
-    latest.current = { onChange, onVimStatusChange, onCursorLineChange, onTrackedLineChange, onTrackedLineLost, onSelectPreset, onToggle };
+    latest.current = {
+      onChange,
+      onVimStatusChange,
+      onCursorLineChange,
+      onTrackedLineChange,
+      onTrackedLineLost,
+      onSelectPreset,
+      onToggle,
+    };
   });
 
   function notifyCursorLine(view: EditorView): void {
@@ -118,7 +147,9 @@ export function Editor({ ref, initialContent, onChange, vimMode = false, presets
       queueMicrotask(() => {
         if (viewRef.current !== view) return;
         view.dispatch({
-          effects: vimEditableCompartment.reconfigure(EditorView.editable.of(!!cm.state.vim?.insertMode)),
+          effects: vimEditableCompartment.reconfigure(
+            EditorView.editable.of(!!cm.state.vim?.insertMode),
+          ),
         });
       });
     };
@@ -161,7 +192,10 @@ export function Editor({ ref, initialContent, onChange, vimMode = false, presets
               } else {
                 const trackedLine = update.state.doc.line(nextLine);
                 trackedTextRef.current = trackedLine.text;
-                latest.current.onTrackedLineChange?.({ lineNumber: nextLine, text: trackedLine.text });
+                latest.current.onTrackedLineChange?.({
+                  lineNumber: nextLine,
+                  text: trackedLine.text,
+                });
               }
             }
             if (update.docChanged || update.selectionSet) {
@@ -222,17 +256,31 @@ export function Editor({ ref, initialContent, onChange, vimMode = false, presets
 
         if (!view || anchor === null) {
           view?.dispatch({ effects: setUiStateEffect.of({ activeLine: null }) });
-          return { deleted: true, lineText: snapshot?.text ?? "", projects: snapshot?.projects ?? [] };
+          return {
+            deleted: true,
+            lineText: snapshot?.text ?? "",
+            projects: snapshot?.projects ?? [],
+          };
         }
 
         const line = view.state.doc.lineAt(anchor);
-        const updatedText = elapsedSeconds > 0 ? addSpentToLine(line.text, elapsedSeconds) : line.text;
+        const updatedText =
+          elapsedSeconds > 0 ? addSpentToLine(line.text, elapsedSeconds) : line.text;
         view.dispatch({
-          changes: updatedText !== line.text ? { from: line.from, to: line.to, insert: updatedText } : undefined,
+          changes:
+            updatedText !== line.text
+              ? { from: line.from, to: line.to, insert: updatedText }
+              : undefined,
           effects: setUiStateEffect.of({ activeLine: null }),
         });
-        const meta = computeTaskMeta(view.state.doc.toString()).get(view.state.doc.lineAt(anchor).number);
-        return { deleted: false, lineText: updatedText, projects: meta?.projects ?? snapshot?.projects ?? [] };
+        const meta = computeTaskMeta(view.state.doc.toString()).get(
+          view.state.doc.lineAt(anchor).number,
+        );
+        return {
+          deleted: false,
+          lineText: updatedText,
+          projects: meta?.projects ?? snapshot?.projects ?? [],
+        };
       },
 
       getTrackedProjects() {
@@ -244,7 +292,8 @@ export function Editor({ ref, initialContent, onChange, vimMode = false, presets
         if (!view || view.state.doc.toString() === text) return;
         const trackedAnchor = trackedAnchorRef.current;
         const trackedText = trackedAnchor === null ? null : trackedTextRef.current;
-        const trackedLineNumber = trackedAnchor === null ? null : view.state.doc.lineAt(trackedAnchor).number;
+        const trackedLineNumber =
+          trackedAnchor === null ? null : view.state.doc.lineAt(trackedAnchor).number;
         const head = view.state.selection.main.head;
         const cursorLine = view.state.doc.lineAt(head);
         const cursorColumn = head - cursorLine.from;
@@ -281,7 +330,8 @@ export function Editor({ ref, initialContent, onChange, vimMode = false, presets
         const view = viewRef.current;
         if (!view || lineNumber < 1 || lineNumber > view.state.doc.lines) return null;
         const line = view.state.doc.line(lineNumber);
-        const updatedText = elapsedSeconds > 0 ? addSpentToLine(line.text, elapsedSeconds) : line.text;
+        const updatedText =
+          elapsedSeconds > 0 ? addSpentToLine(line.text, elapsedSeconds) : line.text;
         if (updatedText !== line.text) {
           view.dispatch({ changes: { from: line.from, to: line.to, insert: updatedText } });
         }

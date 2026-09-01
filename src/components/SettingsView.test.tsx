@@ -75,7 +75,9 @@ describe("SettingsView", () => {
   it("renders each preset's minutes and shortcut", () => {
     const { container } = renderSettings();
 
-    const minutesInputs = Array.from(container.querySelectorAll<HTMLInputElement>('input[type="number"]'));
+    const minutesInputs = Array.from(
+      container.querySelectorAll<HTMLInputElement>('input[type="number"]'),
+    );
     expect(minutesInputs.map((input) => input.value)).toEqual(["10", "30"]);
     expect(container.textContent).toContain("⌘");
   });
@@ -84,7 +86,9 @@ describe("SettingsView", () => {
     const { container, onPickDataDir } = renderSettings();
 
     expect(container.textContent).toContain("/Users/example/Documents/monura");
-    const changeButton = Array.from(container.querySelectorAll("button")).find((b) => b.textContent === "Change…");
+    const changeButton = Array.from(container.querySelectorAll("button")).find(
+      (b) => b.textContent === "Change…",
+    );
     await act(async () => {
       changeButton!.click();
     });
@@ -227,7 +231,9 @@ describe("SettingsView", () => {
   it("disables shortcut capture and hides add/remove when shortcutsDisabled", () => {
     const { container } = renderSettings({ shortcutsDisabled: true });
 
-    expect(container.querySelector<HTMLButtonElement>('[aria-label="Start / stop shortcut"]')!.disabled).toBe(true);
+    expect(
+      container.querySelector<HTMLButtonElement>('[aria-label="Start / stop shortcut"]')!.disabled,
+    ).toBe(true);
     expect(container.querySelector('[aria-label="Add preset"]')).toBeNull();
     expect(container.querySelector('[aria-label="Remove preset 1"]')).toBeNull();
   });

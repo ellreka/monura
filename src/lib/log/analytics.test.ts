@@ -51,7 +51,9 @@ describe("localDateKey", () => {
 
 describe("baseTitle", () => {
   it("removes checkbox, spent:, and +project", () => {
-    expect(baseTitle("- [ ] API error handling fix spent:20m +backend")).toBe("API error handling fix");
+    expect(baseTitle("- [ ] API error handling fix spent:20m +backend")).toBe(
+      "API error handling fix",
+    );
     expect(baseTitle("- [x] Write README")).toBe("Write README");
     expect(baseTitle("A plain note")).toBe("A plain note");
   });

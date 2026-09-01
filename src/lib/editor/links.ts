@@ -40,7 +40,11 @@ export function collectLinkMatches(state: EditorState): LinkMatch[] {
         matches.push({ from: node.from, to: node.to, text: url, url: autolinkHref(url) });
         return;
       }
-      if (node.name === "URL" && node.node.parent?.name !== "Link" && node.node.parent?.name !== "Autolink") {
+      if (
+        node.name === "URL" &&
+        node.node.parent?.name !== "Link" &&
+        node.node.parent?.name !== "Autolink"
+      ) {
         const url = state.doc.sliceString(node.from, node.to);
         matches.push({ from: node.from, to: node.to, text: url, url: autolinkHref(url) });
       }

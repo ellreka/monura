@@ -1,6 +1,12 @@
 import { EditorState, RangeSetBuilder, StateField } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView } from "@codemirror/view";
-import { computeTaskMeta, fencedCodeLineNumbers, matchProjectTokens, matchSpentTokens, parseLines } from "../parser";
+import {
+  computeTaskMeta,
+  fencedCodeLineNumbers,
+  matchProjectTokens,
+  matchSpentTokens,
+  parseLines,
+} from "../parser";
 import { collectLinkMatches } from "./links";
 import { CheckboxWidget, LinkWidget, SpentWidget, SumBadgeWidget } from "./widgets";
 import { setUiStateEffect, uiStateField } from "./uiState";

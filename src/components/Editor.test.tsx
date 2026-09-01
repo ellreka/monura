@@ -63,7 +63,11 @@ describe("Editor tracking across external reloads", () => {
 
     // Simulate an external editor inserting a line above
     act(() =>
-      handle.reloadContent(["externally added heading", "## Schedule", "- [ ] tracked line +monura", "Memo"].join("\n")),
+      handle.reloadContent(
+        ["externally added heading", "## Schedule", "- [ ] tracked line +monura", "Memo"].join(
+          "\n",
+        ),
+      ),
     );
 
     expect(onTrackedLineLost).not.toHaveBeenCalled();
@@ -82,12 +86,18 @@ describe("Editor tracking across external reloads", () => {
     const { handle, onTrackedLineLost } = mountEditor(CONTENT);
     act(() => handle.startTracking(2));
 
-    act(() => handle.reloadContent(["## Schedule", "- [ ] line rewritten externally", "Memo"].join("\n")));
+    act(() =>
+      handle.reloadContent(["## Schedule", "- [ ] line rewritten externally", "Memo"].join("\n")),
+    );
 
     expect(onTrackedLineLost).toHaveBeenCalledTimes(1);
     const stopped = handle.stopTracking(600);
     // Even when the line is lost, keep the snapshot from tracking time for the log
-    expect(stopped).toEqual({ deleted: true, lineText: "- [ ] tracked line +monura", projects: ["monura"] });
+    expect(stopped).toEqual({
+      deleted: true,
+      lineText: "- [ ] tracked line +monura",
+      projects: ["monura"],
+    });
   });
 
   it("re-identifies by the latest line text, not the text at tracking start", () => {
@@ -95,7 +105,11 @@ describe("Editor tracking across external reloads", () => {
     act(() => handle.startTracking(2));
     act(() => handle.applySpentToLine(2, 300));
 
-    act(() => handle.reloadContent(["- [ ] tracked line +monura spent:5m", "## Schedule", "Memo"].join("\n")));
+    act(() =>
+      handle.reloadContent(
+        ["- [ ] tracked line +monura spent:5m", "## Schedule", "Memo"].join("\n"),
+      ),
+    );
 
     expect(onTrackedLineLost).not.toHaveBeenCalled();
     expect(onTrackedLineChange).toHaveBeenLastCalledWith({

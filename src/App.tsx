@@ -1,13 +1,5 @@
-import {
-  type ReactNode,
-  useCallback,
-  useEffect,
-  useEffectEvent,
-  useRef,
-  useState,
-} from "react";
+import { type ReactNode, useCallback, useRef, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import "./App.css";
 import { Editor, type EditorHandle } from "./components/Editor";
 import { Launcher } from "./components/Launcher";
@@ -23,13 +15,10 @@ import {
   createMdFile,
   deleteMdFile,
   ensureDefaultDataDir,
-  listMdFiles,
   listSessionLogs,
   pickDataDir,
-  readMdFile,
   readSessionLog,
   renameMdFile,
-  watchMdFiles,
   writeMdFile,
   type Eol,
   type MdFile,
@@ -43,32 +32,18 @@ import {
   type SessionRecord,
 } from "./lib/log/session";
 import {
-  getLastFileFor,
-  getSettingsFilePath,
-  loadSettings,
-  saveLastFileFor,
-  saveSettings,
-  type AppSettings,
-} from "./lib/settings";
-import {
-  computeElapsedMs,
   createIdleTimer,
   fastForwardToRemaining,
   formatClock,
   formatPresetLabel,
-  isExpired,
-  reassignShortcut,
   startTimer,
   stopTimer,
   DEBUG_FAST_FORWARD_SECONDS,
-  DEFAULT_PRESET_MINUTES,
-  DEFAULT_PRESETS,
-  DEFAULT_START_STOP_SHORTCUT,
-  MAX_PRESETS,
   type TimerState,
 } from "./lib/timer";
 import { cn } from "./lib/cn";
-import { toAccelerator } from "./lib/keybinding";
+import { useAppEffects } from "./hooks/useAppEffects";
+import { useAppSettings } from "./hooks/useAppSettings";
 
 type PendingResolution = Omit<CreateSessionRecordInput, "lineDeleted">;
 
@@ -87,13 +62,7 @@ function createInitialSessionLog(): SessionLog {
 
 function SearchGlyph() {
   return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-    >
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path
         d="M17 17L21 21"
         stroke="currentColor"
@@ -114,13 +83,7 @@ function SearchGlyph() {
 
 function NoteGlyph() {
   return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-    >
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path
         d="M17 2V4M12 2V4M7 2V4"
         stroke="currentColor"
@@ -135,25 +98,14 @@ function NoteGlyph() {
         strokeLinejoin="round"
         strokeWidth="1.5"
       />
-      <path
-        d="M8 15H12M8 10H16"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeWidth="1.5"
-      />
+      <path d="M8 15H12M8 10H16" stroke="currentColor" strokeLinecap="round" strokeWidth="1.5" />
     </svg>
   );
 }
 
 function ClockGlyph() {
   return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-    >
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5" />
       <path
         d="M12 8V12L14 14"
@@ -168,13 +120,7 @@ function ClockGlyph() {
 
 function GearGlyph() {
   return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-    >
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path
         d="M21.3175 7.14139L20.8239 6.28479C20.4506 5.63696 20.264 5.31305 19.9464 5.18388C19.6288 5.05472 19.2696 5.15664 18.5513 5.36048L17.3311 5.70418C16.8725 5.80994 16.3913 5.74994 15.9726 5.53479L15.6357 5.34042C15.2766 5.11043 15.0004 4.77133 14.8475 4.37274L14.5136 3.37536C14.294 2.71534 14.1842 2.38533 13.9228 2.19657C13.6615 2.00781 13.3143 2.00781 12.6199 2.00781H11.5051C10.8108 2.00781 10.4636 2.00781 10.2022 2.19657C9.94085 2.38533 9.83106 2.71534 9.61149 3.37536L9.27753 4.37274C9.12465 4.77133 8.84845 5.11043 8.48937 5.34042L8.15249 5.53479C7.73374 5.74994 7.25259 5.80994 6.79398 5.70418L5.57375 5.36048C4.85541 5.15664 4.49625 5.05472 4.17867 5.18388C3.86109 5.31305 3.67445 5.63696 3.30115 6.28479L2.80757 7.14139C2.45766 7.74864 2.2827 8.05227 2.31666 8.37549C2.35061 8.69871 2.58483 8.95918 3.05326 9.48012L4.0843 10.6328C4.3363 10.9518 4.51521 11.5078 4.51521 12.0077C4.51521 12.5078 4.33636 13.0636 4.08433 13.3827L3.05326 14.5354C2.58483 15.0564 2.35062 15.3168 2.31666 15.6401C2.2827 15.9633 2.45766 16.2669 2.80757 16.8741L3.30114 17.7307C3.67443 18.3785 3.86109 18.7025 4.17867 18.8316C4.49625 18.9608 4.85542 18.8589 5.57377 18.655L6.79394 18.3113C7.25263 18.2055 7.73387 18.2656 8.15267 18.4808L8.4895 18.6752C8.84851 18.9052 9.12464 19.2442 9.2775 19.6428L9.61149 20.6403C9.83106 21.3003 9.94085 21.6303 10.2022 21.8191C10.4636 22.0078 10.8108 22.0078 11.5051 22.0078H12.6199C13.3143 22.0078 13.6615 22.0078 13.9228 21.8191C14.1842 21.6303 14.294 21.3003 14.5136 20.6403L14.8476 19.6428C15.0004 19.2442 15.2765 18.9052 15.6356 18.6752L15.9724 18.4808C16.3912 18.2656 16.8724 18.2055 17.3311 18.3113L18.5513 18.655C19.2696 18.8589 19.6288 18.9608 19.9464 18.8316C20.264 18.7025 20.4506 18.3785 20.8239 17.7307L21.3175 16.8741C21.6674 16.2669 21.8423 15.9633 21.8084 15.6401C21.7744 15.3168 21.5402 15.0564 21.0718 14.5354L20.0407 13.3827C19.7887 13.0636 19.6098 12.5078 19.6098 12.0077C19.6098 11.5078 19.7888 10.9518 20.0407 10.6328L21.0718 9.48012C21.5402 8.95918 21.7744 8.69871 21.8084 8.37549C21.8423 8.05227 21.6674 7.74864 21.3175 7.14139Z"
         stroke="currentColor"
@@ -212,9 +158,7 @@ function NavigationButton({
       type="button"
       className={cn(
         "relative flex h-[26px] w-[26px] items-center justify-center rounded-md p-0",
-        active
-          ? "bg-accent/16 text-accent"
-          : "text-muted hover:bg-white/7 hover:text-ink",
+        active ? "bg-accent/16 text-accent" : "text-muted hover:bg-white/7 hover:text-ink",
       )}
       onClick={onClick}
       aria-label={label}
@@ -227,41 +171,43 @@ function NavigationButton({
 }
 
 function App() {
+  const editorRef = useRef<EditorHandle>(null);
+  const {
+    dataDir,
+    settingsFilePath,
+    settingsReady,
+    vimMode,
+    presetMinutes,
+    presets,
+    startStopShortcut,
+    globalHotkey,
+    setDataDir: persistDataDir,
+    setPresetMinutes,
+    toggleVimMode: handleToggleVimMode,
+    addPreset: handleAddPreset,
+    setPresetDuration: handleSetPresetMinutes,
+    setPresetShortcut: handleSetPresetShortcut,
+    removePreset: handleRemovePreset,
+    setStartStop: handleSetStartStopShortcut,
+    setGlobal: handleSetGlobalHotkey,
+  } = useAppSettings(editorRef);
   const [files, setFiles] = useState<MdFile[]>(() =>
     isTauri() ? [] : SAMPLE_FILES.map((f) => ({ ...f, eol: "\n" as Eol })),
   );
   const [activeIndex, setActiveIndex] = useState(0);
-  const [dataDir, setDataDir] = useState<string | null>(null);
-  const [settingsFilePath, setSettingsFilePath] = useState<string | null>(null);
-  const [settingsReady, setSettingsReady] = useState(() => !isTauri());
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [vimMode, setVimMode] = useState(false);
-  const [presetMinutes, setPresetMinutes] = useState<number>(
-    () => DEFAULT_PRESETS[0]?.minutes ?? DEFAULT_PRESET_MINUTES,
-  );
-  const [presets, setPresets] = useState<AppSettings["presets"]>(() =>
-    DEFAULT_PRESETS.map((preset) => ({ ...preset })),
-  );
-  const [startStopShortcut, setStartStopShortcut] = useState<string | null>(
-    DEFAULT_START_STOP_SHORTCUT,
-  );
-  const [globalHotkey, setGlobalHotkey] = useState<string | null>(null);
-  const [timerState, setTimerState] = useState<TimerState>(() =>
-    createIdleTimer(presetMinutes),
-  );
+  const [timerState, setTimerState] = useState<TimerState>(() => createIdleTimer(presetMinutes));
   const [elapsedMs, setElapsedMs] = useState(0);
   const [trackingLabel, setTrackingLabel] = useState<string | null>(null);
   const [trackingProjects, setTrackingProjects] = useState<string[]>([]);
   const [trackedLost, setTrackedLost] = useState(false);
-  const [pendingResolution, setPendingResolution] =
-    useState<PendingResolution | null>(null);
+  const [pendingResolution, setPendingResolution] = useState<PendingResolution | null>(null);
   const [focusedTaskLabel, setFocusedTaskLabel] = useState<string | null>(null);
   const [view, setView] = useState<AppView>("editor");
   const [launcherOpen, setLauncherOpen] = useState(false);
   const [logRefreshKey, setLogRefreshKey] = useState(0);
   const [diskRefreshKey, setDiskRefreshKey] = useState(0);
 
-  const editorRef = useRef<EditorHandle>(null);
   const sessionLogRef = useRef(createInitialSessionLog());
   const saveTimerRef = useRef<number | undefined>(undefined);
   const pendingSaveRef = useRef<MdFile | null>(null);
@@ -275,22 +221,10 @@ function App() {
 
   const filesRef = useRef(files);
   const activeIndexRef = useRef(activeIndex);
-  useEffect(() => {
-    filesRef.current = files;
-    activeIndexRef.current = activeIndex;
-  });
-
   const isRunning = timerState.status === "running";
   const isCursorOnTask = focusedTaskLabel !== null;
   const activeFile = files[activeIndex];
   const presetMinutesList = presets.map((preset) => preset.minutes);
-  const currentSettings: AppSettings = {
-    dataDir,
-    vimMode,
-    presets,
-    shortcuts: { startStop: startStopShortcut },
-    globalHotkey,
-  };
 
   const handleSelectView = (next: AppView) => {
     setView((current) => (current === next ? "editor" : next));
@@ -328,84 +262,6 @@ function App() {
     [dataDir, flushSaveBestEffort],
   );
 
-  useEffect(() => {
-    window.addEventListener("beforeunload", flushSaveBestEffort);
-    return () =>
-      window.removeEventListener("beforeunload", flushSaveBestEffort);
-  }, [flushSaveBestEffort]);
-
-  useEffect(() => {
-    if (!isTauri()) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const settings = await loadSettings();
-        if (cancelled) return;
-        setDataDir(settings.dataDir);
-        setVimMode(settings.vimMode);
-        setPresets(settings.presets);
-        setPresetMinutes(
-          settings.presets[0]?.minutes ?? DEFAULT_PRESET_MINUTES,
-        );
-        setStartStopShortcut(settings.shortcuts.startStop);
-        setGlobalHotkey(settings.globalHotkey);
-        void getSettingsFilePath()
-          .then((path) => {
-            if (!cancelled) setSettingsFilePath(path);
-          })
-          .catch((e) => console.error("settings path load failed:", e));
-        void invoke("set_global_hotkey", {
-          accelerator: settings.globalHotkey
-            ? toAccelerator(settings.globalHotkey)
-            : null,
-        }).catch((e) => console.error("set global hotkey failed:", e));
-      } catch (e) {
-        console.error("settings load failed:", e);
-      } finally {
-        if (!cancelled) setSettingsReady(true);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!isTauri() || !dataDir) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const lastFilePromise = getLastFileFor(dataDir);
-        const names = await listMdFiles(dataDir);
-        const loaded: MdFile[] = [];
-        for (const name of names) {
-          loaded.push(await readMdFile(dataDir, name));
-        }
-        const lastFile = await lastFilePromise;
-        if (cancelled) return;
-        setFiles(loaded);
-        const restored =
-          lastFile !== null ? loaded.findIndex((f) => f.name === lastFile) : -1;
-        setActiveIndex(restored >= 0 ? restored : 0);
-        setLoadError(null);
-      } catch (e) {
-        if (!cancelled)
-          setLoadError(e instanceof Error ? e.message : String(e));
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [dataDir]);
-
-  const activeFileName = files[activeIndex]?.name ?? null;
-  useEffect(() => {
-    if (!isTauri() || !dataDir || activeFileName === null) return;
-    void saveLastFileFor(dataDir, activeFileName).catch((e) =>
-      console.error("save last file failed:", e),
-    );
-  }, [dataDir, activeFileName]);
-
   const applyDataDir = async (dir: string) => {
     try {
       await flushSave();
@@ -414,12 +270,7 @@ function App() {
       return;
     }
     refreshGenerationRef.current += 1;
-    if (isTauri()) {
-      void saveSettings({ ...currentSettings, dataDir: dir }).catch((error) =>
-        console.error("save settings failed:", error),
-      );
-    }
-    setDataDir(dir);
+    persistDataDir(dir);
   };
 
   const loadSessionRecords = useCallback(async (): Promise<SessionRecord[]> => {
@@ -432,114 +283,10 @@ function App() {
     return parseSessionLines(lines);
   }, []);
 
-  const refreshFromDisk = useCallback(async () => {
-    if (!dataDir) return;
-    const generation = refreshGenerationRef.current;
-    try {
-      const names = await listMdFiles(dataDir);
-      const diskFiles = await Promise.all(
-        names.map((name) => readMdFile(dataDir, name)),
-      );
-      if (generation !== refreshGenerationRef.current) return;
-      if (pendingSaveRef.current !== null || activeWritesRef.current > 0) {
-        window.setTimeout(() => setDiskRefreshKey((key) => key + 1), 300);
-        return;
-      }
-      const current = filesRef.current;
-      const activeName = current[activeIndexRef.current]?.name;
-      const nextIndex = activeName
-        ? diskFiles.findIndex((file) => file.name === activeName)
-        : -1;
-      const activeDiskFile = nextIndex >= 0 ? diskFiles[nextIndex] : undefined;
-      const activeStateFile = current[activeIndexRef.current];
-      setFiles(diskFiles);
-      setActiveIndex(nextIndex >= 0 ? nextIndex : 0);
-      if (
-        activeDiskFile &&
-        activeStateFile?.name === activeDiskFile.name &&
-        activeStateFile.content !== activeDiskFile.content
-      ) {
-        applyingExternalRef.current = true;
-        try {
-          editorRef.current?.reloadContent(activeDiskFile.content);
-        } finally {
-          applyingExternalRef.current = false;
-        }
-      }
-    } catch (e) {
-      if (generation === refreshGenerationRef.current)
-        console.error("watch refresh failed:", e);
-    }
-  }, [dataDir]);
-
-  useEffect(() => {
-    if (!isTauri() || !dataDir || diskRefreshKey === 0) return;
-    const timer = window.setTimeout(() => void refreshFromDisk(), 0);
-    return () => clearTimeout(timer);
-  }, [dataDir, diskRefreshKey, refreshFromDisk]);
-
-  useEffect(() => {
-    if (!isTauri() || !dataDir) return;
-    let disposed = false;
-    let debounce: number | undefined;
-    let unlisten: (() => void) | undefined;
-    watchMdFiles(dataDir, () => {
-      if (disposed) return;
-      clearTimeout(debounce);
-      debounce = window.setTimeout(() => void refreshFromDisk(), 300);
-    })
-      .then((fn) => {
-        if (disposed) fn();
-        else unlisten = fn;
-      })
-      .catch((e) => console.error("watch start failed:", e));
-    return () => {
-      disposed = true;
-      clearTimeout(debounce);
-      unlisten?.();
-    };
-  }, [dataDir, refreshFromDisk]);
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setLauncherOpen(false);
-        setView("editor");
-      } else if (
-        (event.metaKey || event.ctrlKey) &&
-        event.key.toLowerCase() === "k"
-      ) {
-        event.preventDefault();
-        setLauncherOpen((open) => !open);
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
-
-  useEffect(() => {
-    if (!isTauri()) return;
-    let unlisten: (() => void) | undefined;
-    let cancelled = false;
-    listen("open-settings", () => setView("settings")).then((fn) => {
-      if (cancelled) {
-        fn();
-      } else {
-        unlisten = fn;
-      }
-    });
-    return () => {
-      cancelled = true;
-      unlisten?.();
-    };
-  }, []);
-
   const handleDocChange = (text: string) => {
     if (applyingExternalRef.current) return;
     setFiles((prev) =>
-      prev.map((file, index) =>
-        index === activeIndex ? { ...file, content: text } : file,
-      ),
+      prev.map((file, index) => (index === activeIndex ? { ...file, content: text } : file)),
     );
     const current = files[activeIndex];
     if (current) scheduleSave({ ...current, content: text });
@@ -552,9 +299,7 @@ function App() {
   };
 
   const runFileOperation = (operation: () => Promise<void>) => {
-    const next = fileOperationRef.current
-      .catch(() => undefined)
-      .then(operation);
+    const next = fileOperationRef.current.catch(() => undefined).then(operation);
     fileOperationRef.current = next;
     return next;
   };
@@ -594,9 +339,7 @@ function App() {
       }
       if (pendingSaveRef.current?.name === from)
         pendingSaveRef.current = { ...pendingSaveRef.current, name: to };
-      setFiles((prev) =>
-        prev.map((file) => (file.name === from ? { ...file, name: to } : file)),
-      );
+      setFiles((prev) => prev.map((file) => (file.name === from ? { ...file, name: to } : file)));
     });
   };
 
@@ -626,104 +369,10 @@ function App() {
       setFiles((prev) => prev.filter((file) => file.name !== name));
       setActiveIndex((current) => {
         if (index < 0 || index > current) return current;
-        if (index === current)
-          return Math.max(0, Math.min(current, filesRef.current.length - 2));
+        if (index === current) return Math.max(0, Math.min(current, filesRef.current.length - 2));
         return current - 1;
       });
     });
-  };
-
-  const persistSettings = (next: AppSettings) => {
-    if (isTauri())
-      void saveSettings(next).catch((e) =>
-        console.error("save settings failed:", e),
-      );
-  };
-
-  const handleToggleVimMode = () => {
-    const next = !vimMode;
-    setVimMode(next);
-    editorRef.current?.setVimMode(next);
-    persistSettings({ ...currentSettings, vimMode: next });
-  };
-
-  const handleAddPreset = () => {
-    if (presets.length >= MAX_PRESETS) return;
-    const next = [...presets, { minutes: 15, shortcut: null }];
-    setPresets(next);
-    editorRef.current?.setTimerKeymap(next, startStopShortcut);
-    persistSettings({ ...currentSettings, presets: next });
-  };
-
-  const handleSetPresetMinutes = (index: number, minutes: number) => {
-    const previousMinutes = presets[index]?.minutes;
-    const next = presets.map((preset, i) =>
-      i === index ? { ...preset, minutes } : preset,
-    );
-    setPresets(next);
-    editorRef.current?.setTimerKeymap(next, startStopShortcut);
-    setPresetMinutes((current) =>
-      current === previousMinutes ? minutes : current,
-    );
-    persistSettings({ ...currentSettings, presets: next });
-  };
-
-  const handleSetPresetShortcut = (index: number, key: string | null) => {
-    const { presets: next, startStop } = reassignShortcut(
-      presets,
-      startStopShortcut,
-      index,
-      key,
-    );
-    setPresets(next);
-    setStartStopShortcut(startStop);
-    editorRef.current?.setTimerKeymap(next, startStop);
-    persistSettings({
-      ...currentSettings,
-      presets: next,
-      shortcuts: { startStop },
-    });
-  };
-
-  const handleRemovePreset = (index: number) => {
-    if (presets.length <= 1) return;
-    const removedMinutes = presets[index]?.minutes;
-    const next = presets.filter((_, i) => i !== index);
-    setPresets(next);
-    editorRef.current?.setTimerKeymap(next, startStopShortcut);
-    setPresetMinutes((current) =>
-      current === removedMinutes
-        ? (next[0]?.minutes ?? DEFAULT_PRESET_MINUTES)
-        : current,
-    );
-    persistSettings({ ...currentSettings, presets: next });
-  };
-
-  const handleSetStartStopShortcut = (key: string | null) => {
-    const { presets: next, startStop } = reassignShortcut(
-      presets,
-      startStopShortcut,
-      "startStop",
-      key,
-    );
-    setPresets(next);
-    setStartStopShortcut(startStop);
-    editorRef.current?.setTimerKeymap(next, startStop);
-    persistSettings({
-      ...currentSettings,
-      presets: next,
-      shortcuts: { startStop },
-    });
-  };
-
-  const handleSetGlobalHotkey = (key: string | null) => {
-    setGlobalHotkey(key);
-    if (isTauri()) {
-      void invoke("set_global_hotkey", {
-        accelerator: key ? toAccelerator(key) : null,
-      }).catch((e) => console.error("set global hotkey failed:", e));
-    }
-    persistSettings({ ...currentSettings, globalHotkey: key });
   };
 
   const appendRecord = (input: CreateSessionRecordInput) => {
@@ -747,23 +396,15 @@ function App() {
 
   const trayTick = (remaining: string) => {
     if (!isTauri()) return;
-    void invoke("tray_tick", { remaining }).catch((e) =>
-      console.error("tray tick failed:", e),
-    );
+    void invoke("tray_tick", { remaining }).catch((e) => console.error("tray tick failed:", e));
   };
 
   const trayStop = () => {
     if (!isTauri()) return;
-    void invoke("tray_stop").catch((e) =>
-      console.error("tray stop failed:", e),
-    );
+    void invoke("tray_stop").catch((e) => console.error("tray stop failed:", e));
   };
 
-  const timerArm = (
-    label: string,
-    presetMinutes: number,
-    durationSecs: number,
-  ) => {
+  const timerArm = (label: string, presetMinutes: number, durationSecs: number) => {
     if (!isTauri()) return;
     void invoke("timer_arm", {
       label,
@@ -774,9 +415,7 @@ function App() {
 
   const timerDisarm = () => {
     if (!isTauri()) return;
-    void invoke("timer_disarm").catch((e) =>
-      console.error("timer disarm failed:", e),
-    );
+    void invoke("timer_disarm").catch((e) => console.error("timer disarm failed:", e));
   };
 
   const handleStart = () => {
@@ -842,50 +481,6 @@ function App() {
     else handleStart();
   };
 
-  const requestStop = useEffectEvent(() => stopTracking());
-
-  useEffect(() => {
-    if (timerState.status !== "running") return;
-    const id = window.setInterval(() => {
-      const now = Date.now();
-      const elapsed = computeElapsedMs(timerState, now);
-      setElapsedMs(elapsed);
-      const remainingMs = Math.max(
-        0,
-        timerState.presetMinutes * 60000 - elapsed,
-      );
-      const remainingSec = Math.floor(remainingMs / 1000);
-      if (lastTraySecRef.current !== remainingSec) {
-        lastTraySecRef.current = remainingSec;
-        trayTick(formatClock(remainingMs));
-      }
-      if (isExpired(timerState, now)) {
-        window.clearInterval(id);
-        requestStop();
-      }
-    }, 250);
-    return () => window.clearInterval(id);
-  }, [timerState]);
-
-  useEffect(() => {
-    if (!isTauri()) return;
-    const unlistens: (() => void)[] = [];
-    let cancelled = false;
-    for (const event of [
-      "tray-stop-requested",
-      "timer-expired-native",
-    ] as const) {
-      listen(event, () => requestStop()).then((fn) => {
-        if (cancelled) fn();
-        else unlistens.push(fn);
-      });
-    }
-    return () => {
-      cancelled = true;
-      for (const fn of unlistens) fn();
-    };
-  }, []);
-
   const handleResolveLogOnly = () => {
     if (!pendingResolution) return;
     appendRecord({ ...pendingResolution, lineDeleted: true });
@@ -913,19 +508,38 @@ function App() {
   };
 
   const handleDebugFastForward = () => {
-    setTimerState((state) =>
-      fastForwardToRemaining(state, Date.now(), DEBUG_FAST_FORWARD_SECONDS),
-    );
+    setTimerState((state) => fastForwardToRemaining(state, Date.now(), DEBUG_FAST_FORWARD_SECONDS));
     if (trackingLabel)
-      timerArm(
-        trackingLabel,
-        DEBUG_FAST_FORWARD_SECONDS / 60,
-        DEBUG_FAST_FORWARD_SECONDS,
-      );
+      timerArm(trackingLabel, DEBUG_FAST_FORWARD_SECONDS / 60, DEBUG_FAST_FORWARD_SECONDS);
   };
 
-  const showNativeTitlebar =
-    isTauri() && navigator.userAgent.includes("Macintosh");
+  useAppEffects({
+    dataDir,
+    files,
+    activeIndex,
+    filesRef,
+    activeIndexRef,
+    setFiles,
+    setActiveIndex,
+    setLoadError,
+    flushSaveBestEffort,
+    pendingSaveRef,
+    activeWritesRef,
+    applyingExternalRef,
+    reloadActiveEditor: (content) => editorRef.current?.reloadContent(content),
+    refreshGenerationRef,
+    diskRefreshKey,
+    setDiskRefreshKey,
+    setLauncherOpen,
+    setView,
+    timerState,
+    setElapsedMs,
+    lastTraySecRef,
+    trayTick,
+    stopTracking,
+  });
+
+  const showNativeTitlebar = isTauri() && navigator.userAgent.includes("Macintosh");
   const nativeTitlebar = showNativeTitlebar ? (
     <div
       className="relative z-[1] flex h-8 flex-none items-center gap-2 bg-transparent pl-[76px] pr-[10px] text-muted select-none"
@@ -1001,8 +615,8 @@ function App() {
         <div className="relative z-[1] flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
           <h1 className="m-0 text-[22px]">monura</h1>
           <p className="m-0 max-w-[420px] text-[13px] text-muted">
-            Choose a folder for your .md files. It can also be a folder inside
-            iCloud Drive or Dropbox.
+            Choose a folder for your .md files. It can also be a folder inside iCloud Drive or
+            Dropbox.
           </p>
           {loadError && (
             <p className="m-0 max-w-[420px] text-xs break-all text-danger">
@@ -1050,13 +664,9 @@ function App() {
                 vimMode={vimMode}
                 presets={presets}
                 onCursorLineChange={(info) =>
-                  setFocusedTaskLabel(
-                    info.isTask ? toTrackingLabel(info.text) : null,
-                  )
+                  setFocusedTaskLabel(info.isTask ? toTrackingLabel(info.text) : null)
                 }
-                onTrackedLineChange={(info) =>
-                  setTrackingLabel(toTrackingLabel(info.text))
-                }
+                onTrackedLineChange={(info) => setTrackingLabel(toTrackingLabel(info.text))}
                 onTrackedLineLost={() => setTrackedLost(true)}
                 startStopShortcut={startStopShortcut}
                 onSelectPreset={setPresetMinutes}
@@ -1073,9 +683,7 @@ function App() {
               loadRecords={loadSessionRecords}
               refreshKey={logRefreshKey}
               running={
-                isRunning &&
-                timerState.startedAt !== null &&
-                trackingLabel !== null
+                isRunning && timerState.startedAt !== null && trackingLabel !== null
                   ? {
                       label: trackingLabel,
                       startedAt: timerState.startedAt,

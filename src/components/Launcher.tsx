@@ -167,7 +167,10 @@ export function Launcher({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-center bg-black/30 pt-[12vh]" onMouseDown={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex justify-center bg-black/30 pt-[12vh]"
+      onMouseDown={onClose}
+    >
       <Command
         label="Search files"
         role="dialog"
@@ -227,11 +230,16 @@ export function Launcher({
                 disabled={filesDisabled && !isActiveFile}
                 onSelect={() => activate(row)}
                 onContextMenu={(event) => openMenu(event, row.name)}
-                title={filesDisabled && !isActiveFile ? "Cannot switch files while tracking" : row.name}
+                title={
+                  filesDisabled && !isActiveFile ? "Cannot switch files while tracking" : row.name
+                }
                 className={itemClass}
               >
                 <span
-                  className={cn("h-[6px] w-[6px] flex-none rounded-full", isActiveFile ? "bg-ink" : "bg-transparent")}
+                  className={cn(
+                    "h-[6px] w-[6px] flex-none rounded-full",
+                    isActiveFile ? "bg-ink" : "bg-transparent",
+                  )}
                   aria-hidden="true"
                 />
                 <span className="truncate">{row.name}</span>

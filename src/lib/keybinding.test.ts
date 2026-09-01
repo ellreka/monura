@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { captureKeyBinding, formatKeyBindingParts, toAccelerator } from "./keybinding";
 
-function keydown(code: string, mods: Partial<Record<"meta" | "ctrl" | "alt" | "shift", boolean>> = {}) {
+function keydown(
+  code: string,
+  mods: Partial<Record<"meta" | "ctrl" | "alt" | "shift", boolean>> = {},
+) {
   return {
     code,
     metaKey: !!mods.meta,
@@ -27,9 +30,9 @@ describe("captureKeyBinding", () => {
   });
 
   it("orders combined modifiers as Alt-Ctrl-Meta-Shift", () => {
-    expect(captureKeyBinding(keydown("Digit1", { alt: true, ctrl: true, meta: true, shift: true }))).toBe(
-      "Alt-Ctrl-Meta-Shift-1",
-    );
+    expect(
+      captureKeyBinding(keydown("Digit1", { alt: true, ctrl: true, meta: true, shift: true })),
+    ).toBe("Alt-Ctrl-Meta-Shift-1");
   });
 
   it("uses the physical key position (code), not the character the layout/modifier produces", () => {

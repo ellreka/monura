@@ -28,7 +28,16 @@ export interface TaskMeta {
 
 /** The shape of a line that is not task syntax (plain memo, or content inside a fenced code block). */
 function nonTaskLine(raw: string, lineNumber: number): TaskLine {
-  return { lineNumber, raw, indent: 0, isTask: false, checked: false, text: raw, spentSeconds: 0, ownProjects: [] };
+  return {
+    lineNumber,
+    raw,
+    indent: 0,
+    isTask: false,
+    checked: false,
+    text: raw,
+    spentSeconds: 0,
+    ownProjects: [],
+  };
 }
 
 /** Parses a single line in isolation. Lines that are not checklist lines get isTask=false.

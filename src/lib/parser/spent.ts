@@ -10,7 +10,11 @@ const SPENT_TOKEN = /spent:(?=\d)(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?/g;
  * Parses a single "1h10m30s" / "45m" / "1h" / "30s" form.
  * A `spent:` not followed by a digit (invalid) is assumed to be excluded by the caller's regex.
  */
-function parseDurationSeconds(hours: string | undefined, minutes: string | undefined, seconds: string | undefined): number | null {
+function parseDurationSeconds(
+  hours: string | undefined,
+  minutes: string | undefined,
+  seconds: string | undefined,
+): number | null {
   if (!hours && !minutes && !seconds) return null;
   const h = hours ? parseInt(hours, 10) : 0;
   const m = minutes ? parseInt(minutes, 10) : 0;

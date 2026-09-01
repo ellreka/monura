@@ -17,7 +17,11 @@ export interface MatchedLine {
  * (after lines are added/removed, a line near the original position is more likely to be
  * the same line). On equal distance, prefer the earlier line.
  */
-export function findLineByText(doc: Text, text: string, preferNear: number | null = null): MatchedLine | null {
+export function findLineByText(
+  doc: Text,
+  text: string,
+  preferNear: number | null = null,
+): MatchedLine | null {
   let best: MatchedLine | null = null;
   let bestDistance = Number.POSITIVE_INFINITY;
   for (let number = 1; number <= doc.lines; number++) {

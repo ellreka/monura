@@ -69,7 +69,10 @@ describe("collectLinkMatches", () => {
   it("linkifies a bare https URL", () => {
     const matches = collectLinkMatches(stateFor("visit https://example.com/page today"));
     expect(matches).toHaveLength(1);
-    expect(matches[0]).toMatchObject({ text: "https://example.com/page", url: "https://example.com/page" });
+    expect(matches[0]).toMatchObject({
+      text: "https://example.com/page",
+      url: "https://example.com/page",
+    });
   });
 
   it("linkifies a bare www. URL, adding a scheme for the href", () => {

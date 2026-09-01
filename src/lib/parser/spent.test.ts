@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { addSpentToLine, extractSpentSeconds, formatDuration, formatDurationMinutes, matchSpentTokens } from "./spent";
+import {
+  addSpentToLine,
+  extractSpentSeconds,
+  formatDuration,
+  formatDurationMinutes,
+  matchSpentTokens,
+} from "./spent";
 
 describe("matchSpentTokens / extractSpentSeconds", () => {
   it("parses minutes-only notation", () => {

@@ -40,7 +40,7 @@ export const timerKeymapCompartment = new Compartment();
 // global, so unbinding once at load time is enough.
 // The type definition makes ctx a required string, but `:` is registered with no context
 // (undefined), so we need to pass undefined.
-Vim.unmap(":", undefined as unknown as string);
+Vim.unmap(":", undefined!);
 
 export function createMonuraExtensions(options: CreateMonuraExtensionsOptions = {}): Extension[] {
   return [
@@ -65,9 +65,6 @@ export function createMonuraExtensions(options: CreateMonuraExtensionsOptions = 
     activeLineField,
     [editorTheme(), markdownHighlighting()],
     EditorView.lineWrapping,
-    // Keep the tracked line clear of the floating timer bar when scrolling into
-    // view (e.g. Vim's G), since CodeMirror ignores CSS scroll-padding here.
-    EditorView.scrollMargins.of(() => ({ bottom: 90 })),
     EditorView.updateListener.of((update) => {
       if (update.docChanged) {
         options.onDocChange?.(update.state.doc.toString());

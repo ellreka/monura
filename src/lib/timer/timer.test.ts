@@ -171,7 +171,10 @@ describe("reassignShortcut", () => {
   it("assigns a key to a preset", () => {
     expect(reassignShortcut(presets, startStop, 1, "Meta-3")).toEqual({
       startStop: "Meta-Enter",
-      presets: [{ minutes: 10, shortcut: "Meta-1" }, { minutes: 30, shortcut: "Meta-3" }],
+      presets: [
+        { minutes: 10, shortcut: "Meta-1" },
+        { minutes: 30, shortcut: "Meta-3" },
+      ],
     });
   });
 
@@ -185,21 +188,30 @@ describe("reassignShortcut", () => {
   it("clears the key from whichever other preset held it (last write wins)", () => {
     expect(reassignShortcut(presets, startStop, 1, "Meta-1")).toEqual({
       startStop: "Meta-Enter",
-      presets: [{ minutes: 10, shortcut: null }, { minutes: 30, shortcut: "Meta-1" }],
+      presets: [
+        { minutes: 10, shortcut: null },
+        { minutes: 30, shortcut: "Meta-1" },
+      ],
     });
   });
 
   it("clears the key from the toggle when a preset claims it", () => {
     expect(reassignShortcut(presets, startStop, 1, "Meta-Enter")).toEqual({
       startStop: null,
-      presets: [{ minutes: 10, shortcut: "Meta-1" }, { minutes: 30, shortcut: "Meta-Enter" }],
+      presets: [
+        { minutes: 10, shortcut: "Meta-1" },
+        { minutes: 30, shortcut: "Meta-Enter" },
+      ],
     });
   });
 
   it("clears a target without touching other bindings when key is null", () => {
     expect(reassignShortcut(presets, startStop, 0, null)).toEqual({
       startStop: "Meta-Enter",
-      presets: [{ minutes: 10, shortcut: null }, { minutes: 30, shortcut: "Meta-2" }],
+      presets: [
+        { minutes: 10, shortcut: null },
+        { minutes: 30, shortcut: "Meta-2" },
+      ],
     });
   });
 });
