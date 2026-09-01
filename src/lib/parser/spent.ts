@@ -4,7 +4,8 @@ export interface SpentMatch {
   seconds: number;
 }
 
-const SPENT_TOKEN = /spent:(?=\d)(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?/g;
+const SPENT_TOKEN =
+  /(?<![\p{L}\p{N}_-])spent:(?=\d)(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?(?![\p{L}\p{N}_-])/gu;
 
 /**
  * Parses a single "1h10m30s" / "45m" / "1h" / "30s" form.
@@ -75,9 +76,10 @@ export function addSpentToLine(line: string, secondsToAdd: number): string {
   const newTotal = existingTotal + secondsToAdd;
 
   if (tokens.length === 0) {
-    const trimmed = line.replace(/\s+$/, "");
-    const separator = trimmed.length > 0 ? " " : "";
-    return `${trimmed}${separator}spent:${formatDuration(newTotal)}`;
+    const trailing = line.match(/[ \t]+$/)?.[0] ?? "";
+    const content = line.slice(0, line.length - trailing.length);
+    const separator = content.length > 0 ? " " : "";
+    return `${content}${separator}spent:${formatDuration(newTotal)}${trailing}`;
   }
 
   const lastToken = tokens[tokens.length - 1];
