@@ -153,7 +153,7 @@ export function Launcher({
     <>
       <input
         ref={editRef}
-        className="w-full rounded-sm border border-border bg-pill px-1.5 py-[3px] text-xs text-ink"
+        className="w-full rounded-sm border border-border bg-pill px-1.5 py-[3px] text-xs text-ink focus-visible:outline-border"
         value={draft}
         onChange={(e) => {
           setDraft(e.target.value);
@@ -191,7 +191,7 @@ export function Launcher({
           onValueChange={setQuery}
           placeholder="Search files…"
           disabled={editing !== null}
-          className="border-0 border-b border-border bg-transparent px-[14px] py-3 text-[13px] text-ink"
+          className="border-0 border-b border-border bg-transparent px-[14px] py-3 text-[13px] text-ink focus-visible:outline-border"
         />
         <Command.List label="Files" className="overflow-y-auto p-1.5">
           {rows.map((row) => {
