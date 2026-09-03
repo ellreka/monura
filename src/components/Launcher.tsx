@@ -1,5 +1,5 @@
 import { Command } from "cmdk";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { nextUntitledName, normalizeMdName, stripMdSuffix } from "../lib/files/names";
 import { cn } from "../lib/cn";
 
@@ -12,10 +12,10 @@ interface LauncherProps {
   files: readonly LauncherFile[];
   activeIndex: number;
   filesDisabled: boolean;
-  onSelectFile: (index: number) => void;
-  onCreateFile: (name: string) => void;
-  onRenameFile: (from: string, to: string) => void;
-  onDeleteFile: (name: string) => void;
+  onSelectFile: (index: number) => void | Promise<void>;
+  onCreateFile: (name: string) => void | Promise<void>;
+  onRenameFile: (from: string, to: string) => void | Promise<void>;
+  onDeleteFile: (name: string) => void | Promise<void>;
 }
 
 type Row = { kind: "new-file" } | { kind: "file"; name: string; index: number };
@@ -44,17 +44,20 @@ export function Launcher({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const editRef = useRef<HTMLInputElement | null>(null);
 
-  useEffect(() => {
-    const id = requestAnimationFrame(() => inputRef.current?.focus());
-    return () => cancelAnimationFrame(id);
-  }, []);
+  useLayoutEffect(() => {
+    if (editing === null) inputRef.current?.focus();
+  }, [editing]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (editing !== null) {
       editRef.current?.focus();
       editRef.current?.select();
     }
   }, [editing]);
+
+  useLayoutEffect(() => {
+    if (menu === null && editing === null) inputRef.current?.focus();
+  }, [menu, editing]);
 
   useEffect(() => {
     if (menu === null) return;
@@ -98,14 +101,15 @@ export function Launcher({
     setError(null);
   };
 
-  const commit = () => {
+  const commit = async () => {
     if (editing === null) return;
+    const editingName = editing;
     const name = normalizeMdName(draft);
     if (name === null) {
       setError("Invalid file name");
       return;
     }
-    const from = editing === "create" ? null : editing;
+    const from = editingName === "create" ? null : editingName;
     if (from !== null && name === from) {
       cancelEdit();
       return;
@@ -116,22 +120,25 @@ export function Launcher({
     }
     setEditing(null);
     setError(null);
-    if (from === null) {
-      onCreateFile(name);
-      onClose();
-    } else {
-      onRenameFile(from, name);
+    try {
+      if (from === null) {
+        await onCreateFile(name);
+        onClose();
+      } else await onRenameFile(from, name);
+    } catch (error) {
+      setEditing(editingName);
+      setError(error instanceof Error ? error.message : String(error));
     }
   };
 
-  const activate = (row: Row) => {
+  const activate = async (row: Row) => {
     if (row.kind === "new-file") {
       if (filesDisabled) return;
       startCreate();
       return;
     }
     if (filesDisabled && row.index !== activeIndex) return;
-    onSelectFile(row.index);
+    await onSelectFile(row.index);
     onClose();
   };
 
@@ -160,7 +167,6 @@ export function Launcher({
           setError(null);
         }}
         onKeyDown={handleEditKeyDown}
-        onBlur={cancelEdit}
       />
       {error && <span className="text-[10px] text-danger">{error}</span>}
     </>
@@ -208,7 +214,11 @@ export function Launcher({
                   key="new-file"
                   value={NEW_FILE_VALUE}
                   disabled={filesDisabled}
-                  onSelect={() => activate(row)}
+                  onSelect={() =>
+                    void activate(row).catch((error) =>
+                      setError(error instanceof Error ? error.message : String(error)),
+                    )
+                  }
                   className={itemClass}
                 >
                   + New file
@@ -228,7 +238,11 @@ export function Launcher({
                 key={row.name}
                 value={row.name}
                 disabled={filesDisabled && !isActiveFile}
-                onSelect={() => activate(row)}
+                onSelect={() =>
+                  void activate(row).catch((error) =>
+                    setError(error instanceof Error ? error.message : String(error)),
+                  )
+                }
                 onContextMenu={(event) => openMenu(event, row.name)}
                 title={
                   filesDisabled && !isActiveFile ? "Cannot switch files while tracking" : row.name
@@ -272,7 +286,9 @@ export function Launcher({
             role="menuitem"
             className="rounded-[5px] px-[10px] py-1.5 text-left text-xs text-danger hover:bg-danger/8"
             onClick={() => {
-              onDeleteFile(menu.name);
+              void Promise.resolve(onDeleteFile(menu.name)).catch((error) =>
+                setError(error instanceof Error ? error.message : String(error)),
+              );
               setMenu(null);
             }}
           >

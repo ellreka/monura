@@ -1,7 +1,14 @@
-import { type ReactNode, useCallback, useLayoutEffect, useRef, useState } from "react";
+import {
+  type MouseEvent,
+  type ReactNode,
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import "./App.css";
-import { Editor, type EditorHandle } from "./components/Editor";
+import { Editor, type EditorHandle, type EditorSelection } from "./components/Editor";
 import { Launcher } from "./components/Launcher";
 import { LogView } from "./components/LogView";
 import { SettingsView } from "./components/SettingsView";
@@ -153,7 +160,7 @@ function GearGlyph() {
 type NavigationButtonProps = {
   active: boolean;
   label: string;
-  onClick: () => void;
+  onClick: (event?: MouseEvent<HTMLButtonElement>) => void;
   pressed?: boolean;
   title: string;
   children: ReactNode;
@@ -218,6 +225,7 @@ function App() {
   const [focusedTaskLabel, setFocusedTaskLabel] = useState<string | null>(null);
   const [view, setView] = useState<AppView>("editor");
   const [launcherOpen, setLauncherOpen] = useState(false);
+  const [editorFocusRequest, setEditorFocusRequest] = useState(0);
   const [logRefreshKey, setLogRefreshKey] = useState(0);
   const [diskRefreshKey, setDiskRefreshKey] = useState(0);
   const [pendingCommit, setPendingCommit] = useState<PendingCommit | null>(null);
@@ -248,6 +256,10 @@ function App() {
   const isCommittingRef = useRef(false);
   const saveRevisionRef = useRef(0);
   const viewRef = useRef<AppView>(view);
+  const launcherOpenRef = useRef(launcherOpen);
+  const previousLauncherOpenRef = useRef(launcherOpen);
+  const launcherOpenerRef = useRef<HTMLElement | null>(null);
+  const selectionsRef = useRef(new Map<string, EditorSelection>());
   const setSaveError = (value: string | null) => {
     saveErrorRef.current = value;
     setSaveErrorState(value);
@@ -277,6 +289,9 @@ function App() {
     if (!activeFile || !editorRef.current) setFocusedTaskLabel(null);
   }, [activeFile]);
   useLayoutEffect(() => {
+    selectionsRef.current.clear();
+  }, [dataDir]);
+  useLayoutEffect(() => {
     timerRunningRef.current = isRunning;
     pendingResolutionRef.current = pendingResolution;
     workspaceLoadingRef.current = isWorkspaceLoading;
@@ -284,6 +299,7 @@ function App() {
     commitErrorRef.current = commitError;
     isCommittingRef.current = isCommitting;
     viewRef.current = view;
+    launcherOpenRef.current = launcherOpen;
   }, [
     isRunning,
     pendingResolution,
@@ -292,7 +308,13 @@ function App() {
     commitError,
     isCommitting,
     view,
+    launcherOpen,
   ]);
+  useLayoutEffect(() => {
+    if (previousLauncherOpenRef.current && !launcherOpen && view !== "editor")
+      if (launcherOpenerRef.current?.isConnected) launcherOpenerRef.current.focus();
+    previousLauncherOpenRef.current = launcherOpen;
+  }, [launcherOpen, view]);
   const isCursorOnTask = focusedTaskLabel !== null;
   const presetMinutesList = presets.map((preset) => preset.minutes);
   const isFileOperationBlocked =
@@ -318,6 +340,7 @@ function App() {
     !isSavingBoundary;
 
   const handleSelectView = (next: AppView) => {
+    if (view === "editor" && next === "editor") requestEditorFocus();
     setView((current) => (current === next ? "editor" : next));
   };
 
@@ -432,6 +455,15 @@ function App() {
     return parseSessionLines(lines);
   }, []);
 
+  const handleSelectionChange = (selection: EditorSelection, name: string) => {
+    selectionsRef.current.set(name, selection);
+  };
+
+  const handleFilesReplaced = (nextFiles: MdFile[]) => {
+    const names = new Set(nextFiles.map((file) => file.name));
+    selectionsRef.current = new Map([...selectionsRef.current].filter(([name]) => names.has(name)));
+  };
+
   const handleDocChange = (text: string, raw: string) => {
     setFiles((prev) =>
       prev.map((file, index) => (index === activeIndex ? { ...file, content: text, raw } : file)),
@@ -450,6 +482,33 @@ function App() {
   const handleExternalFileAdopted = (file: MdFile) => {
     editorRef.current?.reloadContent(file.content, file.raw);
     setSaveError(null);
+  };
+
+  const focusEditorIfSafe = () => {
+    if (
+      viewRef.current === "editor" &&
+      !launcherOpenRef.current &&
+      pendingResolutionRef.current === null &&
+      !workspaceLoadingRef.current &&
+      pendingCommitRef.current === null &&
+      !commitInFlightRef.current &&
+      !saveBoundaryRef.current &&
+      saveErrorRef.current === null &&
+      commitErrorRef.current === null &&
+      !isCommittingRef.current &&
+      filesRef.current[activeIndexRef.current] &&
+      editorRef.current
+    )
+      editorRef.current.focus();
+  };
+
+  const requestEditorFocus = () => {
+    if (viewRef.current === "editor") setEditorFocusRequest((request) => request + 1);
+  };
+
+  const handleSelectPreset = (minutes: number) => {
+    setPresetMinutes(minutes);
+    focusEditorIfSafe();
   };
 
   const handleSelectFile = async (index: number) => {
@@ -501,6 +560,13 @@ function App() {
         const saved = lastSavedContentsRef.current.get(from);
         lastSavedContentsRef.current.delete(from);
         if (saved !== undefined) lastSavedContentsRef.current.set(to, saved);
+        const selection = selectionsRef.current.get(from);
+        if (selection) {
+          const nextSelections = new Map(selectionsRef.current);
+          nextSelections.delete(from);
+          nextSelections.set(to, selection);
+          selectionsRef.current = nextSelections;
+        }
         setFiles((prev) => prev.map((file) => (file.name === from ? { ...file, name: to } : file)));
       });
     });
@@ -525,6 +591,9 @@ function App() {
         }
         const index = filesRef.current.findIndex((file) => file.name === name);
         lastSavedContentsRef.current.set(name, null);
+        const nextSelections = new Map(selectionsRef.current);
+        nextSelections.delete(name);
+        selectionsRef.current = nextSelections;
         setFiles((prev) => prev.filter((file) => file.name !== name));
         setActiveIndex((current) => {
           if (index < 0 || index > current) return current;
@@ -579,6 +648,7 @@ function App() {
       return false;
     } finally {
       commitInFlightRef.current = false;
+      isCommittingRef.current = false;
       setIsCommitting(false);
     }
   };
@@ -661,7 +731,7 @@ function App() {
     lastTraySecRef.current = presetMinutes * 60;
     trayStart(label, formatClock(presetMinutes * 60 * 1000));
     timerArm(label, presetMinutes, presetMinutes * 60);
-    editorRef.current?.focus();
+    focusEditorIfSafe();
   };
 
   const stopTracking = async (): Promise<boolean> => {
@@ -700,6 +770,7 @@ function App() {
     lastTraySecRef.current = null;
     trayStop();
     timerDisarm();
+    if (completed) focusEditorIfSafe();
     return completed;
   };
 
@@ -734,7 +805,9 @@ function App() {
       return;
     setPendingResolutionSync(null);
     const record = createSessionRecord(pending);
-    void commitSession({ record, needsMarkdownSave: false });
+    void commitSession({ record, needsMarkdownSave: false }).then((completed) => {
+      if (completed) focusEditorIfSafe();
+    });
   };
 
   const handleResolveAssignToCursor = () => {
@@ -766,13 +839,16 @@ function App() {
       ...pending,
       file: currentFile.name,
     });
-    void commitSession({ record, needsMarkdownSave: true });
+    void commitSession({ record, needsMarkdownSave: true }).then((completed) => {
+      if (completed) focusEditorIfSafe();
+    });
   };
 
   const handleDebugFastForward = () => {
     setTimerState((state) => fastForwardToRemaining(state, Date.now(), DEBUG_FAST_FORWARD_SECONDS));
     if (trackingLabel)
       timerArm(trackingLabel, DEBUG_FAST_FORWARD_SECONDS / 60, DEBUG_FAST_FORWARD_SECONDS);
+    focusEditorIfSafe();
   };
 
   useAppEffects({
@@ -789,6 +865,7 @@ function App() {
     pendingSaveRef,
     activeWritesRef,
     onExternalFileAdopted: handleExternalFileAdopted,
+    onFilesReplaced: handleFilesReplaced,
     discardPendingSave,
     lastSavedContentsRef,
     workspaceReloadKey,
@@ -798,12 +875,15 @@ function App() {
     setDiskRefreshKey,
     setLauncherOpen,
     setView,
+    launcherOpenRef,
+    launcherOpenerRef,
     timerState,
     setElapsedMs,
     lastTraySecRef,
     trayTick,
     stopTracking,
     onQuit: handleQuit,
+    onEditorFocusRequest: requestEditorFocus,
   });
 
   const showNativeTitlebar = isTauri() && navigator.userAgent.includes("Macintosh");
@@ -833,7 +913,10 @@ function App() {
         <NavigationButton
           active={launcherOpen}
           label="Open launcher"
-          onClick={() => setLauncherOpen((open) => !open)}
+          onClick={(event) => {
+            if (event) launcherOpenerRef.current = event.currentTarget;
+            setLauncherOpen((open) => !open);
+          }}
           pressed={launcherOpen}
           title="Launcher (⌘K)"
         >
@@ -928,6 +1011,16 @@ function App() {
                 ref={editorRef}
                 initialContent={activeFile.content}
                 initialRaw={activeFile.raw}
+                getInitialSelection={() => selectionsRef.current.get(activeFile.name) ?? null}
+                focusSignal={editorFocusRequest}
+                autoFocus={
+                  view === "editor" &&
+                  !launcherOpen &&
+                  pendingResolution === null &&
+                  !isEditorReadOnly &&
+                  !isWorkspaceLoading
+                }
+                onSelectionChange={(selection) => handleSelectionChange(selection, activeFile.name)}
                 onChange={handleDocChange}
                 readOnly={isEditorReadOnly}
                 vimMode={vimMode}
@@ -1004,6 +1097,7 @@ function App() {
         </div>
       )}
       <TimerBar
+        autoFocusPending={view === "editor" && !launcherOpen}
         trackingLabel={trackingLabel}
         focusedTaskLabel={focusedTaskLabel}
         isRunning={isRunning}
@@ -1020,7 +1114,7 @@ function App() {
         presetMinutes={presetMinutes}
         presets={presetMinutesList}
         elapsedMs={elapsedMs}
-        onSelectPreset={setPresetMinutes}
+        onSelectPreset={handleSelectPreset}
         onStart={handleStart}
         onStop={() => stopTracking()}
         pending={pendingResolution}
@@ -1035,12 +1129,12 @@ function App() {
           files={files}
           activeIndex={activeIndex}
           filesDisabled={isFileOperationBlocked}
-          onSelectFile={(index) => {
-            handleSelectFile(index);
+          onSelectFile={async (index) => {
+            await handleSelectFile(index);
             setView("editor");
           }}
-          onCreateFile={(name) => {
-            void handleCreateFile(name);
+          onCreateFile={async (name) => {
+            await handleCreateFile(name);
             setView("editor");
           }}
           onRenameFile={handleRenameFile}

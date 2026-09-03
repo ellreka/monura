@@ -1,5 +1,10 @@
-import { useEffect, useImperativeHandle, useRef, type Ref } from "react";
-import { Annotation, EditorState, MapMode } from "@codemirror/state";
+import { useEffect, useImperativeHandle, useLayoutEffect, useRef, type Ref } from "react";
+import {
+  Annotation,
+  EditorState,
+  EditorSelection as CMEditorSelection,
+  MapMode,
+} from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { getCM, vim } from "@replit/codemirror-vim";
 import {
@@ -38,6 +43,11 @@ export interface AppliedSpentResult {
   lineText: string;
 }
 
+export interface EditorSelection {
+  ranges: { anchor: number; head: number }[];
+  mainIndex: number;
+}
+
 export interface EditorHandle {
   getCursorLine(): CursorLineInfo | null;
   startTracking(lineNumber?: number): CursorLineInfo | null;
@@ -71,6 +81,10 @@ interface EditorProps {
   /** Starts tracking with the current preset when idle, stops when running. */
   onToggle?: () => void;
   readOnly?: boolean;
+  autoFocus?: boolean;
+  getInitialSelection?: () => EditorSelection | null;
+  focusSignal?: number;
+  onSelectionChange?: (selection: EditorSelection) => void;
 }
 
 export function Editor({
@@ -86,6 +100,10 @@ export function Editor({
   onSelectPreset,
   onToggle,
   readOnly = false,
+  autoFocus = false,
+  getInitialSelection,
+  focusSignal = 0,
+  onSelectionChange,
 }: EditorProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -95,7 +113,6 @@ export function Editor({
   /** Latest text of the tracked line (the re-identification key after external edits). */
   const trackedTextRef = useRef<string | null>(null);
   const vimListenerCleanupRef = useRef<(() => void) | null>(null);
-
   // Latest callbacks for the mount-time effect and the imperative handle below.
   const latest = useRef({
     onChange,
@@ -103,6 +120,7 @@ export function Editor({
     onCursorLineChange,
     onSelectPreset,
     onToggle,
+    onSelectionChange,
   });
   useEffect(() => {
     latest.current = {
@@ -111,6 +129,7 @@ export function Editor({
       onCursorLineChange,
       onSelectPreset,
       onToggle,
+      onSelectionChange,
     };
   });
 
@@ -149,6 +168,20 @@ export function Editor({
     const view = new EditorView({
       state: EditorState.create({
         doc: initialContent,
+        selection: (() => {
+          const initialSelection = getInitialSelection?.();
+          if (!initialSelection || initialSelection.ranges.length === 0) return undefined;
+          const ranges = initialSelection.ranges.map(({ anchor, head }) =>
+            CMEditorSelection.range(
+              Math.max(0, Math.min(anchor, initialContent.length)),
+              Math.max(0, Math.min(head, initialContent.length)),
+            ),
+          );
+          return CMEditorSelection.create(
+            ranges,
+            Math.max(0, Math.min(initialSelection.mainIndex, ranges.length - 1)),
+          );
+        })(),
         extensions: [
           createMonuraExtensions({
             vimMode,
@@ -264,6 +297,12 @@ export function Editor({
               latest.current.onChange(update.state.doc.toString(), rawContentRef.current);
             }
             if (update.docChanged || update.selectionSet) {
+              latest.current.onSelectionChange?.({
+                ranges: update.state.selection.ranges.map(({ anchor, head }) => ({ anchor, head })),
+                mainIndex: update.state.selection.mainIndex,
+              });
+            }
+            if (update.docChanged || update.selectionSet) {
               notifyCursorLine(update.view);
             }
           }),
@@ -279,7 +318,7 @@ export function Editor({
       view.contentDOM.tabIndex = -1;
       vimListenerCleanupRef.current = subscribeVimMode(view);
     }
-    view.focus();
+    if (autoFocus) view.focus();
 
     return () => {
       vimListenerCleanupRef.current?.();
@@ -289,6 +328,10 @@ export function Editor({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useLayoutEffect(() => {
+    if (autoFocus) viewRef.current?.focus();
+  }, [autoFocus, focusSignal]);
 
   useEffect(() => {
     const view = viewRef.current;

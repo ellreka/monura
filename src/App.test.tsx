@@ -5,6 +5,16 @@ import type { EditorHandle } from "./components/Editor";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
+Reflect.set(
+  globalThis,
+  "ResizeObserver",
+  class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  },
+);
+HTMLElement.prototype.scrollIntoView = () => {};
 
 const mocks = vi.hoisted(() => ({
   tauri: false,
@@ -38,6 +48,20 @@ vi.mock("./lib/files", async () => {
 vi.mock("./hooks/useAppEffects", () => ({
   useAppEffects: (options: Record<string, unknown>) => {
     mocks.effects.current = options;
+    useEffect(() => {
+      const onKeyDown = (event: KeyboardEvent) => {
+        if (event.key === "Escape") {
+          const launcherOpenRef = options.launcherOpenRef as { current: boolean };
+          (options.setLauncherOpen as (value: boolean) => void)(false);
+          if (!launcherOpenRef.current) {
+            (options.setView as (value: string) => void)("editor");
+            (options.onEditorFocusRequest as () => void)();
+          }
+        }
+      };
+      window.addEventListener("keydown", onKeyDown);
+      return () => window.removeEventListener("keydown", onKeyDown);
+    }, [options]);
   },
 }));
 vi.mock("./hooks/useAppSettings", () => ({
@@ -66,10 +90,18 @@ vi.mock("./components/Editor", () => ({
     onCursorLineChange,
     ref,
     onChange,
+    autoFocus,
+    focusSignal,
+    getInitialSelection,
+    onSelectionChange,
   }: {
     onCursorLineChange?: (info: { isTask: boolean; text: string }) => void;
     ref?: { current: EditorHandle | null };
     onChange?: (text: string, raw: string) => void;
+    autoFocus?: boolean;
+    focusSignal?: number;
+    getInitialSelection?: () => unknown;
+    onSelectionChange?: (selection: unknown) => void;
   }) => {
     const instanceRef = useRef<EditorHandle | null>(null);
     const trackedRef = useRef(false);
@@ -91,17 +123,24 @@ vi.mock("./components/Editor", () => ({
         setVimMode: vi.fn(),
         setTimerKeymap: vi.fn(),
       };
-      mocks.editors.push({ handle: instanceRef.current });
+      mocks.editors.push({
+        handle: instanceRef.current,
+        initialSelection: getInitialSelection?.(),
+      });
     }
     const handle = instanceRef.current;
     mocks.editor = {
       handle,
       onChange,
+      onSelectionChange,
       onCursorLineChange,
       reloadContent: handle.reloadContent,
       stopTracking: handle.stopTracking,
     };
     useImperativeHandle(ref, () => handle, [handle]);
+    useEffect(() => {
+      if (autoFocus) handle.focus();
+    }, [autoFocus, focusSignal, handle]);
     useEffect(
       () => onCursorLineChange?.({ isTask: true, text: "- [ ] start +foo" }),
       [onCursorLineChange],
@@ -177,7 +216,9 @@ const openLog = async () => {
 };
 const sessionRecords = async () => {
   const all = (await mocks.loadRecords?.()) ?? [];
-  return all.filter((record) => (record as { lineText?: string }).lineText === "- [ ] start +foo");
+  return all.filter(
+    (record: unknown) => (record as { lineText?: string }).lineText === "- [ ] start +foo",
+  );
 };
 
 beforeEach(() => {
@@ -207,7 +248,86 @@ afterEach(() => {
   container = null;
 });
 
+describe("editor focus ownership", () => {
+  it("restores focus after Escape closes the launcher and returns from another view", () => {
+    const focus = (mocks.editor?.handle as { focus: ReturnType<typeof vi.fn> }).focus;
+    focus.mockClear();
+    act(() => container?.querySelector<HTMLButtonElement>("[aria-label='Open launcher']")?.click());
+    expect(document.activeElement).toBe(container?.querySelector("input"));
+    act(() =>
+      container
+        ?.querySelector("[role='dialog']")
+        ?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })),
+    );
+    expect(focus).toHaveBeenCalled();
+    focus.mockClear();
+    act(() => container?.querySelector<HTMLButtonElement>("[aria-label='Session log']")?.click());
+    act(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
+    expect(focus).toHaveBeenCalled();
+  });
+
+  it("restores focus to a non-editor launcher opener when it closes", () => {
+    act(() => container?.querySelector<HTMLButtonElement>("[aria-label='Session log']")?.click());
+    const opener = container?.querySelector<HTMLButtonElement>("[aria-label='Open launcher']");
+    act(() => opener?.click());
+    act(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it("clears cached selection when the workspace changes", async () => {
+    const selection = { ranges: [{ anchor: 2, head: 8 }], mainIndex: 0 };
+    act(() => (mocks.editor?.onSelectionChange as (value: typeof selection) => void)(selection));
+    mocks.initialDataDir = "other";
+    act(() => root?.render(createElement(App)));
+    act(() => container?.querySelector<HTMLButtonElement>("[aria-label='Open launcher']")?.click());
+    await act(async () => {
+      container?.querySelector<HTMLElement>("[data-value='monura.md']")?.click();
+      await Promise.resolve();
+    });
+    act(() => container?.querySelector<HTMLButtonElement>("[aria-label='Open launcher']")?.click());
+    await act(async () => {
+      container?.querySelector<HTMLElement>("[data-value='work.md']")?.click();
+      await Promise.resolve();
+    });
+    expect(mocks.editors[mocks.editors.length - 1]?.initialSelection).toBeNull();
+  });
+
+  it("preserves each file's full selection through file and view changes", async () => {
+    const selection = {
+      ranges: [
+        { anchor: 2, head: 8 },
+        { anchor: 12, head: 15 },
+      ],
+      mainIndex: 1,
+    };
+    act(() => (mocks.editor?.onSelectionChange as (value: typeof selection) => void)(selection));
+    act(() => container?.querySelector<HTMLButtonElement>("[aria-label='Session log']")?.click());
+    act(() => container?.querySelector<HTMLButtonElement>("[aria-label='Editor']")?.click());
+    act(() => container?.querySelector<HTMLButtonElement>("[aria-label='Open launcher']")?.click());
+    await act(async () => {
+      container?.querySelector<HTMLElement>("[data-value='monura.md']")?.click();
+      await Promise.resolve();
+    });
+    act(() => container?.querySelector<HTMLButtonElement>("[aria-label='Open launcher']")?.click());
+    await act(async () => {
+      container?.querySelector<HTMLElement>("[data-value='work.md']")?.click();
+      await Promise.resolve();
+    });
+    expect(
+      mocks.editors.map((editor: Record<string, unknown>) => editor.initialSelection),
+    ).toContainEqual(selection);
+  });
+});
+
 describe("rendered App timer resolution", () => {
+  it("restores focus after a successful stop", async () => {
+    start();
+    const focus = (mocks.editor?.handle as { focus: ReturnType<typeof vi.fn> }).focus;
+    focus.mockClear();
+    await stop();
+    expect(focus).toHaveBeenCalled();
+  });
+
   it("adopts external content without stopping the timer", () => {
     start();
     const external = {
@@ -282,6 +402,21 @@ describe("rendered App timer resolution", () => {
     });
   });
 
+  it("restores focus after logging a deleted target with a replacement file", async () => {
+    start();
+    const replacement = { name: "next.md", content: "- [ ] destination", raw: "- [ ] destination" };
+    act(() => (mocks.effects.current?.setFiles as (files: unknown[]) => void)([replacement]));
+    (mocks.effects.current?.filesRef as { current: unknown[] }).current = [replacement];
+    await stop();
+    const focus = (mocks.editor?.handle as { focus: ReturnType<typeof vi.fn> }).focus;
+    focus.mockClear();
+    await act(async () => {
+      container?.querySelector<HTMLButtonElement>("[data-testid=log-only]")?.click();
+      await Promise.resolve();
+    });
+    expect(focus).toHaveBeenCalled();
+  });
+
   it("assigns once after external deletion with a replacement file", async () => {
     start();
     const replacement = { name: "next.md", content: "- [ ] destination", raw: "- [ ] destination" };
@@ -298,18 +433,35 @@ describe("rendered App timer resolution", () => {
       deleted: true,
       lineText: "",
     });
+    const focus = (mocks.editor?.handle as { focus: ReturnType<typeof vi.fn> }).focus;
+    focus.mockClear();
     await act(async () => {
       container?.querySelector<HTMLButtonElement>("[data-testid=assign]")?.click();
       container?.querySelector<HTMLButtonElement>("[data-testid=assign]")?.click();
       await Promise.resolve();
     });
     expect(mocks.applySpentToLine).toHaveBeenCalledTimes(1);
+    expect(focus).toHaveBeenCalled();
     await openLog();
     expect(await sessionRecords()).toHaveLength(1);
     expect((await sessionRecords())[0]).toMatchObject({
       file: "next.md",
       lineText: "- [ ] start +foo",
     });
+  });
+});
+
+describe("rendered App commit failures", () => {
+  it("does not restore focus after a failed stop", async () => {
+    start();
+    const focus = (mocks.editor?.handle as { focus: ReturnType<typeof vi.fn> }).focus;
+    focus.mockClear();
+    mocks.tauri = true;
+    mocks.invoke.mockImplementation((command: string) =>
+      command === "append_session_log" ? Promise.reject(new Error("failed")) : Promise.resolve(),
+    );
+    await stop();
+    expect(focus).not.toHaveBeenCalled();
   });
 });
 
@@ -373,7 +525,7 @@ describe("rendered App write conflict resolution", () => {
       await Promise.resolve();
     });
     const appendCalls = mocks.invoke.mock.calls.filter(
-      ([command]) => command === "append_session_log",
+      (call: unknown[]) => call[0] === "append_session_log",
     );
     expect(appendCalls).toHaveLength(1);
     const payload = appendCalls[0][1] as { line: string };

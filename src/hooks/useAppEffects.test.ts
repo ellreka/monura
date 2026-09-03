@@ -62,6 +62,7 @@ describe("quit request handling", () => {
       pendingSaveRef: { current: null },
       activeWritesRef: { current: 0 },
       onExternalFileAdopted: vi.fn(),
+      onFilesReplaced: vi.fn(),
       discardPendingSave: vi.fn(),
       lastSavedContentsRef: { current: new Map() },
       workspaceReloadKey: 0,
@@ -71,6 +72,9 @@ describe("quit request handling", () => {
       setDiskRefreshKey: vi.fn(),
       setLauncherOpen: vi.fn(),
       setView: vi.fn(),
+      launcherOpenRef: { current: false },
+      launcherOpenerRef: { current: null },
+      onEditorFocusRequest: vi.fn(),
       timerState: { status: "idle", presetMinutes: 10, startedAt: null, durationSeconds: 600 },
       setElapsedMs: vi.fn(),
       lastTraySecRef: { current: null },
@@ -117,6 +121,82 @@ describe("quit request handling", () => {
     await handleQuitRequested(async () => true);
     expect(invoke).toHaveBeenCalledWith("exit_app");
     expect(invoke).not.toHaveBeenCalledWith("show_main_window_command");
+  });
+});
+
+function makeKeyboardOptions(launcherOpen: boolean) {
+  return {
+    dataDir: null,
+    files: [],
+    activeIndex: 0,
+    filesRef: { current: [] },
+    activeIndexRef: { current: 0 },
+    setFiles: vi.fn(),
+    setActiveIndex: vi.fn(),
+    setLoadError: vi.fn(),
+    setRefreshError: vi.fn(),
+    flushSaveBestEffort: vi.fn(),
+    pendingSaveRef: { current: null },
+    activeWritesRef: { current: 0 },
+    onExternalFileAdopted: vi.fn(),
+    onFilesReplaced: vi.fn(),
+    discardPendingSave: vi.fn(),
+    lastSavedContentsRef: { current: new Map() },
+    workspaceReloadKey: 0,
+    onWorkspaceLoading: vi.fn(),
+    onWorkspaceLoaded: vi.fn(),
+    diskRefreshKey: 0,
+    setDiskRefreshKey: vi.fn(),
+    setLauncherOpen: vi.fn(),
+    setView: vi.fn(),
+    launcherOpenRef: { current: launcherOpen },
+    launcherOpenerRef: { current: null },
+    onEditorFocusRequest: vi.fn(),
+    timerState: { status: "idle", presetMinutes: 10, startedAt: null, durationSeconds: 600 },
+    setElapsedMs: vi.fn(),
+    lastTraySecRef: { current: null },
+    trayTick: vi.fn(),
+    stopTracking: vi.fn(),
+    onQuit: () => Promise.resolve(false),
+  } as Parameters<typeof useAppEffects>[0];
+}
+
+describe("global keyboard handling", () => {
+  it.each([
+    [true, false],
+    [false, true],
+  ])("handles Escape with launcher %s", (launcherOpen, shouldFocusEditor) => {
+    const options = makeKeyboardOptions(launcherOpen);
+    const root = createRoot(document.createElement("div"));
+    act(() => root.render(createElement(() => (useAppEffects(options), null))));
+    act(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
+    expect(options.setLauncherOpen).toHaveBeenCalledWith(false);
+    expect(options.setView).toHaveBeenCalledTimes(shouldFocusEditor ? 1 : 0);
+    expect(options.onEditorFocusRequest).toHaveBeenCalledTimes(shouldFocusEditor ? 1 : 0);
+    act(() => root.unmount());
+  });
+
+  it("captures the opener and toggles the launcher with Cmd/Ctrl-K", () => {
+    const options = makeKeyboardOptions(false);
+    const opener = document.createElement("button");
+    document.body.append(opener);
+    opener.focus();
+    const root = createRoot(document.createElement("div"));
+    act(() => root.render(createElement(() => (useAppEffects(options), null))));
+    act(() =>
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "k", ctrlKey: true, bubbles: true }),
+      ),
+    );
+    expect(options.launcherOpenerRef.current).toBe(opener);
+    const toggle = vi.mocked(options.setLauncherOpen).mock.calls[0][0];
+    expect(typeof toggle).toBe("function");
+    if (typeof toggle === "function") {
+      expect(toggle(false)).toBe(true);
+      expect(toggle(true)).toBe(false);
+    }
+    act(() => root.unmount());
+    opener.remove();
   });
 });
 
@@ -288,6 +368,7 @@ describe("mounted watcher disk handling", () => {
       pendingSaveRef: { current: pending },
       activeWritesRef: { current: activeWrites },
       onExternalFileAdopted: vi.fn(),
+      onFilesReplaced: vi.fn(),
       discardPendingSave: vi.fn(),
       lastSavedContentsRef: { current: new Map([["work.md", "old"]]) },
       workspaceReloadKey: 0,
@@ -297,6 +378,9 @@ describe("mounted watcher disk handling", () => {
       setDiskRefreshKey: vi.fn(),
       setLauncherOpen: vi.fn(),
       setView: vi.fn(),
+      launcherOpenRef: { current: false },
+      launcherOpenerRef: { current: null },
+      onEditorFocusRequest: vi.fn(),
       timerState: { status: "idle", presetMinutes: 10, startedAt: null, durationSeconds: 600 },
       setElapsedMs: vi.fn(),
       lastTraySecRef: { current: null },

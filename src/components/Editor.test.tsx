@@ -1,9 +1,10 @@
 import { act, createRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { EditorView } from "@codemirror/view";
+import { EditorSelection as CMEditorSelection } from "@codemirror/state";
 import { moveLineDown } from "@codemirror/commands";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
-import { Editor, type EditorHandle } from "./Editor";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { Editor, type EditorHandle, type EditorSelection } from "./Editor";
 
 beforeAll(() => {
   // React 19's act() checks an environment flag
@@ -26,7 +27,16 @@ interface MountedEditor {
   view: EditorView;
 }
 
-function mountEditor(initialContent: string, initialRaw = initialContent): MountedEditor {
+function mountEditor(
+  initialContent: string,
+  initialRaw = initialContent,
+  props: {
+    getInitialSelection?: () => EditorSelection | null;
+    onSelectionChange?: (selection: EditorSelection) => void;
+    autoFocus?: boolean;
+    focusSignal?: number;
+  } = {},
+): MountedEditor {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const ref = createRef<EditorHandle>();
@@ -38,6 +48,10 @@ function mountEditor(initialContent: string, initialRaw = initialContent): Mount
         initialContent={initialContent}
         initialRaw={initialRaw}
         onChange={() => {}}
+        getInitialSelection={props.getInitialSelection}
+        onSelectionChange={props.onSelectionChange}
+        autoFocus={props.autoFocus}
+        focusSignal={props.focusSignal}
         presets={[
           { minutes: 10, shortcut: null },
           { minutes: 30, shortcut: null },
@@ -55,6 +69,98 @@ function mountEditor(initialContent: string, initialRaw = initialContent): Mount
 }
 
 const CONTENT = ["## Schedule", "- [ ] tracked line +foo", "Memo"].join("\n");
+
+describe("Editor selection lifecycle", () => {
+  it("does not focus on mount when autoFocus is false", () => {
+    const { view } = mountEditor("text");
+    expect(document.activeElement).not.toBe(view.contentDOM);
+  });
+
+  it("only focuses changed signals when autoFocus is currently true", () => {
+    const { view } = mountEditor("text", "text", { autoFocus: false, focusSignal: 0 });
+    const focus = vi.spyOn(view, "focus");
+    act(() =>
+      mounted?.root.render(
+        <Editor
+          initialContent="text"
+          initialRaw="text"
+          onChange={() => {}}
+          autoFocus={false}
+          focusSignal={1}
+          presets={[]}
+        />,
+      ),
+    );
+    expect(focus).not.toHaveBeenCalled();
+    act(() =>
+      mounted?.root.render(
+        <Editor
+          initialContent="text"
+          initialRaw="text"
+          onChange={() => {}}
+          autoFocus
+          focusSignal={1}
+          presets={[]}
+        />,
+      ),
+    );
+    expect(focus).toHaveBeenCalled();
+  });
+
+  it("restores full multi-range selections through the initial-selection getter", () => {
+    const selection = {
+      ranges: [
+        { anchor: 1, head: 4 },
+        { anchor: 7, head: 8 },
+      ],
+      mainIndex: 1,
+    };
+    const changes: EditorSelection[] = [];
+    const { view } = mountEditor("0123456789", "0123456789", {
+      getInitialSelection: () => selection,
+      onSelectionChange: (next) => changes.push(next),
+    });
+    expect(view.state.selection.ranges.map(({ anchor, head }) => ({ anchor, head }))).toEqual(
+      selection.ranges,
+    );
+    expect(view.state.selection.mainIndex).toBe(1);
+    act(() =>
+      view.dispatch({
+        selection: CMEditorSelection.create(
+          selection.ranges.map(({ anchor, head }) => CMEditorSelection.range(anchor, head)),
+          1,
+        ),
+      }),
+    );
+    expect(changes[changes.length - 1]).toEqual(selection);
+  });
+
+  it("maps the cached selection after document edits", () => {
+    const changes: EditorSelection[] = [];
+    const { view } = mountEditor("abcd", "abcd", {
+      getInitialSelection: () => ({ ranges: [{ anchor: 2, head: 2 }], mainIndex: 0 }),
+      onSelectionChange: (selection) => changes.push(selection),
+    });
+    act(() => view.dispatch({ changes: { from: 0, insert: "XX" } }));
+    expect(changes[changes.length - 1]?.ranges).toEqual([{ anchor: 4, head: 4 }]);
+  });
+
+  it("clamps and normalizes cached selections for shorter content", () => {
+    const { view } = mountEditor("abc", "abc", {
+      getInitialSelection: () => ({
+        ranges: [
+          { anchor: 99, head: -4 },
+          { anchor: 2, head: 3 },
+        ],
+        mainIndex: 99,
+      }),
+    });
+    expect(view.state.selection.ranges.map(({ anchor, head }) => ({ anchor, head }))).toEqual([
+      { anchor: 0, head: 3 },
+    ]);
+    expect(view.state.selection.mainIndex).toBe(0);
+  });
+});
 
 describe("Editor tracking across external reloads", () => {
   it("re-identifies the tracked line by exact text after an external reload", () => {

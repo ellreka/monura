@@ -1,5 +1,6 @@
 import { formatDuration } from "../lib/log/analytics";
 import { DEBUG_FAST_FORWARD_SECONDS, formatClock, formatPresetLabel } from "../lib/timer";
+import { useLayoutEffect, useRef } from "react";
 import { cn } from "../lib/cn";
 
 function PlayGlyph() {
@@ -53,6 +54,7 @@ interface TimerBarProps {
   onResolveAssignToCursor: () => void;
   /** Dev-only: rewinds the running timer's start time so DEBUG_FAST_FORWARD_SECONDS remain. */
   onDebugFastForward: () => void;
+  autoFocusPending?: boolean;
 }
 
 const barClass =
@@ -74,7 +76,12 @@ export function TimerBar({
   onResolveLogOnly,
   onResolveAssignToCursor,
   onDebugFastForward,
+  autoFocusPending = false,
 }: TimerBarProps) {
+  const resolutionRef = useRef<HTMLButtonElement>(null);
+  useLayoutEffect(() => {
+    if (pending && autoFocusPending) resolutionRef.current?.focus();
+  }, [pending, autoFocusPending]);
   const totalMs = presetMinutes * 60 * 1000;
   const remainingMs = Math.max(0, totalMs - elapsedMs);
   const remainingRatio = isRunning ? Math.min(1, remainingMs / totalMs) : 0;
@@ -96,6 +103,7 @@ export function TimerBar({
           <button
             type="button"
             className="rounded-lg border border-border bg-pill px-[10px] py-1.5 text-xs text-ink enabled:hover:border-accent disabled:cursor-not-allowed disabled:opacity-40"
+            ref={resolutionRef}
             onClick={onResolveLogOnly}
           >
             Log only

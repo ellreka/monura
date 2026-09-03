@@ -133,6 +133,7 @@ type Options = {
   pendingSaveRef: MutableRef<MdFile | null>;
   activeWritesRef: MutableRef<number>;
   onExternalFileAdopted: (file: MdFile) => void;
+  onFilesReplaced: (files: MdFile[]) => void;
   discardPendingSave: () => void;
   lastSavedContentsRef: MutableRef<Map<string, string | null>>;
   workspaceReloadKey: number;
@@ -142,6 +143,9 @@ type Options = {
   setDiskRefreshKey: Dispatch<SetStateAction<number>>;
   setLauncherOpen: Dispatch<SetStateAction<boolean>>;
   setView: Dispatch<SetStateAction<AppView>>;
+  launcherOpenRef: MutableRef<boolean>;
+  launcherOpenerRef: MutableRef<HTMLElement | null>;
+  onEditorFocusRequest: () => void;
   timerState: TimerState;
   setElapsedMs: Dispatch<SetStateAction<number>>;
   lastTraySecRef: MutableRef<number | null>;
@@ -164,6 +168,7 @@ export function useAppEffects({
   pendingSaveRef,
   activeWritesRef,
   onExternalFileAdopted,
+  onFilesReplaced,
   discardPendingSave,
   lastSavedContentsRef,
   workspaceReloadKey,
@@ -173,6 +178,9 @@ export function useAppEffects({
   setDiskRefreshKey,
   setLauncherOpen,
   setView,
+  launcherOpenRef,
+  launcherOpenerRef,
+  onEditorFocusRequest,
   timerState,
   setElapsedMs,
   lastTraySecRef,
@@ -184,6 +192,8 @@ export function useAppEffects({
   const requestQuit = useEffectEvent(onQuit);
   const workspaceLoading = useEffectEvent(onWorkspaceLoading);
   const workspaceLoaded = useEffectEvent(onWorkspaceLoaded);
+  const filesReplaced = useEffectEvent(onFilesReplaced);
+  const editorFocusRequest = useEffectEvent(onEditorFocusRequest);
   const applyDiskFiles = useEffectEvent((diskFiles: MdFile[]) => {
     if (activeWritesRef.current > 0) {
       window.setTimeout(() => setDiskRefreshKey((key) => key + 1), 300);
@@ -214,6 +224,7 @@ export function useAppEffects({
       return;
     }
     for (const file of diskFiles) lastSavedContentsRef.current.set(file.name, file.raw);
+    filesReplaced(diskFiles);
     setFiles(diskFiles);
     setActiveIndex(nextIndex >= 0 ? nextIndex : 0);
     if (!active && activeName) discardPendingSave();
@@ -279,6 +290,7 @@ export function useAppEffects({
         if (cancelled || result === null) return;
         const { files: loaded, lastFile } = result;
         for (const file of loaded) lastSavedContentsRef.current.set(file.name, file.raw);
+        filesReplaced(loaded);
         setFiles(loaded);
         const restored =
           lastFile === null ? -1 : loaded.findIndex((file) => file.name === lastFile);
@@ -288,6 +300,7 @@ export function useAppEffects({
       })
       .catch((error) => {
         if (!cancelled) {
+          filesReplaced([]);
           setFiles([]);
           setActiveIndex(0);
           setLoadError(error instanceof Error ? error.message : String(error));
@@ -354,16 +367,22 @@ export function useAppEffects({
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        const wasOpen = launcherOpenRef.current;
         setLauncherOpen(false);
-        setView("editor");
+        if (!wasOpen) {
+          setView("editor");
+          editorFocusRequest();
+        }
       } else if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
+        if (!launcherOpenRef.current && document.activeElement instanceof HTMLElement)
+          launcherOpenerRef.current = document.activeElement;
         setLauncherOpen((open) => !open);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [setLauncherOpen, setView]);
+  }, [launcherOpenRef, launcherOpenerRef, setLauncherOpen, setView]);
 
   useEffect(() => {
     if (!isTauri()) return;
