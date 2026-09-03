@@ -28,8 +28,8 @@ vi.mock("../lib/settings", () => ({
 const stored = (globalHotkey: string | null = null) => ({
   dataDir: null,
   vimMode: false,
-  presets: [{ minutes: 10, shortcut: null }],
-  shortcuts: { startStop: null },
+  presets: [{ minutes: 10, shortcut: "Meta-1" }],
+  shortcuts: { startStop: null, toggleCheckbox: null },
   globalHotkey,
 });
 
@@ -38,8 +38,8 @@ let root: Root | null = null;
 let container: HTMLDivElement | null = null;
 let result: { current: Result };
 
-function mount() {
-  const editorRef = { current: null } as RefObject<EditorHandle | null>;
+function mount(editor: EditorHandle | null = null) {
+  const editorRef = { current: editor } as RefObject<EditorHandle | null>;
   function Harness() {
     result.current = useAppSettings(editorRef);
     return null;
@@ -74,6 +74,29 @@ afterEach(() => {
   if (root && container) act(() => root?.unmount());
   root = null;
   container = null;
+});
+
+describe("useAppSettings shortcuts", () => {
+  it("persists the complete shortcut set, resolves conflicts, and reconfigures immediately", async () => {
+    const editor = { setEditorKeymap: vi.fn() } as unknown as EditorHandle;
+    mount(editor);
+    await settle();
+    await act(async () => result.current.setToggleCheckbox("Meta-1"));
+    expect(result.current.toggleCheckboxShortcut).toBe("Meta-1");
+    expect(result.current.presets[0]?.shortcut).toBeNull();
+    expect(mocks.saveSettings).toHaveBeenLastCalledWith({
+      dataDir: null,
+      vimMode: false,
+      presets: [{ minutes: 10, shortcut: null }],
+      shortcuts: { startStop: null, toggleCheckbox: "Meta-1" },
+      globalHotkey: null,
+    });
+    expect(editor.setEditorKeymap).toHaveBeenLastCalledWith(
+      [{ minutes: 10, shortcut: null }],
+      null,
+      "Meta-1",
+    );
+  });
 });
 
 describe("useAppSettings global hotkey", () => {

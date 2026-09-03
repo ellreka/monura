@@ -5,6 +5,8 @@ const mocks = vi.hoisted(() => ({
   join: vi.fn(),
   save: vi.fn(),
   set: vi.fn(),
+  get: vi.fn(),
+  has: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/api/path", () => ({
@@ -16,10 +18,12 @@ vi.mock("@tauri-apps/plugin-store", () => ({
   LazyStore: class {
     save = mocks.save;
     set = mocks.set;
+    get = mocks.get;
+    has = mocks.has;
   },
 }));
 
-import { getSettingsFilePath, validateAppSettings } from "./settings";
+import { getSettingsFilePath, loadSettings, saveSettings, validateAppSettings } from "./settings";
 
 const settings = {
   dataDir: "/Users/example/Documents/monura",
@@ -31,12 +35,16 @@ const settings = {
   ],
   shortcuts: {
     startStop: "Meta-Enter",
+    toggleCheckbox: null,
   },
   globalHotkey: "Meta-Shift-M",
 };
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.get.mockResolvedValue(undefined);
+  mocks.has.mockResolvedValue(false);
+  vi.stubGlobal("localStorage", { getItem: vi.fn(() => null), removeItem: vi.fn() });
 });
 
 describe("validateAppSettings", () => {
@@ -64,6 +72,16 @@ describe("validateAppSettings", () => {
       expect(result.errors.join("\n")).toContain("/shortcuts/startStop");
       expect(result.errors.join("\n")).toContain("/shortcuts/toggle");
     }
+  });
+
+  it("rejects shortcuts missing toggleCheckbox", () => {
+    const result = validateAppSettings({
+      ...settings,
+      shortcuts: { startStop: settings.shortcuts.startStop },
+    });
+
+    expect(result).toMatchObject({ success: false });
+    if (!result.success) expect(result.errors.join("\n")).toContain("/shortcuts/toggleCheckbox");
   });
 
   it("keeps globalHotkey outside the shortcuts group", () => {
@@ -126,6 +144,15 @@ describe("validateAppSettings", () => {
     });
   });
 
+  it("rejects a duplicate toggle checkbox shortcut", () => {
+    expect(
+      validateAppSettings({
+        ...settings,
+        shortcuts: { startStop: "Meta-Enter", toggleCheckbox: "Meta-1" },
+      }),
+    ).toMatchObject({ success: false });
+  });
+
   it("requires a modifier for global shortcuts", () => {
     expect(validateAppSettings({ ...settings, globalHotkey: "F8" })).toEqual({
       success: false,
@@ -137,6 +164,22 @@ describe("validateAppSettings", () => {
     expect(validateAppSettings({ ...settings, globalHotkey: "Meta" })).toEqual({
       success: false,
       errors: ["/globalHotkey: A global shortcut requires a non-modifier key."],
+    });
+  });
+});
+
+describe("settings persistence shape", () => {
+  it("loads the default toggle checkbox shortcut", async () => {
+    await expect(loadSettings()).resolves.toMatchObject({
+      shortcuts: { startStop: "Meta-Enter", toggleCheckbox: "Meta-Shift-Enter" },
+    });
+  });
+
+  it("saves the complete shortcuts object", async () => {
+    await saveSettings({ ...settings, shortcuts: { startStop: null, toggleCheckbox: "Meta-T" } });
+    expect(mocks.set).toHaveBeenCalledWith("shortcuts", {
+      startStop: null,
+      toggleCheckbox: "Meta-T",
     });
   });
 });

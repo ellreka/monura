@@ -11,7 +11,7 @@ import { uiStateField } from "./uiState";
 import { editorTheme, markdownHighlighting } from "./theme";
 import { listContinuationKeymap } from "./listContinuation";
 import { vimNormalModeGuardKeymap } from "./vimGuard";
-import { createTimerKeymap } from "./timerKeymap";
+import { createLocalKeymap } from "./localKeymap";
 import type { TimerPreset } from "../timer";
 
 export interface CreateMonuraExtensionsOptions {
@@ -19,6 +19,7 @@ export interface CreateMonuraExtensionsOptions {
   vimMode?: boolean;
   presets?: readonly TimerPreset[];
   startStopShortcut?: string | null;
+  toggleCheckboxShortcut?: string | null;
   onSelectPreset?: (presetMinutes: number) => void;
   onToggle?: () => void;
   readOnly?: boolean;
@@ -34,7 +35,7 @@ export const vimModeCompartment = new Compartment();
  */
 export const vimEditableCompartment = new Compartment();
 
-export const timerKeymapCompartment = new Compartment();
+export const editorKeymapCompartment = new Compartment();
 export const readOnlyCompartment = new Compartment();
 
 // Disable the `:`-triggered Ex commands (:w, :q, etc.), because they don't mesh with this
@@ -54,10 +55,11 @@ export function createMonuraExtensions(options: CreateMonuraExtensionsOptions = 
     editorBaseSetup,
     keymap.of([indentWithTab]),
     listContinuationKeymap,
-    timerKeymapCompartment.of(
-      createTimerKeymap({
+    editorKeymapCompartment.of(
+      createLocalKeymap({
         presets: options.presets ?? [],
         startStopShortcut: options.startStopShortcut ?? null,
+        toggleCheckboxShortcut: options.toggleCheckboxShortcut ?? null,
         onSelectPreset: (minutes) => options.onSelectPreset?.(minutes),
         onToggle: () => options.onToggle?.(),
       }),

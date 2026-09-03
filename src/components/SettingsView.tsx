@@ -14,6 +14,8 @@ type SettingsViewProps = {
   onRemovePreset: (index: number) => void;
   startStopShortcut: string | null;
   onSetStartStopShortcut: (key: string | null) => void;
+  toggleCheckboxShortcut?: string | null;
+  onSetToggleCheckboxShortcut?: (key: string | null) => void;
   globalHotkey: string | null;
   globalHotkeyError?: string | null;
   globalHotkeyBusy?: boolean;
@@ -62,6 +64,8 @@ export function SettingsView({
   onRemovePreset,
   startStopShortcut,
   onSetStartStopShortcut,
+  toggleCheckboxShortcut = null,
+  onSetToggleCheckboxShortcut = () => {},
   globalHotkey,
   globalHotkeyError,
   globalHotkeyBusy = false,
@@ -144,6 +148,14 @@ export function SettingsView({
               value={startStopShortcut}
               onCommit={onSetStartStopShortcut}
               ariaLabel="Start / stop shortcut"
+              disabled={shortcutsDisabled}
+            />
+          </Row>
+          <Row label="Toggle checkbox" description="Toggles the task under the cursor.">
+            <ShortcutCaptureButton
+              value={toggleCheckboxShortcut}
+              onCommit={onSetToggleCheckboxShortcut}
+              ariaLabel="Toggle checkbox shortcut"
               disabled={shortcutsDisabled}
             />
           </Row>

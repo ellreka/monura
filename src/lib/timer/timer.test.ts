@@ -4,6 +4,7 @@ import {
   DEFAULT_PRESET_MINUTES,
   DEFAULT_PRESETS,
   DEFAULT_START_STOP_SHORTCUT,
+  DEFAULT_TOGGLE_CHECKBOX_SHORTCUT,
   computeElapsedMs,
   createIdleTimer,
   fastForwardToRemaining,
@@ -122,9 +123,10 @@ describe("DEFAULT_PRESETS", () => {
   });
 });
 
-describe("DEFAULT_START_STOP_SHORTCUT", () => {
-  it("matches the historical binding", () => {
+describe("shortcut defaults", () => {
+  it("matches the default bindings", () => {
     expect(DEFAULT_START_STOP_SHORTCUT).toBe("Meta-Enter");
+    expect(DEFAULT_TOGGLE_CHECKBOX_SHORTCUT).toBe("Meta-Shift-Enter");
   });
 });
 
@@ -167,10 +169,12 @@ describe("reassignShortcut", () => {
     { minutes: 30, shortcut: "Meta-2" },
   ];
   const startStop = "Meta-Enter";
+  const toggleCheckbox = "Meta-T";
 
   it("assigns a key to a preset", () => {
-    expect(reassignShortcut(presets, startStop, 1, "Meta-3")).toEqual({
-      startStop: "Meta-Enter",
+    expect(reassignShortcut(presets, startStop, toggleCheckbox, 1, "Meta-3")).toEqual({
+      startStop,
+      toggleCheckbox,
       presets: [
         { minutes: 10, shortcut: "Meta-1" },
         { minutes: 30, shortcut: "Meta-3" },
@@ -179,39 +183,81 @@ describe("reassignShortcut", () => {
   });
 
   it("assigns a key to the start/stop toggle", () => {
-    expect(reassignShortcut(presets, startStop, "startStop", "Meta-Space")).toEqual({
-      startStop: "Meta-Space",
+    expect(reassignShortcut(presets, startStop, toggleCheckbox, "startStop", "Meta-Space")).toEqual(
+      {
+        startStop: "Meta-Space",
+        toggleCheckbox,
+        presets,
+      },
+    );
+  });
+
+  it("assigns a key to the checkbox toggle", () => {
+    expect(
+      reassignShortcut(presets, startStop, toggleCheckbox, "toggleCheckbox", "Meta-Space"),
+    ).toEqual({
+      startStop,
+      toggleCheckbox: "Meta-Space",
       presets,
     });
   });
 
-  it("clears the key from whichever other preset held it (last write wins)", () => {
-    expect(reassignShortcut(presets, startStop, 1, "Meta-1")).toEqual({
-      startStop: "Meta-Enter",
-      presets: [
-        { minutes: 10, shortcut: null },
-        { minutes: 30, shortcut: "Meta-1" },
-      ],
+  it("clears a preset shortcut when it is claimed by each other action", () => {
+    expect(reassignShortcut(presets, startStop, toggleCheckbox, 1, "Meta-1")).toMatchObject({
+      presets: [{ shortcut: null }, { shortcut: "Meta-1" }],
+      startStop,
+      toggleCheckbox,
+    });
+    expect(
+      reassignShortcut(presets, startStop, toggleCheckbox, "startStop", "Meta-1"),
+    ).toMatchObject({
+      presets: [{ shortcut: null }, { shortcut: "Meta-2" }],
+      startStop: "Meta-1",
+      toggleCheckbox,
+    });
+    expect(
+      reassignShortcut(presets, startStop, toggleCheckbox, "toggleCheckbox", "Meta-1"),
+    ).toMatchObject({
+      presets: [{ shortcut: null }, { shortcut: "Meta-2" }],
+      startStop,
+      toggleCheckbox: "Meta-1",
     });
   });
 
-  it("clears the key from the toggle when a preset claims it", () => {
-    expect(reassignShortcut(presets, startStop, 1, "Meta-Enter")).toEqual({
-      startStop: null,
+  it("clears the checkbox shortcut when a preset claims it", () => {
+    expect(reassignShortcut(presets, startStop, toggleCheckbox, 1, "Meta-T")).toEqual({
+      startStop,
+      toggleCheckbox: null,
       presets: [
         { minutes: 10, shortcut: "Meta-1" },
-        { minutes: 30, shortcut: "Meta-Enter" },
+        { minutes: 30, shortcut: "Meta-T" },
       ],
     });
   });
 
-  it("clears a target without touching other bindings when key is null", () => {
-    expect(reassignShortcut(presets, startStop, 0, null)).toEqual({
-      startStop: "Meta-Enter",
-      presets: [
-        { minutes: 10, shortcut: null },
-        { minutes: 30, shortcut: "Meta-2" },
-      ],
+  it("clears the checkbox shortcut when start/stop claims it", () => {
+    expect(reassignShortcut(presets, startStop, toggleCheckbox, "startStop", "Meta-T")).toEqual({
+      startStop: "Meta-T",
+      toggleCheckbox: null,
+      presets,
+    });
+  });
+
+  it("clears the start/stop shortcut when the checkbox claims it", () => {
+    expect(
+      reassignShortcut(presets, "Meta-Enter", "Meta-T", "toggleCheckbox", "Meta-Enter"),
+    ).toEqual({
+      startStop: null,
+      toggleCheckbox: "Meta-Enter",
+      presets,
+    });
+  });
+
+  it("clears only the target when key is null", () => {
+    expect(reassignShortcut(presets, startStop, toggleCheckbox, "toggleCheckbox", null)).toEqual({
+      startStop,
+      toggleCheckbox: null,
+      presets,
     });
   });
 });
