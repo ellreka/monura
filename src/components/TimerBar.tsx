@@ -37,8 +37,6 @@ interface TimerBarProps {
   trackingLabel: string | null;
   /** The task currently under the cursor (independent of tracking state); shown while idle. */
   focusedTaskLabel: string | null;
-  /** The tracked line was lost while measuring. */
-  trackedLost: boolean;
   isRunning: boolean;
   canStart: boolean;
   presetMinutes: number;
@@ -63,7 +61,6 @@ const barClass =
 export function TimerBar({
   trackingLabel,
   focusedTaskLabel,
-  trackedLost,
   isRunning,
   canStart,
   presetMinutes,
@@ -142,13 +139,7 @@ export function TimerBar({
         className="relative z-[1] min-w-0 flex-1 truncate text-xs text-muted"
         title={displayLabel ?? undefined}
       >
-        {trackedLost ? (
-          <span className="font-semibold text-accent">
-            Tracked line not found (choose destination when stopping)
-          </span>
-        ) : (
-          displayLabel
-        )}
+        {displayLabel}
       </div>
       <div className="relative z-[1] flex flex-none items-center gap-[10px]">
         <div className="flex gap-1 rounded-lg bg-white/6 p-0.5">

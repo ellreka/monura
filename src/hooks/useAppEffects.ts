@@ -133,7 +133,6 @@ type Options = {
   pendingSaveRef: MutableRef<MdFile | null>;
   activeWritesRef: MutableRef<number>;
   onExternalFileAdopted: (file: MdFile) => void;
-  onExternalFileMissing: (name: string) => void;
   discardPendingSave: () => void;
   lastSavedContentsRef: MutableRef<Map<string, string | null>>;
   workspaceReloadKey: number;
@@ -165,7 +164,6 @@ export function useAppEffects({
   pendingSaveRef,
   activeWritesRef,
   onExternalFileAdopted,
-  onExternalFileMissing,
   discardPendingSave,
   lastSavedContentsRef,
   workspaceReloadKey,
@@ -218,10 +216,7 @@ export function useAppEffects({
     for (const file of diskFiles) lastSavedContentsRef.current.set(file.name, file.raw);
     setFiles(diskFiles);
     setActiveIndex(nextIndex >= 0 ? nextIndex : 0);
-    if (!active && activeName) {
-      discardPendingSave();
-      onExternalFileMissing(activeName);
-    }
+    if (!active && activeName) discardPendingSave();
     if (changed) {
       discardPendingSave();
       onExternalFileAdopted(active);

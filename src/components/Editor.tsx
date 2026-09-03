@@ -29,11 +29,6 @@ export interface CursorLineChangeInfo extends CursorLineInfo {
   isTask: boolean;
 }
 
-export interface TrackedLineChangeInfo {
-  lineNumber: number;
-  text: string;
-}
-
 export interface StopTrackingResult {
   deleted: boolean;
   lineText: string;
@@ -51,11 +46,7 @@ export interface EditorHandle {
   stopTracking(elapsedSeconds: number, applySpent?: boolean): StopTrackingResult;
   /** Inheritance-resolved projects for the tracked line. null while not tracking. */
   getTrackedProjects(): string[] | null;
-  /**
-   * Replaces the whole doc (used to reflect external edits; never called from our own edit path).
-   * While tracking, re-identifies the tracked line by exact text match; if not found,
-   * calls onTrackedLineLost (merging with the same flow as line deletion). Undo history is reset.
-   */
+  /** Replaces the whole doc (used to reflect external edits; never called from our own edit path). */
   reloadContent(text: string, raw: string): void;
   /**
    * Adds spent: to the given line (used to pick a new recording target after the tracked line is lost).
@@ -79,9 +70,6 @@ interface EditorProps {
   startStopShortcut?: string | null;
   onVimStatusChange?: (status: string | null) => void;
   onCursorLineChange?: (info: CursorLineChangeInfo) => void;
-  onTrackedLineChange?: (info: TrackedLineChangeInfo) => void;
-  /** Called when the tracked line is lost (deleted, or not re-identified after an external edit). */
-  onTrackedLineLost?: () => void;
   /** Changes the selected preset only — never starts tracking. */
   onSelectPreset?: (presetMinutes: number) => void;
   /** Starts tracking with the current preset when idle, stops when running. */
@@ -99,8 +87,6 @@ export function Editor({
   startStopShortcut = null,
   onVimStatusChange,
   onCursorLineChange,
-  onTrackedLineChange,
-  onTrackedLineLost,
   onSelectPreset,
   onToggle,
   readOnly = false,
@@ -119,8 +105,6 @@ export function Editor({
     onChange,
     onVimStatusChange,
     onCursorLineChange,
-    onTrackedLineChange,
-    onTrackedLineLost,
     onSelectPreset,
     onToggle,
   });
@@ -129,8 +113,6 @@ export function Editor({
       onChange,
       onVimStatusChange,
       onCursorLineChange,
-      onTrackedLineChange,
-      onTrackedLineLost,
       onSelectPreset,
       onToggle,
     };
@@ -258,22 +240,14 @@ export function Editor({
               if (currentActiveLine !== nextLine) {
                 update.view.dispatch({ effects: setUiStateEffect.of({ activeLine: nextLine }) });
               }
-              if (nextLine === null) {
-                // Line deletion is not blocking; the user picks the recording target when tracking ends
-                latest.current.onTrackedLineLost?.();
-              } else {
+              if (nextLine !== null) {
                 const trackedLine = update.state.doc.line(nextLine);
                 if (!parseLines(update.state.doc.toString())[nextLine - 1]?.isTask) {
                   trackedAnchorRef.current = null;
                   trackedTextRef.current = null;
                   update.view.dispatch({ effects: setUiStateEffect.of({ activeLine: null }) });
-                  latest.current.onTrackedLineLost?.();
                 } else {
                   trackedTextRef.current = trackedLine.text;
-                  latest.current.onTrackedLineChange?.({
-                    lineNumber: nextLine,
-                    text: trackedLine.text,
-                  });
                 }
               }
             }
@@ -440,13 +414,11 @@ export function Editor({
           trackedAnchorRef.current = null;
           trackedTextRef.current = null;
           view.dispatch({ effects: setUiStateEffect.of({ activeLine: null }) });
-          latest.current.onTrackedLineLost?.();
           return;
         }
         trackedAnchorRef.current = found.from;
         trackedTextRef.current = found.text;
         view.dispatch({ effects: setUiStateEffect.of({ activeLine: found.number }) });
-        latest.current.onTrackedLineChange?.({ lineNumber: found.number, text: found.text });
       },
 
       applySpentToLine(lineNumber, elapsedSeconds) {

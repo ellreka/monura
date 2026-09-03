@@ -62,7 +62,6 @@ describe("quit request handling", () => {
       pendingSaveRef: { current: null },
       activeWritesRef: { current: 0 },
       onExternalFileAdopted: vi.fn(),
-      onExternalFileMissing: vi.fn(),
       discardPendingSave: vi.fn(),
       lastSavedContentsRef: { current: new Map() },
       workspaceReloadKey: 0,
@@ -289,7 +288,6 @@ describe("mounted watcher disk handling", () => {
       pendingSaveRef: { current: pending },
       activeWritesRef: { current: activeWrites },
       onExternalFileAdopted: vi.fn(),
-      onExternalFileMissing: vi.fn(),
       discardPendingSave: vi.fn(),
       lastSavedContentsRef: { current: new Map([["work.md", "old"]]) },
       workspaceReloadKey: 0,
@@ -332,7 +330,6 @@ describe("mounted watcher disk handling", () => {
     expect(options.discardPendingSave).not.toHaveBeenCalled();
     expect(options.onExternalFileAdopted).not.toHaveBeenCalled();
     expect(options.setFiles).not.toHaveBeenCalled();
-    expect(options.onExternalFileMissing).not.toHaveBeenCalled();
     act(() => vi.advanceTimersByTime(300));
     await act(async () => {
       await Promise.resolve();
@@ -397,8 +394,6 @@ describe("mounted watcher disk handling", () => {
     });
     expect(options.setFiles).toHaveBeenCalledWith([]);
     expect(options.discardPendingSave).toHaveBeenCalledTimes(1);
-    expect(options.onExternalFileMissing).toHaveBeenCalledTimes(1);
-    expect(options.onExternalFileMissing).toHaveBeenCalledWith("work.md");
     act(() => root.unmount());
     vi.useRealTimers();
   });

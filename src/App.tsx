@@ -216,7 +216,6 @@ function App() {
   const [elapsedMs, setElapsedMs] = useState(0);
   const [trackingLabel, setTrackingLabel] = useState<string | null>(null);
   const [trackingProjects, setTrackingProjects] = useState<string[]>([]);
-  const [trackedLost, setTrackedLost] = useState(false);
   const [pendingResolution, setPendingResolution] = useState<PendingResolution | null>(null);
   const [focusedTaskLabel, setFocusedTaskLabel] = useState<string | null>(null);
   const [view, setView] = useState<AppView>("editor");
@@ -235,10 +234,8 @@ function App() {
   const pendingSaveRef = useRef<MdFile | null>(null);
   const saveInFlightRef = useRef<Promise<void>>(Promise.resolve());
   const activeWritesRef = useRef(0);
-  const applyingExternalRef = useRef(false);
   const lastTraySecRef = useRef<number | null>(null);
   const stoppingRef = useRef(false);
-  const trackedLostRef = useRef(false);
   const fileOperationRef = useRef(Promise.resolve());
   const activeSessionRef = useRef<ActiveSession | null>(null);
   const lastSavedContentsRef = useRef(new Map<string, string | null>());
@@ -438,7 +435,6 @@ function App() {
   }, []);
 
   const handleDocChange = (text: string, raw: string) => {
-    if (applyingExternalRef.current) return;
     setFiles((prev) =>
       prev.map((file, index) => (index === activeIndex ? { ...file, content: text, raw } : file)),
     );
@@ -454,20 +450,7 @@ function App() {
   };
 
   const handleExternalFileAdopted = (file: MdFile) => {
-    applyingExternalRef.current = true;
-    try {
-      editorRef.current?.reloadContent(file.content, file.raw);
-    } finally {
-      applyingExternalRef.current = false;
-    }
-    setSaveError(null);
-  };
-
-  const handleExternalFileMissing = (name: string) => {
-    if (activeSessionRef.current?.file === name) {
-      trackedLostRef.current = true;
-      setTrackedLost(true);
-    }
+    editorRef.current?.reloadContent(file.content, file.raw);
     setSaveError(null);
   };
 
@@ -679,8 +662,6 @@ function App() {
     activeSessionRef.current = session;
     setTrackingLabel(label);
     setTrackingProjects(projects);
-    trackedLostRef.current = false;
-    setTrackedLost(false);
     setTimerState(startTimer(presetMinutes, session.startedAt));
     setElapsedMs(0);
     lastTraySecRef.current = presetMinutes * 60;
@@ -696,11 +677,10 @@ function App() {
     const now = Date.now();
     const session = activeSessionRef.current;
     const { elapsedSeconds } = stopTimer(timerState, now);
-    const safeTarget = !trackedLostRef.current;
-    const stopped = editorRef.current?.stopTracking(elapsedSeconds, safeTarget);
+    const stopped = editorRef.current?.stopTracking(elapsedSeconds);
 
     let completed = false;
-    if (safeTarget && session && stopped && !stopped.deleted) {
+    if (session && stopped && !stopped.deleted) {
       const record = createSessionRecord({
         file: session.file,
         startedAt: session.startedAt,
@@ -727,8 +707,6 @@ function App() {
     setElapsedMs(0);
     setTrackingLabel(null);
     setTrackingProjects([]);
-    trackedLostRef.current = false;
-    setTrackedLost(false);
     lastTraySecRef.current = null;
     trayStop();
     timerDisarm();
@@ -822,7 +800,6 @@ function App() {
     pendingSaveRef,
     activeWritesRef,
     onExternalFileAdopted: handleExternalFileAdopted,
-    onExternalFileMissing: handleExternalFileMissing,
     discardPendingSave,
     lastSavedContentsRef,
     workspaceReloadKey,
@@ -969,10 +946,6 @@ function App() {
                 onCursorLineChange={(info) =>
                   setFocusedTaskLabel(info.isTask ? toTrackingLabel(info.text) : null)
                 }
-                onTrackedLineLost={() => {
-                  trackedLostRef.current = true;
-                  setTrackedLost(true);
-                }}
                 startStopShortcut={startStopShortcut}
                 onSelectPreset={setPresetMinutes}
                 onToggle={handleToggleTracking}
@@ -1045,7 +1018,6 @@ function App() {
       <TimerBar
         trackingLabel={trackingLabel}
         focusedTaskLabel={focusedTaskLabel}
-        trackedLost={trackedLost}
         isRunning={isRunning}
         canStart={
           isCursorOnTask &&

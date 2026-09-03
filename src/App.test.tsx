@@ -1,4 +1,4 @@
-import { act, createElement, useEffect } from "react";
+import { act, createElement, useEffect, useImperativeHandle, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { EditorHandle } from "./components/Editor";
@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   initialDataDir: null as string | null,
   effects: { current: null as Record<string, unknown> | null },
   editor: null as Record<string, unknown> | null,
+  editors: [] as Array<Record<string, unknown>>,
   invoke: vi.fn(),
   pickDataDir: vi.fn(),
   ensureDefaultDataDir: vi.fn(),
@@ -63,33 +64,45 @@ vi.mock("./hooks/useAppSettings", () => ({
 vi.mock("./components/Editor", () => ({
   Editor: ({
     onCursorLineChange,
-    onTrackedLineLost,
     ref,
     onChange,
   }: {
     onCursorLineChange?: (info: { isTask: boolean; text: string }) => void;
-    onTrackedLineLost?: () => void;
     ref?: { current: EditorHandle | null };
     onChange?: (text: string, raw: string) => void;
   }) => {
-    const handle = {
-      getCursorLine: () => ({ lineNumber: 1, text: "- [ ] start +old" }),
-      startTracking: () => ({ lineNumber: 1, text: "- [ ] start +old" }),
-      stopTracking: mocks.stopTracking,
-      getTrackedProjects: () => ["old"],
-      reloadContent: vi.fn(),
-      applySpentToLine: mocks.applySpentToLine,
-      focus: vi.fn(),
-      setVimMode: vi.fn(),
-      setTimerKeymap: vi.fn(),
-    };
+    const instanceRef = useRef<EditorHandle | null>(null);
+    const trackedRef = useRef(false);
+    if (!instanceRef.current) {
+      instanceRef.current = {
+        getCursorLine: () => ({ lineNumber: 1, text: "- [ ] start +old" }),
+        startTracking: vi.fn(() => {
+          trackedRef.current = true;
+          return { lineNumber: 1, text: "- [ ] start +old" };
+        }),
+        stopTracking: vi.fn((elapsedSeconds: number) => {
+          if (!trackedRef.current) return { deleted: true, lineText: "", projects: [] };
+          trackedRef.current = false;
+          return mocks.stopTracking(elapsedSeconds);
+        }),
+        getTrackedProjects: () => ["old"],
+        reloadContent: vi.fn(),
+        applySpentToLine: mocks.applySpentToLine,
+        focus: vi.fn(),
+        setVimMode: vi.fn(),
+        setTimerKeymap: vi.fn(),
+      };
+      mocks.editors.push({ handle: instanceRef.current });
+    }
+    const handle = instanceRef.current;
     mocks.editor = {
-      onTrackedLineLost,
+      handle,
       onChange,
       onCursorLineChange,
       reloadContent: handle.reloadContent,
+      stopTracking: handle.stopTracking,
     };
-    if (ref) ref.current = handle;
+    useImperativeHandle(ref, () => handle, [handle]);
     useEffect(
       () => onCursorLineChange?.({ isTask: true, text: "- [ ] start +old" }),
       [onCursorLineChange],
@@ -104,7 +117,6 @@ vi.mock("./components/TimerBar", () => ({
     pending,
     onResolveLogOnly,
     onResolveAssignToCursor,
-    trackedLost,
     isRunning,
     trackingLabel,
   }: {
@@ -113,7 +125,6 @@ vi.mock("./components/TimerBar", () => ({
     pending: unknown;
     onResolveLogOnly: () => void;
     onResolveAssignToCursor: () => void;
-    trackedLost: boolean;
     isRunning: boolean;
     trackingLabel: string | null;
   }) =>
@@ -129,7 +140,6 @@ vi.mock("./components/TimerBar", () => ({
         "Assign",
       ),
       createElement("span", { "data-testid": "tracking-label" }, trackingLabel),
-      createElement("span", { "data-testid": "lost" }, String(trackedLost)),
       createElement("span", { "data-testid": "running" }, String(isRunning)),
       createElement("pre", { "data-testid": "pending" }, JSON.stringify(pending)),
     ),
@@ -177,6 +187,7 @@ beforeEach(() => {
   mocks.initialDataDir = null;
   mocks.effects.current = null;
   mocks.editor = null;
+  mocks.editors = [];
   mocks.loadRecords = null;
   mocks.stopTracking.mockReturnValue({
     deleted: false,
@@ -214,13 +225,24 @@ describe("rendered App timer resolution", () => {
     expect(container?.querySelector("[data-testid=running]")?.textContent).toBe("true");
   });
 
-  it("marks an externally deleted target lost and logs only its start snapshot", async () => {
+  it("keeps an externally deleted target normal until stop, then offers resolution", async () => {
     start();
-    act(() => (mocks.effects.current?.onExternalFileMissing as (name: string) => void)("work.md"));
-    expect(container?.querySelector("[data-testid=lost]")?.textContent).toBe("true");
+    const snapshot = {
+      file: "work.md",
+      lineText: "- [ ] start +old",
+      projects: ["old"],
+    };
+    act(() => (mocks.effects.current?.setFiles as (files: unknown[]) => void)([]));
+    expect(container?.querySelector("[data-testid=editor]")).toBeNull();
     expect(container?.querySelector("[data-testid=running]")?.textContent).toBe("true");
+    expect(container?.querySelector("[data-testid=pending]")?.textContent).toBe("null");
+    expect(container?.textContent).not.toContain("Could not finish session");
     await stop();
-    expect(mocks.stopTracking).toHaveBeenLastCalledWith(expect.any(Number), false);
+    expect(mocks.stopTracking).not.toHaveBeenCalled();
+    expect(container?.querySelector("[data-testid=running]")?.textContent).toBe("false");
+    expect(container?.querySelector("[data-testid=pending]")?.textContent).not.toBe("null");
+    expect(mocks.applySpentToLine).not.toHaveBeenCalled();
+    expect(mocks.invoke).not.toHaveBeenCalledWith("append_session_log", expect.anything());
     await act(async () => {
       container?.querySelector<HTMLButtonElement>("[data-testid=log-only]")?.click();
       await Promise.resolve();
@@ -228,9 +250,7 @@ describe("rendered App timer resolution", () => {
     await openLog();
     expect(await sessionRecords()).toHaveLength(1);
     expect((await sessionRecords())[0]).toMatchObject({
-      file: "work.md",
-      lineText: "- [ ] start +old",
-      projects: ["old"],
+      ...snapshot,
       lineDeleted: true,
     });
   });
@@ -249,7 +269,7 @@ describe("rendered App timer resolution", () => {
     });
     expect(container?.querySelector("[data-testid=tracking-label]")?.textContent).toBe("start");
     await stop();
-    expect(mocks.stopTracking).toHaveBeenCalledWith(expect.any(Number), true);
+    expect(mocks.stopTracking).toHaveBeenCalledWith(expect.any(Number));
     await openLog();
     expect(await sessionRecords()).toHaveLength(1);
     expect((await sessionRecords())[0]).toMatchObject({
@@ -258,10 +278,23 @@ describe("rendered App timer resolution", () => {
     });
   });
 
-  it("assigns once after the target file disappears and keeps the start snapshot", async () => {
+  it("assigns once after external deletion with a replacement file", async () => {
     start();
-    act(() => (mocks.effects.current?.onExternalFileMissing as (name: string) => void)("work.md"));
+    const replacement = { name: "next.md", content: "- [ ] destination", raw: "- [ ] destination" };
+    act(() => (mocks.effects.current?.setFiles as (files: unknown[]) => void)([replacement]));
+    (mocks.effects.current?.filesRef as { current: unknown[] }).current = [replacement];
     await stop();
+    expect(mocks.stopTracking).not.toHaveBeenCalled();
+    expect(mocks.editors).toHaveLength(2);
+    const replacementEditor = mocks.editors[1];
+    expect((replacementEditor.handle as EditorHandle).stopTracking).toHaveBeenCalledWith(
+      expect.any(Number),
+    );
+    expect((replacementEditor.handle as EditorHandle).stopTracking).toHaveReturnedWith({
+      deleted: true,
+      lineText: "",
+      projects: [],
+    });
     await act(async () => {
       container?.querySelector<HTMLButtonElement>("[data-testid=assign]")?.click();
       container?.querySelector<HTMLButtonElement>("[data-testid=assign]")?.click();
@@ -271,7 +304,7 @@ describe("rendered App timer resolution", () => {
     await openLog();
     expect(await sessionRecords()).toHaveLength(1);
     expect((await sessionRecords())[0]).toMatchObject({
-      file: "work.md",
+      file: "next.md",
       lineText: "- [ ] start +old",
       projects: ["old"],
     });
@@ -323,6 +356,7 @@ describe("rendered App write conflict resolution", () => {
       ),
     ).toBe(false);
     expect(mocks.invoke).not.toHaveBeenCalledWith("append_session_log", expect.anything());
+    const writesBeforeExternal = mocks.writeMdFile.mock.calls.length;
     act(() =>
       (mocks.effects.current?.onExternalFileAdopted as (file: unknown) => void)({
         name: "work.md",
@@ -331,6 +365,7 @@ describe("rendered App write conflict resolution", () => {
       }),
     );
     expect(mocks.editor?.reloadContent).toHaveBeenCalledWith("external", "external");
+    expect(mocks.writeMdFile).toHaveBeenCalledTimes(writesBeforeExternal);
     await act(async () => {
       container?.querySelector<HTMLButtonElement>("[data-testid=log-only]")?.click();
       await Promise.resolve();
