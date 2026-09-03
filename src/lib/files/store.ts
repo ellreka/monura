@@ -1,13 +1,37 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import { detectEol, fromLf, toLf, type Eol } from "./eol";
+import { toLf } from "./eol";
 
 export interface MdFile {
   name: string;
   /** LF-normalized content (for editor display). */
   content: string;
-  /** The original file's line ending. Restored on save. */
-  eol: Eol;
+  raw: string;
+}
+
+export type ExpectedRevision = { kind: "content"; raw: string } | { kind: "missing" };
+export type WriteConflict = {
+  kind: "conflict";
+  name: string;
+  disk: { kind: "content"; raw: string } | { kind: "missing" };
+};
+export type MdReadError = { kind: "not_found" } | { kind: "io"; message: string };
+
+export function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  if (error && typeof error === "object" && "message" in error) return String(error.message);
+  return JSON.stringify(error) ?? String(error);
+}
+
+export function isMdNotFound(error: unknown): boolean {
+  return !!error && typeof error === "object" && (error as { kind?: unknown }).kind === "not_found";
+}
+
+export function isWriteConflict(error: unknown): error is WriteConflict {
+  return (
+    typeof error === "object" && error !== null && (error as { kind?: unknown }).kind === "conflict"
+  );
 }
 
 export async function listMdFiles(dir: string): Promise<string[]> {
@@ -16,14 +40,19 @@ export async function listMdFiles(dir: string): Promise<string[]> {
 
 export async function readMdFile(dir: string, name: string): Promise<MdFile> {
   const raw = await invoke<string>("read_md_file", { dir, name });
-  return { name, content: toLf(raw), eol: detectEol(raw) };
+  return { name, content: toLf(raw), raw };
 }
 
-export async function writeMdFile(dir: string, file: MdFile): Promise<void> {
+export async function writeMdFile(
+  dir: string,
+  file: MdFile,
+  expectedRevision: ExpectedRevision | null,
+): Promise<void> {
   await invoke("write_md_file", {
     dir,
     name: file.name,
-    contents: fromLf(file.content, file.eol),
+    contents: file.raw,
+    expectedRevision: expectedRevision ?? null,
   });
 }
 

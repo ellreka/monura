@@ -23,6 +23,12 @@ pub fn show_main_window(app: &AppHandle) {
     }
 }
 
+#[tauri::command]
+pub fn show_main_window_command(app: AppHandle) -> Result<(), String> {
+    show_main_window(&app);
+    Ok(())
+}
+
 /// Builds the tray icon (initially hidden) and its menu — a read-only current-task label, a
 /// Stop action, and Show/Quit — then stores the handles as managed state.
 pub fn setup(app: &tauri::App) -> tauri::Result<()> {
@@ -56,7 +62,7 @@ pub fn setup(app: &tauri::App) -> tauri::Result<()> {
             } else if event.id() == "tray-show" {
                 show_main_window(app_handle);
             } else if event.id() == "tray-quit" {
-                app_handle.exit(0);
+                let _ = app_handle.emit("quit-requested", ());
             }
         })
         .build(app)?;
@@ -71,9 +77,18 @@ pub fn setup(app: &tauri::App) -> tauri::Result<()> {
 #[tauri::command]
 pub fn tray_start(app: AppHandle, label: String, remaining: String) -> Result<(), String> {
     let handles = app.state::<TrayHandles>();
-    handles.task_item.set_text(&label).map_err(|e| e.to_string())?;
-    handles.icon.set_tooltip(Some(&label)).map_err(|e| e.to_string())?;
-    handles.icon.set_title(Some(&remaining)).map_err(|e| e.to_string())?;
+    handles
+        .task_item
+        .set_text(&label)
+        .map_err(|e| e.to_string())?;
+    handles
+        .icon
+        .set_tooltip(Some(&label))
+        .map_err(|e| e.to_string())?;
+    handles
+        .icon
+        .set_title(Some(&remaining))
+        .map_err(|e| e.to_string())?;
     handles.icon.set_visible(true).map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -82,7 +97,10 @@ pub fn tray_start(app: AppHandle, label: String, remaining: String) -> Result<()
 #[tauri::command]
 pub fn tray_tick(app: AppHandle, remaining: String) -> Result<(), String> {
     let handles = app.state::<TrayHandles>();
-    handles.icon.set_title(Some(&remaining)).map_err(|e| e.to_string())?;
+    handles
+        .icon
+        .set_title(Some(&remaining))
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -91,7 +109,13 @@ pub fn tray_tick(app: AppHandle, remaining: String) -> Result<(), String> {
 pub fn tray_stop(app: AppHandle) -> Result<(), String> {
     let handles = app.state::<TrayHandles>();
     handles.icon.set_visible(false).map_err(|e| e.to_string())?;
-    handles.icon.set_title(None::<&str>).map_err(|e| e.to_string())?;
-    handles.icon.set_tooltip(None::<&str>).map_err(|e| e.to_string())?;
+    handles
+        .icon
+        .set_title(None::<&str>)
+        .map_err(|e| e.to_string())?;
+    handles
+        .icon
+        .set_tooltip(None::<&str>)
+        .map_err(|e| e.to_string())?;
     Ok(())
 }

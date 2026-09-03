@@ -4,8 +4,11 @@ mod hotkey;
 mod tray;
 mod watch;
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::menu::{MenuBuilder, MenuItem, SubmenuBuilder};
 use tauri::{Emitter, Manager, RunEvent, WindowEvent};
+
+pub(crate) static EXIT_ALLOWED: AtomicBool = AtomicBool::new(false);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -28,6 +31,7 @@ pub fn run() {
             commands::rename_md_file,
             commands::delete_md_file,
             commands::ensure_default_data_dir,
+            commands::exit_app,
             commands::append_session_log,
             commands::list_session_logs,
             commands::read_session_log,
@@ -35,6 +39,7 @@ pub fn run() {
             tray::tray_start,
             tray::tray_tick,
             tray::tray_stop,
+            tray::show_main_window_command,
             alarm::timer_arm,
             alarm::timer_disarm,
             hotkey::set_global_hotkey,
@@ -51,6 +56,7 @@ pub fn run() {
 
             let preferences =
                 MenuItem::with_id(handle, "preferences", "Preferences...", true, Some("Cmd+,"))?;
+            let quit = MenuItem::with_id(handle, "app-quit", "Quit monura", true, Some("Cmd+Q"))?;
 
             let app_menu = SubmenuBuilder::new(handle, "monura")
                 .about(None)
@@ -63,7 +69,7 @@ pub fn run() {
                 .hide_others()
                 .show_all()
                 .separator()
-                .quit()
+                .item(&quit)
                 .build()?;
 
             let edit_menu = SubmenuBuilder::new(handle, "Edit")
@@ -90,6 +96,8 @@ pub fn run() {
             app.on_menu_event(move |app_handle, event| {
                 if event.id() == "preferences" {
                     let _ = app_handle.emit("open-settings", ());
+                } else if event.id() == "app-quit" {
+                    let _ = app_handle.emit("quit-requested", ());
                 }
             });
 
@@ -100,6 +108,15 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
         .run(|app_handle, event| {
+            if let RunEvent::ExitRequested { api, .. } = &event {
+                if EXIT_ALLOWED.swap(false, Ordering::SeqCst) {
+                    return;
+                }
+                api.prevent_exit();
+                let _ = app_handle.emit("quit-requested", ());
+                return;
+            }
+
             // Hide instead of quitting so a running timer keeps counting in the background;
             // the tray icon (or the dock icon on macOS) brings the window back.
             if let RunEvent::WindowEvent {

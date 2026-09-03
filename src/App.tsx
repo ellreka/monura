@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useRef, useState } from "react";
+import { type ReactNode, useCallback, useLayoutEffect, useRef, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import "./App.css";
 import { Editor, type EditorHandle } from "./components/Editor";
@@ -12,6 +12,7 @@ import { SAMPLE_FILES } from "./sampleFiles";
 import { SAMPLE_SESSION_RECORDS } from "./sampleSessionLog";
 import {
   appendSessionLog,
+  errorMessage,
   createMdFile,
   deleteMdFile,
   ensureDefaultDataDir,
@@ -20,8 +21,9 @@ import {
   readSessionLog,
   renameMdFile,
   writeMdFile,
-  type Eol,
   type MdFile,
+  type ExpectedRevision,
+  isWriteConflict,
 } from "./lib/files";
 import { baseTitle, parseSessionLines } from "./lib/log/analytics";
 import {
@@ -46,6 +48,24 @@ import { useAppEffects } from "./hooks/useAppEffects";
 import { useAppSettings } from "./hooks/useAppSettings";
 
 type PendingResolution = Omit<CreateSessionRecordInput, "lineDeleted">;
+
+type ActiveSession = {
+  file: string;
+  startedAt: number;
+  presetMinutes: number;
+  lineText: string;
+  projects: string[];
+};
+
+type PendingCommit = {
+  record: SessionRecord;
+  needsMarkdownSave: boolean;
+};
+
+type ExternalConflict = {
+  name: string;
+  file: MdFile | null;
+};
 
 function toTrackingLabel(text: string): string {
   const title = baseTitle(text);
@@ -192,10 +212,11 @@ function App() {
     setGlobal: handleSetGlobalHotkey,
   } = useAppSettings(editorRef);
   const [files, setFiles] = useState<MdFile[]>(() =>
-    isTauri() ? [] : SAMPLE_FILES.map((f) => ({ ...f, eol: "\n" as Eol })),
+    isTauri() ? [] : SAMPLE_FILES.map((f) => ({ ...f, raw: f.content })),
   );
   const [activeIndex, setActiveIndex] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
   const [timerState, setTimerState] = useState<TimerState>(() => createIdleTimer(presetMinutes));
   const [elapsedMs, setElapsedMs] = useState(0);
   const [trackingLabel, setTrackingLabel] = useState<string | null>(null);
@@ -207,6 +228,14 @@ function App() {
   const [launcherOpen, setLauncherOpen] = useState(false);
   const [logRefreshKey, setLogRefreshKey] = useState(0);
   const [diskRefreshKey, setDiskRefreshKey] = useState(0);
+  const [pendingCommit, setPendingCommit] = useState<PendingCommit | null>(null);
+  const [saveError, setSaveErrorState] = useState<string | null>(null);
+  const [commitError, setCommitErrorState] = useState<string | null>(null);
+  const [isCommitting, setIsCommitting] = useState(false);
+  const [isSavingBoundary, setIsSavingBoundary] = useState(false);
+  const [isWorkspaceLoading, setIsWorkspaceLoading] = useState(false);
+  const [workspaceReloadKey, setWorkspaceReloadKey] = useState(0);
+  const [externalConflict, setExternalConflict] = useState<ExternalConflict | null>(null);
 
   const sessionLogRef = useRef(createInitialSessionLog());
   const saveTimerRef = useRef<number | undefined>(undefined);
@@ -216,15 +245,94 @@ function App() {
   const applyingExternalRef = useRef(false);
   const lastTraySecRef = useRef<number | null>(null);
   const stoppingRef = useRef(false);
-  const refreshGenerationRef = useRef(0);
+  const trackedLostRef = useRef(false);
   const fileOperationRef = useRef(Promise.resolve());
+  const activeSessionRef = useRef<ActiveSession | null>(null);
+  const externalConflictRef = useRef<ExternalConflict | null>(null);
+  const lastSavedContentsRef = useRef(new Map<string, string | null>());
+  const commitInFlightRef = useRef(false);
+  const pendingCommitRef = useRef<PendingCommit | null>(null);
+  const conflictResolutionRef = useRef(false);
+  const saveBoundaryRef = useRef(false);
+  const timerRunningRef = useRef(false);
+  const pendingResolutionRef = useRef<PendingResolution | null>(null);
+  const workspaceLoadingRef = useRef(false);
+  const saveErrorRef = useRef<string | null>(null);
+  const commitErrorRef = useRef<string | null>(null);
+  const isCommittingRef = useRef(false);
+  const saveRevisionRef = useRef(0);
+  const viewRef = useRef<AppView>(view);
+  const setSaveError = (value: string | null) => {
+    saveErrorRef.current = value;
+    setSaveErrorState(value);
+  };
+  const setCommitError = (value: string | null) => {
+    commitErrorRef.current = value;
+    setCommitErrorState(value);
+  };
+  const setPendingCommitSync = (value: PendingCommit | null) => {
+    pendingCommitRef.current = value;
+    setPendingCommit(value);
+  };
+  const setPendingResolutionSync = (value: PendingResolution | null) => {
+    pendingResolutionRef.current = value;
+    setPendingResolution(value);
+  };
+  const setWorkspaceLoadingSync = (value: boolean) => {
+    workspaceLoadingRef.current = value;
+    setIsWorkspaceLoading(value);
+  };
 
   const filesRef = useRef(files);
   const activeIndexRef = useRef(activeIndex);
   const isRunning = timerState.status === "running";
-  const isCursorOnTask = focusedTaskLabel !== null;
   const activeFile = files[activeIndex];
+  useLayoutEffect(() => {
+    if (!activeFile || !editorRef.current) setFocusedTaskLabel(null);
+  }, [activeFile]);
+  useLayoutEffect(() => {
+    timerRunningRef.current = isRunning;
+    pendingResolutionRef.current = pendingResolution;
+    workspaceLoadingRef.current = isWorkspaceLoading;
+    saveErrorRef.current = saveError;
+    commitErrorRef.current = commitError;
+    isCommittingRef.current = isCommitting;
+    viewRef.current = view;
+  }, [
+    isRunning,
+    pendingResolution,
+    isWorkspaceLoading,
+    saveError,
+    commitError,
+    isCommitting,
+    view,
+  ]);
+  const isCursorOnTask = focusedTaskLabel !== null;
   const presetMinutesList = presets.map((preset) => preset.minutes);
+  const isFileOperationBlocked =
+    isRunning ||
+    externalConflict !== null ||
+    pendingCommit !== null ||
+    isCommitting ||
+    isSavingBoundary ||
+    isWorkspaceLoading ||
+    saveError !== null ||
+    commitError !== null;
+  const isEditorReadOnly =
+    externalConflict !== null ||
+    pendingCommit !== null ||
+    isCommitting ||
+    isSavingBoundary ||
+    isWorkspaceLoading ||
+    saveError !== null ||
+    commitError !== null;
+  const canAssignPending =
+    view === "editor" &&
+    isCursorOnTask &&
+    !isEditorReadOnly &&
+    externalConflict === null &&
+    !isWorkspaceLoading &&
+    !isSavingBoundary;
 
   const handleSelectView = (next: AppView) => {
     setView((current) => (current === next ? "editor" : next));
@@ -234,13 +342,30 @@ function App() {
     clearTimeout(saveTimerRef.current);
     saveTimerRef.current = undefined;
     const pending = pendingSaveRef.current;
+    const revision = saveRevisionRef.current;
     pendingSaveRef.current = null;
     if (!pending || !dataDir) return saveInFlightRef.current;
 
     activeWritesRef.current += 1;
     const save = saveInFlightRef.current
       .catch(() => undefined)
-      .then(() => writeMdFile(dataDir, pending))
+      .then(() => {
+        const expected = lastSavedContentsRef.current.get(pending.name);
+        const revision: ExpectedRevision | null =
+          expected === undefined
+            ? null
+            : expected === null
+              ? { kind: "missing" }
+              : { kind: "content", raw: expected };
+        return writeMdFile(dataDir, pending, revision).then(() => {
+          lastSavedContentsRef.current.set(pending.name, pending.raw);
+        });
+      })
+      .catch((error) => {
+        if (saveRevisionRef.current === revision) pendingSaveRef.current ??= pending;
+        if (isWriteConflict(error)) setDiskRefreshKey((key) => key + 1);
+        throw error;
+      })
       .finally(() => {
         activeWritesRef.current -= 1;
       });
@@ -249,12 +374,34 @@ function App() {
   }, [dataDir]);
 
   const flushSaveBestEffort = useCallback(() => {
-    void flushSave().catch((error) => console.error("save failed:", error));
+    void flushSave()
+      .then(() => setSaveError(null))
+      .catch((error) => setSaveError(`Could not save: ${errorMessage(error)}`));
   }, [flushSave]);
+
+  const flushSaveAtBoundary = async (after?: () => Promise<void>): Promise<boolean> => {
+    if (saveBoundaryRef.current) return false;
+    saveBoundaryRef.current = true;
+    setIsSavingBoundary(true);
+    try {
+      await flushSave();
+      await after?.();
+      setSaveError(null);
+      return true;
+    } catch (error) {
+      setSaveError(`Could not save: ${errorMessage(error)}`);
+      return false;
+    } finally {
+      saveBoundaryRef.current = false;
+      setIsSavingBoundary(false);
+    }
+  };
 
   const scheduleSave = useCallback(
     (file: MdFile) => {
       if (!isTauri() || !dataDir) return;
+      if (externalConflictRef.current) return;
+      saveRevisionRef.current += 1;
       pendingSaveRef.current = file;
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = window.setTimeout(flushSaveBestEffort, 500);
@@ -263,14 +410,25 @@ function App() {
   );
 
   const applyDataDir = async (dir: string) => {
-    try {
-      await flushSave();
-    } catch (e) {
-      setLoadError(e instanceof Error ? e.message : String(e));
-      return;
-    }
-    refreshGenerationRef.current += 1;
-    persistDataDir(dir);
+    const blockedNow = (ignoreBoundary = false) =>
+      timerRunningRef.current ||
+      activeSessionRef.current !== null ||
+      externalConflictRef.current !== null ||
+      pendingCommitRef.current !== null ||
+      pendingResolutionRef.current !== null ||
+      commitInFlightRef.current ||
+      (!ignoreBoundary && saveBoundaryRef.current) ||
+      workspaceLoadingRef.current ||
+      saveErrorRef.current !== null ||
+      commitErrorRef.current !== null ||
+      isCommittingRef.current;
+    if (blockedNow()) return;
+    await flushSaveAtBoundary(async () => {
+      if (blockedNow(true)) return;
+      setWorkspaceLoadingSync(true);
+      setWorkspaceReloadKey((key) => key + 1);
+      persistDataDir(dir);
+    });
   };
 
   const loadSessionRecords = useCallback(async (): Promise<SessionRecord[]> => {
@@ -283,19 +441,103 @@ function App() {
     return parseSessionLines(lines);
   }, []);
 
-  const handleDocChange = (text: string) => {
+  const handleDocChange = (text: string, raw: string) => {
     if (applyingExternalRef.current) return;
     setFiles((prev) =>
-      prev.map((file, index) => (index === activeIndex ? { ...file, content: text } : file)),
+      prev.map((file, index) => (index === activeIndex ? { ...file, content: text, raw } : file)),
     );
     const current = files[activeIndex];
-    if (current) scheduleSave({ ...current, content: text });
+    if (current) scheduleSave({ ...current, content: text, raw });
   };
 
-  const handleSelectFile = (index: number) => {
-    if (isRunning) return;
-    flushSaveBestEffort();
-    setActiveIndex(index);
+  const setExternalConflictCandidate = (conflict: ExternalConflict) => {
+    if (!externalConflictRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = undefined;
+      pendingSaveRef.current = null;
+    }
+    externalConflictRef.current = conflict;
+    setExternalConflict(conflict);
+  };
+
+  const handleExternalConflict = (file: MdFile) => {
+    setExternalConflictCandidate({ name: file.name, file });
+  };
+
+  const handleExternalFileMissing = (name: string) => {
+    setExternalConflictCandidate({ name, file: null });
+  };
+
+  const useExternalContent = async () => {
+    const conflict = externalConflictRef.current;
+    if (!conflict || conflictResolutionRef.current || commitInFlightRef.current) return;
+    conflictResolutionRef.current = true;
+    try {
+      await saveInFlightRef.current.catch(() => undefined);
+      if (externalConflictRef.current !== conflict) return;
+      pendingSaveRef.current = null;
+      if (conflict.file) {
+        setFiles((current) =>
+          current.map((file) => (file.name === conflict.name ? conflict.file! : file)),
+        );
+        applyingExternalRef.current = true;
+        try {
+          editorRef.current?.reloadContent(conflict.file.content, conflict.file.raw);
+        } finally {
+          applyingExternalRef.current = false;
+        }
+        lastSavedContentsRef.current.set(conflict.name, conflict.file.raw);
+      } else {
+        if (activeSessionRef.current?.file === conflict.name) {
+          trackedLostRef.current = true;
+          setTrackedLost(true);
+        }
+        lastSavedContentsRef.current.set(conflict.name, null);
+        setFiles((current) => current.filter((file) => file.name !== conflict.name));
+        setActiveIndex(0);
+      }
+      const unresolvedCommit = pendingCommitRef.current;
+      if (unresolvedCommit?.needsMarkdownSave) {
+        const record = unresolvedCommit.record;
+        setPendingCommitSync(null);
+        setCommitError(null);
+        setPendingResolutionSync({
+          file: record.file,
+          startedAt: new Date(record.startedAt).getTime(),
+          presetMinutes: record.presetMinutes,
+          elapsedSeconds: record.elapsedSeconds,
+          lineText: record.lineText,
+          projects: record.projects,
+        });
+      }
+      saveInFlightRef.current = Promise.resolve();
+      setSaveError(null);
+      externalConflictRef.current = null;
+      setExternalConflict(null);
+      setDiskRefreshKey((key) => key + 1);
+    } catch (error) {
+      setSaveError(`Could not apply external changes: ${errorMessage(error)}`);
+    } finally {
+      conflictResolutionRef.current = false;
+    }
+  };
+
+  const keepLocalContent = () => {
+    const conflict = externalConflictRef.current;
+    if (!conflict || commitInFlightRef.current || conflictResolutionRef.current) return;
+    externalConflictRef.current = null;
+    setExternalConflict(null);
+    if (conflict.file) lastSavedContentsRef.current.set(conflict.name, conflict.file.raw);
+    else lastSavedContentsRef.current.set(conflict.name, null);
+    const current = filesRef.current.find((file) => file.name === conflict.name);
+    if (current) scheduleSave(current);
+  };
+
+  const handleSelectFile = async (index: number) => {
+    if (isFileOperationBlocked) return;
+    await flushSaveAtBoundary(async () => {
+      setActiveIndex(index);
+    });
   };
 
   const runFileOperation = (operation: () => Promise<void>) => {
@@ -305,86 +547,113 @@ function App() {
   };
 
   const handleCreateFile = (name: string) => {
-    if (isRunning) return Promise.resolve();
+    if (isFileOperationBlocked) return Promise.resolve();
     return runFileOperation(async () => {
-      if (isTauri() && dataDir) {
-        try {
-          await createMdFile(dataDir, name);
-        } catch (e) {
-          setLoadError(e instanceof Error ? e.message : String(e));
-          return;
+      await flushSaveAtBoundary(async () => {
+        if (isTauri() && dataDir) {
+          try {
+            await createMdFile(dataDir, name);
+          } catch (e) {
+            setLoadError(errorMessage(e));
+            return;
+          }
         }
-      }
-      setFiles((prev) => [{ name, content: "", eol: "\n" as Eol }, ...prev]);
-      setActiveIndex(0);
-    });
-  };
-
-  const handleRenameFile = (from: string, to: string) => {
-    if (isRunning) return Promise.resolve();
-    return runFileOperation(async () => {
-      try {
-        await flushSave();
-      } catch (e) {
-        setLoadError(e instanceof Error ? e.message : String(e));
-        return;
-      }
-      if (isTauri() && dataDir) {
-        try {
-          await renameMdFile(dataDir, from, to);
-        } catch (e) {
-          setLoadError(e instanceof Error ? e.message : String(e));
-          return;
-        }
-      }
-      if (pendingSaveRef.current?.name === from)
-        pendingSaveRef.current = { ...pendingSaveRef.current, name: to };
-      setFiles((prev) => prev.map((file) => (file.name === from ? { ...file, name: to } : file)));
-    });
-  };
-
-  const handleDeleteFile = (name: string) => {
-    if (isRunning) return Promise.resolve();
-    return runFileOperation(async () => {
-      try {
-        await flushSave();
-      } catch (e) {
-        setLoadError(e instanceof Error ? e.message : String(e));
-        return;
-      }
-      if (pendingSaveRef.current?.name === name) {
-        pendingSaveRef.current = null;
-        clearTimeout(saveTimerRef.current);
-        saveTimerRef.current = undefined;
-      }
-      if (isTauri() && dataDir) {
-        try {
-          await deleteMdFile(dataDir, name);
-        } catch (e) {
-          setLoadError(e instanceof Error ? e.message : String(e));
-          return;
-        }
-      }
-      const index = filesRef.current.findIndex((file) => file.name === name);
-      setFiles((prev) => prev.filter((file) => file.name !== name));
-      setActiveIndex((current) => {
-        if (index < 0 || index > current) return current;
-        if (index === current) return Math.max(0, Math.min(current, filesRef.current.length - 2));
-        return current - 1;
+        lastSavedContentsRef.current.set(name, "");
+        setFiles((prev) => [{ name, content: "", raw: "" }, ...prev]);
+        setActiveIndex(0);
       });
     });
   };
 
-  const appendRecord = (input: CreateSessionRecordInput) => {
-    const record = createSessionRecord(input);
-    sessionLogRef.current.append(record);
+  const handleRenameFile = (from: string, to: string) => {
+    if (isFileOperationBlocked) return Promise.resolve();
+    return runFileOperation(async () => {
+      await flushSaveAtBoundary(async () => {
+        if (isTauri() && dataDir) {
+          try {
+            await renameMdFile(dataDir, from, to);
+          } catch (e) {
+            setLoadError(errorMessage(e));
+            return;
+          }
+        }
+        if (pendingSaveRef.current?.name === from)
+          pendingSaveRef.current = { ...pendingSaveRef.current, name: to };
+        const saved = lastSavedContentsRef.current.get(from);
+        lastSavedContentsRef.current.delete(from);
+        if (saved !== undefined) lastSavedContentsRef.current.set(to, saved);
+        setFiles((prev) => prev.map((file) => (file.name === from ? { ...file, name: to } : file)));
+      });
+    });
+  };
+
+  const handleDeleteFile = (name: string) => {
+    if (isFileOperationBlocked) return Promise.resolve();
+    return runFileOperation(async () => {
+      await flushSaveAtBoundary(async () => {
+        if (pendingSaveRef.current?.name === name) {
+          pendingSaveRef.current = null;
+          clearTimeout(saveTimerRef.current);
+          saveTimerRef.current = undefined;
+        }
+        if (isTauri() && dataDir) {
+          try {
+            await deleteMdFile(dataDir, name);
+          } catch (e) {
+            setLoadError(errorMessage(e));
+            return;
+          }
+        }
+        const index = filesRef.current.findIndex((file) => file.name === name);
+        lastSavedContentsRef.current.set(name, null);
+        setFiles((prev) => prev.filter((file) => file.name !== name));
+        setActiveIndex((current) => {
+          if (index < 0 || index > current) return current;
+          if (index === current) return Math.max(0, Math.min(current, filesRef.current.length - 2));
+          return current - 1;
+        });
+      });
+    });
+  };
+
+  const appendRecord = async (record: SessionRecord) => {
     if (isTauri()) {
-      void appendSessionLog(
-        sessionLogFilename(new Date(input.startedAt)),
+      await appendSessionLog(
+        sessionLogFilename(new Date(record.startedAt)),
         JSON.stringify(record),
-      ).catch((e) => console.error("session log append failed:", e));
+      );
     }
+    sessionLogRef.current.append(record);
     setLogRefreshKey((key) => key + 1);
+  };
+
+  const commitSession = async (commit: PendingCommit): Promise<boolean> => {
+    if (commitInFlightRef.current) return false;
+    commitInFlightRef.current = true;
+    setIsCommitting(true);
+    try {
+      if (commit.needsMarkdownSave) {
+        await flushSave();
+        setSaveError(null);
+        commit = { ...commit, needsMarkdownSave: false };
+      }
+      await appendRecord(commit.record);
+      setPendingCommitSync(null);
+      setCommitError(null);
+      return true;
+    } catch (error) {
+      setPendingCommitSync(commit);
+      setCommitError(`Could not finish session: ${errorMessage(error)}`);
+      return false;
+    } finally {
+      commitInFlightRef.current = false;
+      setIsCommitting(false);
+    }
+  };
+
+  const retryPendingCommit = () => {
+    if (pendingCommit) void commitSession(pendingCommit);
+    else flushSaveBestEffort();
   };
 
   const trayStart = (label: string, remaining: string) => {
@@ -419,16 +688,49 @@ function App() {
   };
 
   const handleStart = () => {
-    if (isRunning || !isCursorOnTask || pendingResolution !== null) return;
+    if (
+      timerRunningRef.current ||
+      activeSessionRef.current !== null ||
+      pendingResolutionRef.current !== null ||
+      pendingCommitRef.current !== null ||
+      commitInFlightRef.current ||
+      saveBoundaryRef.current ||
+      workspaceLoadingRef.current ||
+      externalConflictRef.current !== null ||
+      saveErrorRef.current !== null ||
+      commitErrorRef.current !== null
+    )
+      return;
     stoppingRef.current = false;
-    const cursor = editorRef.current?.getCursorLine();
-    if (!cursor) return;
+    const cursor = editorRef.current?.startTracking();
+    if (!cursor) {
+      timerRunningRef.current = false;
+      setFocusedTaskLabel(null);
+      return;
+    }
+    timerRunningRef.current = true;
     const label = toTrackingLabel(cursor.text);
+
+    const projects = editorRef.current?.getTrackedProjects() ?? [];
+    const currentFile = filesRef.current[activeIndexRef.current];
+    if (!currentFile) {
+      editorRef.current?.stopTracking(0, false);
+      timerRunningRef.current = false;
+      return;
+    }
+    const session = {
+      file: currentFile.name,
+      startedAt: Date.now(),
+      presetMinutes,
+      lineText: cursor.text,
+      projects,
+    };
+    activeSessionRef.current = session;
     setTrackingLabel(label);
-    editorRef.current?.startTracking(cursor.lineNumber);
-    setTrackingProjects(editorRef.current?.getTrackedProjects() ?? []);
+    setTrackingProjects(projects);
+    trackedLostRef.current = false;
     setTrackedLost(false);
-    setTimerState(startTimer(presetMinutes, Date.now()));
+    setTimerState(startTimer(presetMinutes, session.startedAt));
     setElapsedMs(0);
     lastTraySecRef.current = presetMinutes * 60;
     trayStart(label, formatClock(presetMinutes * 60 * 1000));
@@ -436,44 +738,66 @@ function App() {
     editorRef.current?.focus();
   };
 
-  const stopTracking = () => {
-    if (!isRunning || stoppingRef.current) return;
+  const stopTracking = async (): Promise<boolean> => {
+    if (!timerRunningRef.current || stoppingRef.current) return false;
     stoppingRef.current = true;
+    timerRunningRef.current = false;
     const now = Date.now();
+    const session = activeSessionRef.current;
     const { elapsedSeconds } = stopTimer(timerState, now);
-    const startedAt = timerState.startedAt ?? now;
-    const stopped = editorRef.current?.stopTracking(elapsedSeconds);
+    const safeTarget = !trackedLostRef.current && externalConflictRef.current === null;
+    const stopped = editorRef.current?.stopTracking(elapsedSeconds, safeTarget);
 
-    if (stopped && !stopped.deleted) {
-      appendRecord({
-        file: activeFile?.name ?? "",
-        startedAt,
-        presetMinutes: timerState.presetMinutes,
+    let completed = false;
+    if (safeTarget && session && stopped && !stopped.deleted) {
+      const record = createSessionRecord({
+        file: session.file,
+        startedAt: session.startedAt,
+        presetMinutes: session.presetMinutes,
         elapsedSeconds,
-        lineText: stopped.lineText,
-        projects: stopped.projects,
+        lineText: session.lineText,
+        projects: session.projects,
         lineDeleted: false,
       });
-      flushSaveBestEffort();
-    } else {
-      setPendingResolution({
-        file: activeFile?.name ?? "",
-        startedAt,
-        presetMinutes: timerState.presetMinutes,
+      completed = await commitSession({ record, needsMarkdownSave: true });
+    } else if (session) {
+      setPendingResolutionSync({
+        file: session.file,
+        startedAt: session.startedAt,
+        presetMinutes: session.presetMinutes,
         elapsedSeconds,
-        lineText: stopped?.lineText ?? trackingLabel ?? "",
-        projects: stopped?.projects ?? trackingProjects,
+        lineText: session.lineText,
+        projects: session.projects,
       });
     }
 
+    activeSessionRef.current = null;
     setTimerState(createIdleTimer(presetMinutes));
     setElapsedMs(0);
     setTrackingLabel(null);
     setTrackingProjects([]);
+    trackedLostRef.current = false;
     setTrackedLost(false);
     lastTraySecRef.current = null;
     trayStop();
     timerDisarm();
+    return completed;
+  };
+
+  const handleQuit = async (): Promise<boolean> => {
+    if (
+      externalConflictRef.current ||
+      pendingCommitRef.current ||
+      pendingResolutionRef.current ||
+      commitInFlightRef.current ||
+      saveBoundaryRef.current ||
+      workspaceLoadingRef.current ||
+      saveErrorRef.current ||
+      commitErrorRef.current
+    )
+      return false;
+    if (timerRunningRef.current || activeSessionRef.current !== null) return stopTracking();
+    return flushSaveAtBoundary();
   };
 
   const handleToggleTracking = () => {
@@ -482,29 +806,51 @@ function App() {
   };
 
   const handleResolveLogOnly = () => {
-    if (!pendingResolution) return;
-    appendRecord({ ...pendingResolution, lineDeleted: true });
-    setPendingResolution(null);
+    const pending = pendingResolutionRef.current;
+    if (
+      !pending ||
+      pendingCommitRef.current !== null ||
+      commitInFlightRef.current ||
+      workspaceLoadingRef.current
+    )
+      return;
+    setPendingResolutionSync(null);
+    const record = createSessionRecord({ ...pending, lineDeleted: true });
+    void commitSession({ record, needsMarkdownSave: false });
   };
 
   const handleResolveAssignToCursor = () => {
-    if (!pendingResolution) return;
+    const pending = pendingResolutionRef.current;
+    const currentFile = filesRef.current[activeIndexRef.current];
+    if (
+      !pending ||
+      viewRef.current !== "editor" ||
+      !currentFile ||
+      externalConflictRef.current !== null ||
+      pendingCommitRef.current !== null ||
+      commitInFlightRef.current ||
+      saveBoundaryRef.current ||
+      workspaceLoadingRef.current ||
+      saveErrorRef.current !== null ||
+      commitErrorRef.current !== null ||
+      isCommittingRef.current
+    )
+      return;
+    setPendingResolutionSync(null);
     const cursor = editorRef.current?.getCursorLine();
-    if (!cursor) return;
-    const applied = editorRef.current?.applySpentToLine(
-      cursor.lineNumber,
-      pendingResolution.elapsedSeconds,
-    );
-    if (!applied) return;
-    appendRecord({
-      ...pendingResolution,
-      file: activeFile?.name ?? pendingResolution.file,
-      lineText: applied.lineText,
-      projects: applied.projects,
+    const applied = cursor
+      ? editorRef.current?.applySpentToLine(cursor.lineNumber, pending.elapsedSeconds)
+      : null;
+    if (!applied) {
+      setPendingResolutionSync(pending);
+      return;
+    }
+    const record = createSessionRecord({
+      ...pending,
+      file: currentFile.name,
       lineDeleted: false,
     });
-    flushSaveBestEffort();
-    setPendingResolution(null);
+    void commitSession({ record, needsMarkdownSave: true });
   };
 
   const handleDebugFastForward = () => {
@@ -522,12 +868,23 @@ function App() {
     setFiles,
     setActiveIndex,
     setLoadError,
+    setRefreshError,
     flushSaveBestEffort,
     pendingSaveRef,
     activeWritesRef,
     applyingExternalRef,
-    reloadActiveEditor: (content) => editorRef.current?.reloadContent(content),
-    refreshGenerationRef,
+    reloadActiveEditor: (content, raw) => editorRef.current?.reloadContent(content, raw),
+    onExternalConflict: handleExternalConflict,
+    onExternalFileMissing: handleExternalFileMissing,
+    externalConflictRef,
+    lastSavedContentsRef,
+    onTrackedFileMissing: () => {
+      trackedLostRef.current = true;
+      setTrackedLost(true);
+    },
+    workspaceReloadKey,
+    onWorkspaceLoading: () => setWorkspaceLoadingSync(true),
+    onWorkspaceLoaded: () => setWorkspaceLoadingSync(false),
     diskRefreshKey,
     setDiskRefreshKey,
     setLauncherOpen,
@@ -537,6 +894,7 @@ function App() {
     lastTraySecRef,
     trayTick,
     stopTracking,
+    onQuit: handleQuit,
   });
 
   const showNativeTitlebar = isTauri() && navigator.userAgent.includes("Macintosh");
@@ -660,14 +1018,18 @@ function App() {
                 key={activeFile.name}
                 ref={editorRef}
                 initialContent={activeFile.content}
+                initialRaw={activeFile.raw}
                 onChange={handleDocChange}
+                readOnly={isEditorReadOnly}
                 vimMode={vimMode}
                 presets={presets}
                 onCursorLineChange={(info) =>
                   setFocusedTaskLabel(info.isTask ? toTrackingLabel(info.text) : null)
                 }
-                onTrackedLineChange={(info) => setTrackingLabel(toTrackingLabel(info.text))}
-                onTrackedLineLost={() => setTrackedLost(true)}
+                onTrackedLineLost={() => {
+                  trackedLostRef.current = true;
+                  setTrackedLost(true);
+                }}
                 startStopShortcut={startStopShortcut}
                 onSelectPreset={setPresetMinutes}
                 onToggle={handleToggleTracking}
@@ -708,7 +1070,7 @@ function App() {
               onSetGlobalHotkey={handleSetGlobalHotkey}
               shortcutsDisabled={isDemoMode}
               dataDir={dataDir}
-              dataDirDisabled={isRunning}
+              dataDirDisabled={isFileOperationBlocked}
               onPickDataDir={async () => {
                 const dir = await pickDataDir();
                 if (dir) await applyDataDir(dir);
@@ -718,12 +1080,70 @@ function App() {
           )}
         </div>
       </div>
+      {(externalConflict || commitError || saveError || refreshError) && (
+        <div
+          className="relative z-10 flex flex-none items-center justify-between gap-3 border-t border-danger/40 bg-timer-bg px-4 py-2 text-xs text-muted"
+          role="status"
+          aria-live="polite"
+        >
+          <span>
+            {externalConflict
+              ? externalConflict.file
+                ? `External changes detected in ${externalConflict.name}.`
+                : `${externalConflict.name} was deleted externally.`
+              : (commitError ?? saveError ?? refreshError)}
+          </span>
+          <div className="flex flex-none gap-2">
+            {externalConflict ? (
+              <>
+                <button
+                  type="button"
+                  className="text-ink hover:text-accent"
+                  onClick={useExternalContent}
+                  disabled={isCommitting}
+                >
+                  Use external
+                </button>
+                <button
+                  type="button"
+                  className="text-ink hover:text-accent"
+                  onClick={keepLocalContent}
+                  disabled={isCommitting}
+                >
+                  Keep local
+                </button>
+              </>
+            ) : (
+              (commitError || saveError) && (
+                <button
+                  type="button"
+                  className="text-ink hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={retryPendingCommit}
+                  disabled={isCommitting}
+                >
+                  Retry
+                </button>
+              )
+            )}
+          </div>
+        </div>
+      )}
       <TimerBar
         trackingLabel={trackingLabel}
         focusedTaskLabel={focusedTaskLabel}
         trackedLost={trackedLost}
         isRunning={isRunning}
-        canStart={isCursorOnTask && pendingResolution === null}
+        canStart={
+          isCursorOnTask &&
+          pendingResolution === null &&
+          pendingCommit === null &&
+          !isCommitting &&
+          !isSavingBoundary &&
+          !isWorkspaceLoading &&
+          externalConflict === null &&
+          saveError === null &&
+          commitError === null
+        }
         presetMinutes={presetMinutes}
         presets={presetMinutesList}
         elapsedMs={elapsedMs}
@@ -731,7 +1151,7 @@ function App() {
         onStart={handleStart}
         onStop={() => stopTracking()}
         pending={pendingResolution}
-        canAssignToCursor={isCursorOnTask}
+        canAssignToCursor={canAssignPending}
         onResolveLogOnly={handleResolveLogOnly}
         onResolveAssignToCursor={handleResolveAssignToCursor}
         onDebugFastForward={handleDebugFastForward}
@@ -741,7 +1161,7 @@ function App() {
           onClose={() => setLauncherOpen(false)}
           files={files}
           activeIndex={activeIndex}
-          filesDisabled={isRunning}
+          filesDisabled={isFileOperationBlocked}
           onSelectFile={(index) => {
             handleSelectFile(index);
             setView("editor");

@@ -1,6 +1,9 @@
+use crate::EXIT_ALLOWED;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use tauri::{AppHandle, Manager};
 
 /// Validate an .md file name. Prevents path escape outside the directory.
@@ -55,19 +58,161 @@ fn created_key(meta: &fs::Metadata) -> (u64, u32) {
         .unwrap_or((0, 0))
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "snake_case", tag = "kind")]
+pub enum ReadMdError {
+    NotFound,
+    Io { message: String },
+}
+
 #[tauri::command]
-pub fn read_md_file(dir: String, name: String) -> Result<String, String> {
-    fs::read_to_string(md_path(&dir, &name)?).map_err(|e| format!("read {name}: {e}"))
+pub fn read_md_file(dir: String, name: String) -> Result<String, ReadMdError> {
+    let path = md_path(&dir, &name).map_err(|message| ReadMdError::Io { message })?;
+    fs::read_to_string(path).map_err(|error| {
+        if error.kind() == std::io::ErrorKind::NotFound {
+            ReadMdError::NotFound
+        } else {
+            ReadMdError::Io {
+                message: format!("read {name}: {error}"),
+            }
+        }
+    })
 }
 
 /// Write to a temp file in the same directory, then rename (atomic write).
 /// This keeps the real file from being corrupted by a crash mid-write.
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "lowercase", tag = "kind", content = "raw")]
+pub enum ExpectedRevision {
+    Content(String),
+    Missing,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "lowercase", tag = "kind")]
+pub enum WriteMdError {
+    Conflict {
+        name: String,
+        disk: ExpectedRevision,
+    },
+    Io {
+        message: String,
+    },
+}
+
+fn read_revision(path: &Path) -> Result<ExpectedRevision, std::io::Error> {
+    match fs::read_to_string(path) {
+        Ok(raw) => Ok(ExpectedRevision::Content(raw)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(ExpectedRevision::Missing),
+        Err(error) => Err(error),
+    }
+}
+
 #[tauri::command]
-pub fn write_md_file(dir: String, name: String, contents: String) -> Result<(), String> {
-    let path = md_path(&dir, &name)?;
-    let tmp = path.with_file_name(format!(".{name}.tmp"));
-    fs::write(&tmp, contents).map_err(|e| format!("write tmp: {e}"))?;
-    fs::rename(&tmp, &path).map_err(|e| format!("rename: {e}"))
+pub fn write_md_file(
+    dir: String,
+    name: String,
+    contents: String,
+    expected_revision: Option<ExpectedRevision>,
+) -> Result<(), WriteMdError> {
+    let path = md_path(&dir, &name).map_err(|message| WriteMdError::Io { message })?;
+    if let Some(expected) = expected_revision.as_ref() {
+        let actual = read_revision(&path).map_err(|error| WriteMdError::Io {
+            message: format!("read {name}: {error}"),
+        })?;
+        if !same_revision(expected, &actual) {
+            return Err(WriteMdError::Conflict { name, disk: actual });
+        }
+    }
+    let (tmp, mut file) = reserve_temp(&path).map_err(|message| WriteMdError::Io { message })?;
+    let result = (|| {
+        file.write_all(contents.as_bytes())
+            .map_err(|error| WriteMdError::Io {
+                message: format!("write tmp: {error}"),
+            })?;
+        file.sync_all().map_err(|error| WriteMdError::Io {
+            message: format!("sync tmp: {error}"),
+        })?;
+        drop(file);
+        if let Some(expected) = expected_revision.as_ref() {
+            let actual = read_revision(&path).map_err(|error| WriteMdError::Io {
+                message: format!("read {name}: {error}"),
+            })?;
+            if !same_revision(expected, &actual) {
+                return Err(WriteMdError::Conflict {
+                    name: name.clone(),
+                    disk: actual,
+                });
+            }
+        }
+        if matches!(expected_revision, Some(ExpectedRevision::Missing)) {
+            install_missing(&tmp, &path, &name)
+        } else {
+            fs::rename(&tmp, &path).map_err(|error| WriteMdError::Io {
+                message: format!("rename: {error}"),
+            })
+        }
+    })();
+    let _ = fs::remove_file(&tmp);
+    result
+}
+
+fn install_missing(tmp: &Path, path: &Path, name: &str) -> Result<(), WriteMdError> {
+    match fs::hard_link(tmp, path) {
+        Ok(()) => {
+            let _ = fs::remove_file(tmp);
+            Ok(())
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+            let disk = read_revision(path).map_err(|read_error| WriteMdError::Io {
+                message: format!("read {name}: {read_error}"),
+            })?;
+            Err(WriteMdError::Conflict {
+                name: name.to_string(),
+                disk,
+            })
+        }
+        Err(error) => Err(WriteMdError::Io {
+            message: format!("install: {error}"),
+        }),
+    }
+}
+
+fn reserve_temp(path: &Path) -> Result<(PathBuf, fs::File), String> {
+    for _ in 0..16 {
+        let candidate = path.with_file_name(format!(
+            ".monura-tmp-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&candidate)
+        {
+            Ok(file) => return Ok((candidate, file)),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(format!("reserve tmp: {error}")),
+        }
+    }
+    Err("reserve tmp: too many collisions".to_string())
+}
+
+fn same_revision(left: &ExpectedRevision, right: &ExpectedRevision) -> bool {
+    match (left, right) {
+        (ExpectedRevision::Content(a), ExpectedRevision::Content(b)) => a == b,
+        (ExpectedRevision::Missing, ExpectedRevision::Missing) => true,
+        _ => false,
+    }
+}
+
+fn unique_suffix() -> u128 {
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let time = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or_default();
+    (time << 64) | u128::from(COUNTER.fetch_add(1, Ordering::Relaxed))
 }
 
 /// Create a new file. Existing files are not overwritten (create_new).
@@ -97,7 +242,17 @@ pub fn rename_md_file(dir: String, from: String, to: String) -> Result<(), Strin
 #[tauri::command]
 pub fn delete_md_file(dir: String, name: String) -> Result<(), String> {
     let path = md_path(&dir, &name)?;
-    fs::remove_file(&path).map_err(|e| format!("delete {name}: {e}"))
+    match fs::remove_file(&path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(format!("delete {name}: {e}")),
+    }
+}
+
+#[tauri::command]
+pub fn exit_app(app: AppHandle) {
+    EXIT_ALLOWED.store(true, Ordering::SeqCst);
+    app.exit(0);
 }
 
 /// Create the default data folder (~/Documents/monura) and return its path.
@@ -233,5 +388,105 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         // aaa.md was created last (newest), so it sorts first.
         assert_eq!(result.unwrap(), vec!["aaa.md", "bbb.md", "ccc.md"]);
+    }
+
+    fn test_dir(label: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "monura-{label}-{}-{}",
+            std::process::id(),
+            unique_suffix()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn conditional_writes_preserve_revisions_and_cleanup_temps() {
+        let dir = test_dir("write");
+        let path = dir.join("long-".to_string() + &"x".repeat(240) + ".md");
+        let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        fs::write(&path, "a\r\nb\nc").unwrap();
+        assert!(write_md_file(
+            dir.to_string_lossy().into_owned(),
+            name.clone(),
+            "a\nb\nC".into(),
+            Some(ExpectedRevision::Content("a\r\nb\nc".into()))
+        )
+        .is_ok());
+        assert_eq!(fs::read_to_string(&path).unwrap(), "a\nb\nC");
+        let conflict = write_md_file(
+            dir.to_string_lossy().into_owned(),
+            name.clone(),
+            "other".into(),
+            Some(ExpectedRevision::Content("wrong".into())),
+        );
+        assert!(matches!(conflict, Err(WriteMdError::Conflict { .. })));
+        let temps: Vec<_> = fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|e| e.file_name().to_string_lossy().starts_with(".monura-tmp-"))
+            .collect();
+        assert!(temps.is_empty());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn final_missing_install_race_is_a_conflict_without_overwriting() {
+        let dir = test_dir("install-race");
+        let path = dir.join("new.md");
+        let tmp = dir.join(".tmp");
+        fs::write(&path, "disk").unwrap();
+        fs::write(&tmp, "new").unwrap();
+        let result = install_missing(&tmp, &path, "new.md");
+        assert!(
+            matches!(result, Err(WriteMdError::Conflict { disk: ExpectedRevision::Content(raw), .. }) if raw == "disk")
+        );
+        assert_eq!(fs::read_to_string(&path).unwrap(), "disk");
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn conditional_write_missing_is_no_clobber_and_new_file_works() {
+        let dir = test_dir("missing");
+        let name = "new.md".to_string();
+        assert!(write_md_file(
+            dir.to_string_lossy().into_owned(),
+            name.clone(),
+            "new".into(),
+            Some(ExpectedRevision::Missing)
+        )
+        .is_ok());
+        assert_eq!(fs::read_to_string(dir.join(&name)).unwrap(), "new");
+        let recreated = write_md_file(
+            dir.to_string_lossy().into_owned(),
+            name,
+            "again".into(),
+            Some(ExpectedRevision::Missing),
+        );
+        assert!(matches!(recreated, Err(WriteMdError::Conflict { .. })));
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn read_error_uses_typescript_shape() {
+        assert_eq!(
+            serde_json::to_string(&ReadMdError::NotFound).unwrap(),
+            r#"{"kind":"not_found"}"#
+        );
+    }
+
+    #[test]
+    fn reserved_temp_names_are_short_and_unique() {
+        let dir = test_dir("reserve");
+        let path = dir.join("a.md");
+        let (first, first_file) = reserve_temp(&path).unwrap();
+        let (second, second_file) = reserve_temp(&path).unwrap();
+        drop(first_file);
+        drop(second_file);
+        assert_ne!(first, second);
+        assert!(first.file_name().unwrap().len() < 80);
+        fs::remove_file(first).unwrap();
+        fs::remove_file(second).unwrap();
+        fs::remove_dir_all(dir).unwrap();
     }
 }

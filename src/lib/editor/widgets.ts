@@ -34,7 +34,7 @@ export class CheckboxWidget extends WidgetType {
 }
 
 function toggleCheckboxAtLine(view: EditorView, lineNumber: number): void {
-  if (lineNumber > view.state.doc.lines) return;
+  if (view.state.readOnly || lineNumber > view.state.doc.lines) return;
   const line = view.state.doc.line(lineNumber);
   const match = /\[( |x|X)\]/.exec(line.text);
   if (!match || match.index === undefined) return;
@@ -117,10 +117,21 @@ export class LinkWidget extends WidgetType {
 
 async function openLink(url: string): Promise<void> {
   try {
+    const parsed = new URL(url);
+    if (
+      parsed.protocol !== "http:" &&
+      parsed.protocol !== "https:" &&
+      parsed.protocol !== "mailto:"
+    )
+      return;
     if (isTauri()) {
-      await openUrl(url);
+      await openUrl(parsed.href);
     } else {
-      window.open(url, "_blank", "noopener,noreferrer");
+      const link = document.createElement("a");
+      link.href = parsed.href;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.click();
     }
   } catch (e) {
     console.error("open link failed:", e);

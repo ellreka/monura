@@ -13,6 +13,7 @@ const LIST_MARKER = /^(\s*)([-*+])(\s+)(\[[ xX]\]\s*)?/;
  * looking at the syntax tree.
  */
 const continueList: Command = (view) => {
+  if (view.state.readOnly) return false;
   // In vim NORMAL mode Enter is a line-move command, so don't intercept it.
   // This keymap is evaluated before vim's keydown handler inside CodeMirror's domEventHandlers,
   // so we need to explicitly check the mode here and delegate.

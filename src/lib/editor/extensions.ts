@@ -1,5 +1,5 @@
 import type { Extension } from "@codemirror/state";
-import { Compartment } from "@codemirror/state";
+import { Compartment, EditorState } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import { Autolink } from "@lezer/markdown";
 import { EditorView, keymap } from "@codemirror/view";
@@ -21,6 +21,7 @@ export interface CreateMonuraExtensionsOptions {
   startStopShortcut?: string | null;
   onSelectPreset?: (presetMinutes: number) => void;
   onToggle?: () => void;
+  readOnly?: boolean;
 }
 
 export const vimModeCompartment = new Compartment();
@@ -34,6 +35,7 @@ export const vimModeCompartment = new Compartment();
 export const vimEditableCompartment = new Compartment();
 
 export const timerKeymapCompartment = new Compartment();
+export const readOnlyCompartment = new Compartment();
 
 // Disable the `:`-triggered Ex commands (:w, :q, etc.), because they don't mesh with this
 // app's file operation model of auto-save and tab switching. Vim state is module-level
@@ -47,6 +49,7 @@ export function createMonuraExtensions(options: CreateMonuraExtensionsOptions = 
     // vim must take effect before the keymaps that come from editorBaseSetup
     vimModeCompartment.of(options.vimMode ? [vim()] : []),
     vimEditableCompartment.of(EditorView.editable.of(!options.vimMode)),
+    readOnlyCompartment.of(EditorState.readOnly.of(!!options.readOnly)),
     vimNormalModeGuardKeymap,
     editorBaseSetup,
     keymap.of([indentWithTab]),

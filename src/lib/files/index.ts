@@ -1,5 +1,5 @@
-export { detectEol, fromLf, toLf } from "./eol";
-export type { Eol } from "./eol";
+export { applyEditorChanges, detectEol, fromLf, toLf } from "./eol";
+export type { Eol, EditorChange } from "./eol";
 export {
   appendSessionLog,
   createMdFile,
@@ -14,4 +14,5 @@ export {
   watchMdFiles,
   writeMdFile,
 } from "./store";
-export type { MdFile } from "./store";
+export type { ExpectedRevision, MdFile, MdReadError, WriteConflict } from "./store";
+export { errorMessage, isMdNotFound, isWriteConflict } from "./store";

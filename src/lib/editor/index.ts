@@ -4,6 +4,7 @@ export {
   uiStateField,
   vimModeCompartment,
   vimEditableCompartment,
+  readOnlyCompartment,
   timerKeymapCompartment,
   DEFAULT_UI_STATE,
 } from "./extensions";
