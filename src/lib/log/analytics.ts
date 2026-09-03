@@ -27,10 +27,28 @@ export function parseSessionLines(lines: string[]): SessionRecord[] {
 function isSessionRecord(v: unknown): v is SessionRecord {
   if (typeof v !== "object" || v === null) return false;
   const r = v as Record<string, unknown>;
+  const offset = r.tzOffsetMinutes;
+  const preset = r.presetMinutes;
+  const elapsed = r.elapsedSeconds;
+  const startedAt = r.startedAt;
+  const validStartedAt =
+    typeof startedAt === "string" &&
+    Number.isFinite(Date.parse(startedAt)) &&
+    new Date(startedAt).toISOString() === startedAt;
   return (
-    typeof r.startedAt === "string" &&
-    typeof r.elapsedSeconds === "number" &&
-    typeof r.presetMinutes === "number" &&
+    r.v === 1 &&
+    typeof r.file === "string" &&
+    validStartedAt &&
+    typeof offset === "number" &&
+    Number.isInteger(offset) &&
+    offset >= -14 * 60 &&
+    offset <= 14 * 60 &&
+    typeof preset === "number" &&
+    Number.isFinite(preset) &&
+    preset > 0 &&
+    typeof elapsed === "number" &&
+    Number.isFinite(elapsed) &&
+    elapsed >= 0 &&
     typeof r.lineText === "string"
   );
 }
@@ -52,7 +70,6 @@ export function localDateKey(r: SessionRecord): string {
   return format(recordDate(r), "yyyy-MM-dd");
 }
 
-/** Extracts just the title from a line's text (removes checkbox and spent:). */
 export function baseTitle(lineText: string): string {
   const parsed = parseLine(lineText, 1);
   const text = parsed.isTask ? parsed.text : lineText;
@@ -99,7 +116,6 @@ export interface TaskGroup {
   seconds: number;
   firstDay: string;
   lastDay: string;
-  /** A group whose title shares a common prefix (candidate rename split). */
   renamed: boolean;
 }
 

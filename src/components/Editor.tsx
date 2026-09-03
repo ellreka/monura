@@ -52,7 +52,6 @@ export interface EditorHandle {
   getCursorLine(): CursorLineInfo | null;
   startTracking(lineNumber?: number): CursorLineInfo | null;
   stopTracking(elapsedSeconds: number, applySpent?: boolean): StopTrackingResult;
-  /** Replaces the whole doc (used to reflect external edits; never called from our own edit path). */
   reloadContent(text: string, raw: string): void;
   /**
    * Adds spent: to the given line (used to pick a new recording target after the tracked line is lost).

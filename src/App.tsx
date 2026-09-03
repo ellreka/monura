@@ -202,6 +202,8 @@ function App() {
     presets,
     startStopShortcut,
     globalHotkey,
+    globalHotkeyError,
+    globalHotkeyBusy,
     setDataDir: persistDataDir,
     setPresetMinutes,
     toggleVimMode: handleToggleVimMode,
@@ -391,13 +393,12 @@ function App() {
       });
   }, [flushSave]);
 
-  const flushSaveAtBoundary = async (after?: () => Promise<void>): Promise<boolean> => {
+  const flushSaveAtBoundary = async (): Promise<boolean> => {
     if (saveBoundaryRef.current) return false;
     saveBoundaryRef.current = true;
     setIsSavingBoundary(true);
     try {
       await flushSave();
-      await after?.();
       setSaveError(null);
       return true;
     } catch (error) {
@@ -437,12 +438,10 @@ function App() {
       commitErrorRef.current !== null ||
       isCommittingRef.current;
     if (blockedNow()) return;
-    await flushSaveAtBoundary(async () => {
-      if (blockedNow(true)) return;
-      setWorkspaceLoadingSync(true);
-      setWorkspaceReloadKey((key) => key + 1);
-      persistDataDir(dir);
-    });
+    if (!(await flushSaveAtBoundary()) || blockedNow(true)) return;
+    setWorkspaceLoadingSync(true);
+    setWorkspaceReloadKey((key) => key + 1);
+    persistDataDir(dir);
   };
 
   const loadSessionRecords = useCallback(async (): Promise<SessionRecord[]> => {
@@ -513,9 +512,8 @@ function App() {
 
   const handleSelectFile = async (index: number) => {
     if (isFileOperationBlocked) return;
-    await flushSaveAtBoundary(async () => {
-      setActiveIndex(index);
-    });
+    if (!(await flushSaveAtBoundary())) throw new Error("Could not save pending changes");
+    setActiveIndex(index);
   };
 
   const runFileOperation = (operation: () => Promise<void>) => {
@@ -527,79 +525,55 @@ function App() {
   const handleCreateFile = (name: string) => {
     if (isFileOperationBlocked) return Promise.resolve();
     return runFileOperation(async () => {
-      await flushSaveAtBoundary(async () => {
-        if (isTauri() && dataDir) {
-          try {
-            await createMdFile(dataDir, name);
-          } catch (e) {
-            setLoadError(errorMessage(e));
-            return;
-          }
-        }
-        lastSavedContentsRef.current.set(name, "");
-        setFiles((prev) => [{ name, content: "", raw: "" }, ...prev]);
-        setActiveIndex(0);
-      });
+      if (!(await flushSaveAtBoundary())) throw new Error("Could not save pending changes");
+      if (isTauri() && dataDir) await createMdFile(dataDir, name);
+      lastSavedContentsRef.current.set(name, "");
+      setFiles((prev) => [{ name, content: "", raw: "" }, ...prev]);
+      setActiveIndex(0);
     });
   };
 
   const handleRenameFile = (from: string, to: string) => {
     if (isFileOperationBlocked) return Promise.resolve();
     return runFileOperation(async () => {
-      await flushSaveAtBoundary(async () => {
-        if (isTauri() && dataDir) {
-          try {
-            await renameMdFile(dataDir, from, to);
-          } catch (e) {
-            setLoadError(errorMessage(e));
-            return;
-          }
-        }
-        if (pendingSaveRef.current?.name === from)
-          pendingSaveRef.current = { ...pendingSaveRef.current, name: to };
-        const saved = lastSavedContentsRef.current.get(from);
-        lastSavedContentsRef.current.delete(from);
-        if (saved !== undefined) lastSavedContentsRef.current.set(to, saved);
-        const selection = selectionsRef.current.get(from);
-        if (selection) {
-          const nextSelections = new Map(selectionsRef.current);
-          nextSelections.delete(from);
-          nextSelections.set(to, selection);
-          selectionsRef.current = nextSelections;
-        }
-        setFiles((prev) => prev.map((file) => (file.name === from ? { ...file, name: to } : file)));
-      });
+      if (!(await flushSaveAtBoundary())) throw new Error("Could not save pending changes");
+      if (isTauri() && dataDir) await renameMdFile(dataDir, from, to);
+      if (pendingSaveRef.current?.name === from)
+        pendingSaveRef.current = { ...pendingSaveRef.current, name: to };
+      const saved = lastSavedContentsRef.current.get(from);
+      lastSavedContentsRef.current.delete(from);
+      if (saved !== undefined) lastSavedContentsRef.current.set(to, saved);
+      const selection = selectionsRef.current.get(from);
+      if (selection) {
+        const nextSelections = new Map(selectionsRef.current);
+        nextSelections.delete(from);
+        nextSelections.set(to, selection);
+        selectionsRef.current = nextSelections;
+      }
+      setFiles((prev) => prev.map((file) => (file.name === from ? { ...file, name: to } : file)));
     });
   };
 
   const handleDeleteFile = (name: string) => {
     if (isFileOperationBlocked) return Promise.resolve();
     return runFileOperation(async () => {
-      await flushSaveAtBoundary(async () => {
-        if (pendingSaveRef.current?.name === name) {
-          pendingSaveRef.current = null;
-          clearTimeout(saveTimerRef.current);
-          saveTimerRef.current = undefined;
-        }
-        if (isTauri() && dataDir) {
-          try {
-            await deleteMdFile(dataDir, name);
-          } catch (e) {
-            setLoadError(errorMessage(e));
-            return;
-          }
-        }
-        const index = filesRef.current.findIndex((file) => file.name === name);
-        lastSavedContentsRef.current.set(name, null);
-        const nextSelections = new Map(selectionsRef.current);
-        nextSelections.delete(name);
-        selectionsRef.current = nextSelections;
-        setFiles((prev) => prev.filter((file) => file.name !== name));
-        setActiveIndex((current) => {
-          if (index < 0 || index > current) return current;
-          if (index === current) return Math.max(0, Math.min(current, filesRef.current.length - 2));
-          return current - 1;
-        });
+      if (!(await flushSaveAtBoundary())) throw new Error("Could not save pending changes");
+      if (pendingSaveRef.current?.name === name) {
+        pendingSaveRef.current = null;
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = undefined;
+      }
+      if (isTauri() && dataDir) await deleteMdFile(dataDir, name);
+      const index = filesRef.current.findIndex((file) => file.name === name);
+      lastSavedContentsRef.current.set(name, null);
+      const nextSelections = new Map(selectionsRef.current);
+      nextSelections.delete(name);
+      selectionsRef.current = nextSelections;
+      setFiles((prev) => prev.filter((file) => file.name !== name));
+      setActiveIndex((current) => {
+        if (index < 0 || index > current) return current;
+        if (index === current) return Math.max(0, Math.min(current, filesRef.current.length - 2));
+        return current - 1;
       });
     });
   };
@@ -1064,6 +1038,8 @@ function App() {
               startStopShortcut={startStopShortcut}
               onSetStartStopShortcut={handleSetStartStopShortcut}
               globalHotkey={globalHotkey}
+              globalHotkeyError={globalHotkeyError}
+              globalHotkeyBusy={globalHotkeyBusy}
               onSetGlobalHotkey={handleSetGlobalHotkey}
               shortcutsDisabled={isDemoMode}
               dataDir={dataDir}

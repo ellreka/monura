@@ -3,7 +3,6 @@ const FENCE_LINE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
 /**
  * Line numbers (1-based, inclusive of the fence delimiter lines themselves)
  * that fall inside a fenced code block (``` or ~~~). Content in there is
- * never task/spent syntax, even if it looks like it (e.g. a code
  * example showing `- [ ] like this`).
  *
  * A pure text scan is enough: fence detection only needs the marker lines,

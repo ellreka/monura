@@ -15,7 +15,9 @@ type SettingsViewProps = {
   startStopShortcut: string | null;
   onSetStartStopShortcut: (key: string | null) => void;
   globalHotkey: string | null;
-  onSetGlobalHotkey: (key: string | null) => void;
+  globalHotkeyError?: string | null;
+  globalHotkeyBusy?: boolean;
+  onSetGlobalHotkey: (key: string | null) => void | Promise<void>;
   shortcutsDisabled?: boolean;
   dataDir?: string | null;
   dataDirDisabled?: boolean;
@@ -61,6 +63,8 @@ export function SettingsView({
   startStopShortcut,
   onSetStartStopShortcut,
   globalHotkey,
+  globalHotkeyError,
+  globalHotkeyBusy = false,
   onSetGlobalHotkey,
   shortcutsDisabled = false,
   dataDir,
@@ -147,13 +151,20 @@ export function SettingsView({
             label="Global hotkey"
             description="Works from anywhere, even while Monura isn't focused. Must include Cmd, Ctrl, or Option."
           >
-            <ShortcutCaptureButton
-              value={globalHotkey}
-              onCommit={onSetGlobalHotkey}
-              ariaLabel="Global hotkey"
-              disabled={shortcutsDisabled}
-              requireModifier
-            />
+            <div className="flex flex-col items-end gap-1">
+              <ShortcutCaptureButton
+                value={globalHotkey}
+                onCommit={onSetGlobalHotkey}
+                ariaLabel="Global hotkey"
+                disabled={shortcutsDisabled || globalHotkeyBusy}
+                requireModifier
+              />
+              {globalHotkeyError && (
+                <span className="max-w-[220px] text-right text-[10px] text-danger">
+                  {globalHotkeyError}
+                </span>
+              )}
+            </div>
           </Row>
         </Section>
         <Section title="Editor">

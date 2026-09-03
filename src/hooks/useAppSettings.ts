@@ -1,5 +1,5 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { useEffect, useState, type RefObject } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import type { EditorHandle } from "../components/Editor";
 import { toAccelerator } from "../lib/keybinding";
 import { getSettingsFilePath, loadSettings, saveSettings, type AppSettings } from "../lib/settings";
@@ -26,6 +26,9 @@ export function useAppSettings(editorRef: RefObject<EditorHandle | null>) {
     DEFAULT_START_STOP_SHORTCUT,
   );
   const [globalHotkey, setGlobalHotkey] = useState<string | null>(null);
+  const [globalHotkeyError, setGlobalHotkeyError] = useState<string | null>(null);
+  const [globalHotkeyBusy, setGlobalHotkeyBusy] = useState(false);
+  const globalHotkeyBusyRef = useRef(false);
 
   const settings = (): AppSettings => ({
     dataDir,
@@ -44,20 +47,35 @@ export function useAppSettings(editorRef: RefObject<EditorHandle | null>) {
     if (!isTauri()) return;
     let cancelled = false;
     void loadSettings()
-      .then((next) => {
+      .then(async (next) => {
         if (cancelled) return;
         setDataDirState(next.dataDir);
         setVimMode(next.vimMode);
         setPresets(next.presets);
         setPresetMinutes(next.presets[0]?.minutes ?? DEFAULT_PRESET_MINUTES);
         setStartStopShortcut(next.shortcuts.startStop);
-        setGlobalHotkey(next.globalHotkey);
+        try {
+          await invoke("set_global_hotkey", {
+            accelerator: next.globalHotkey ? toAccelerator(next.globalHotkey) : null,
+          });
+          setGlobalHotkey(next.globalHotkey);
+        } catch (error) {
+          setGlobalHotkey(null);
+          const nativeError = error instanceof Error ? error.message : String(error);
+          setGlobalHotkeyError(nativeError);
+          try {
+            await saveSettings({ ...next, globalHotkey: null });
+          } catch (saveError) {
+            const persistenceError =
+              saveError instanceof Error ? saveError.message : String(saveError);
+            setGlobalHotkeyError(
+              `${nativeError}; clearing the saved hotkey failed: ${persistenceError}`,
+            );
+          }
+        }
         void getSettingsFilePath()
           .then((path) => !cancelled && setSettingsFilePath(path))
           .catch((error) => console.error("settings path load failed:", error));
-        void invoke("set_global_hotkey", {
-          accelerator: next.globalHotkey ? toAccelerator(next.globalHotkey) : null,
-        }).catch((error) => console.error("set global hotkey failed:", error));
       })
       .catch((error) => console.error("settings load failed:", error))
       .finally(() => !cancelled && setSettingsReady(true));
@@ -130,13 +148,44 @@ export function useAppSettings(editorRef: RefObject<EditorHandle | null>) {
     persist({ ...settings(), presets: next, shortcuts: { startStop } });
   };
 
-  const setGlobal = (key: string | null) => {
-    setGlobalHotkey(key);
-    if (isTauri())
-      void invoke("set_global_hotkey", {
-        accelerator: key ? toAccelerator(key) : null,
-      }).catch((error) => console.error("set global hotkey failed:", error));
-    persist({ ...settings(), globalHotkey: key });
+  const setGlobal = async (key: string | null) => {
+    if (globalHotkeyBusyRef.current) return;
+    globalHotkeyBusyRef.current = true;
+    setGlobalHotkeyBusy(true);
+    const previous = globalHotkey;
+    const tauri = isTauri();
+    const next = { ...settings(), globalHotkey: key };
+    let nativeChanged = false;
+    try {
+      if (tauri) {
+        await invoke("set_global_hotkey", {
+          accelerator: key ? toAccelerator(key) : null,
+        });
+        nativeChanged = previous !== key;
+        await saveSettings(next);
+      }
+      setGlobalHotkey(key);
+      setGlobalHotkeyError(null);
+    } catch (error) {
+      let message = error instanceof Error ? error.message : String(error);
+      if (tauri && nativeChanged) {
+        try {
+          await invoke("set_global_hotkey", {
+            accelerator: previous ? toAccelerator(previous) : null,
+          });
+          setGlobalHotkey(previous);
+        } catch (rollbackError) {
+          const rollbackMessage =
+            rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
+          setGlobalHotkey(key);
+          message = `${message}; restoring previous hotkey failed: ${rollbackMessage}`;
+        }
+      }
+      setGlobalHotkeyError(message);
+    } finally {
+      globalHotkeyBusyRef.current = false;
+      setGlobalHotkeyBusy(false);
+    }
   };
 
   return {
@@ -148,6 +197,8 @@ export function useAppSettings(editorRef: RefObject<EditorHandle | null>) {
     presets,
     startStopShortcut,
     globalHotkey,
+    globalHotkeyError,
+    globalHotkeyBusy,
     setDataDir,
     setPresetMinutes,
     toggleVimMode,

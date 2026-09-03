@@ -36,6 +36,33 @@ describe("parseSessionLines", () => {
     expect(records[0].startedAt).toBe("2026-08-14T01:00:00.000Z");
     expect(records[1].startedAt).toBe("2026-08-14T05:00:00.000Z");
   });
+
+  it.each([
+    { v: 2 },
+    { file: 1 },
+    { lineText: 1 },
+    { startedAt: "not-a-date" },
+    { startedAt: "2026-02-30T01:00:00.000Z" },
+    { startedAt: "2026-08-14T01:00:00.000Z", tzOffsetMinutes: 900 },
+    { startedAt: "2026-08-14T01:00:00.000Z", tzOffsetMinutes: 30.5 },
+    { startedAt: "2026-08-14T01:00:00.000Z", presetMinutes: 0 },
+    { startedAt: "2026-08-14T01:00:00.000Z", elapsedSeconds: -1 },
+    { startedAt: "2026-08-14T01:00:00.000Z", elapsedSeconds: Infinity },
+  ])("skips invalid record %#", (override) => {
+    expect(parseSessionLines([JSON.stringify(record(override as Partial<SessionRecord>))])).toEqual(
+      [],
+    );
+  });
+
+  it("does not let invalid offsets reach date formatting", () => {
+    const lines = [JSON.stringify({ ...record({}), tzOffsetMinutes: undefined })];
+    expect(parseSessionLines(lines)).toEqual([]);
+    expect(
+      parseSessionLines([
+        '{"v":1,"file":"todo.md","startedAt":"2026-08-14T01:00:00.000Z","tzOffsetMinutes":540,"presetMinutes":30,"elapsedSeconds":1e999,"lineText":"task"}',
+      ]),
+    ).toEqual([]);
+  });
 });
 
 describe("localDateKey", () => {

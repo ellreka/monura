@@ -228,6 +228,24 @@ describe("SettingsView", () => {
     expect(onSetGlobalHotkey).toHaveBeenCalledWith("Meta-Shift-G");
   });
 
+  it("shows a global hotkey error", () => {
+    const { container } = renderSettings({ globalHotkeyError: "native failed" });
+
+    expect(container.textContent).toContain("native failed");
+  });
+
+  it("disables global hotkey capture while busy", async () => {
+    const { container, onSetGlobalHotkey } = renderSettings({ globalHotkeyBusy: true });
+    const button = container.querySelector<HTMLButtonElement>('[aria-label="Global hotkey"]')!;
+
+    expect(button.disabled).toBe(true);
+    await act(async () => {
+      button.click();
+      dispatchKeydown({ code: "KeyG", metaKey: true });
+    });
+    expect(onSetGlobalHotkey).not.toHaveBeenCalled();
+  });
+
   it("disables shortcut capture and hides add/remove when shortcutsDisabled", () => {
     const { container } = renderSettings({ shortcutsDisabled: true });
 

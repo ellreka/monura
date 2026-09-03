@@ -1,9 +1,5 @@
 @import "tailwindcss";
 
-/*
- * Bare, unprefixed tokens. `src/lib/editor/theme.ts` (CodeMirror's theme extension) reads
- * these directly as `var(--x)` strings because it runs outside Tailwind's className pipeline.
- */
 :root {
   color-scheme: dark;
   --ink: #f2f0f6;
@@ -19,12 +15,10 @@
 }
 
 @theme inline {
-  /* Aliased so Tailwind utilities (`bg-ink`, `text-accent`, ...) stay in sync with the bare tokens above — `inline` keeps them as live `var(--x)` references instead of baking in resolved values. */
   --color-ink: var(--ink);
   --color-muted: var(--muted);
   --color-accent: var(--accent);
 
-  /* Tailwind-only tokens: nothing outside the className pipeline reads these. */
   --color-on-accent: #28161c;
   --color-border: rgba(255, 255, 255, 0.1);
   --color-bg: rgba(18, 17, 24, 0);
@@ -72,9 +66,6 @@
 }
 
 @layer components {
-  /* Subtle film-grain overlay across the whole window; a data-URI SVG turbulence filter
-     isn't practical to express as an arbitrary-value utility, so it stays as a small
-     hand-written class applied via `className="noise-overlay"` alongside utilities. */
   .noise-overlay::before {
     content: "";
     position: absolute;
@@ -87,8 +78,6 @@
     mix-blend-mode: soft-light;
   }
 
-  /* CodeMirror renders its own DOM beneath `.monura-editor`; those nodes aren't
-     JSX-controlled so their sizing can't be set via className utilities. */
   .monura-editor .cm-editor {
     height: 100%;
   }

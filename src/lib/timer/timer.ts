@@ -12,43 +12,32 @@ export const DEBUG_FAST_FORWARD_SECONDS = 5;
 /** The preset selected at startup (minutes). */
 export const DEFAULT_PRESET_MINUTES = 60;
 
-/** At most this many quick-start presets are configurable (Settings screen). */
 export const MAX_PRESETS = 4;
 
 /**
- * A single quick-start duration and its optional keyboard shortcut (mirrors clicking its pill
- * — selects only, never starts tracking). null shortcut = unassigned. Between 1 and
- * `MAX_PRESETS` presets are required.
  */
 export interface TimerPreset {
   minutes: number;
   shortcut: string | null;
 }
 
-/** Presets shipped out of the box, matching the historical Cmd-1..3 bindings. */
 export const DEFAULT_PRESETS: readonly TimerPreset[] = [
   { minutes: 10, shortcut: "Meta-1" },
   { minutes: 30, shortcut: "Meta-2" },
   { minutes: DEFAULT_PRESET_MINUTES, shortcut: "Meta-3" },
 ];
 
-/** Shortcut shipped out of the box for starting/stopping tracking (mirrors the play/stop button). */
 export const DEFAULT_START_STOP_SHORTCUT = "Meta-Enter";
 
-/** Validates and rounds a user-entered preset value (minutes). Returns null when out of range. */
 export function sanitizePresetMinutes(value: number): number | null {
   if (!Number.isFinite(value)) return null;
   const rounded = Math.round(value);
   return rounded >= 1 && rounded <= 1440 ? rounded : null;
 }
 
-/** Which action a shortcut is being assigned to: the start/stop toggle, or a preset index. */
 export type ShortcutTarget = "startStop" | number;
 
 /**
- * Assigns `key` to `target` (a preset index or the start/stop toggle), clearing it from
- * whichever other action previously held the same key (last write wins — two actions can
- * never share one shortcut). Passing `key: null` clears `target` only.
  */
 export function reassignShortcut(
   presets: readonly TimerPreset[],

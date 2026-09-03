@@ -97,7 +97,6 @@ export function isSubtreeComplete(node: TaskNode): boolean {
   return node.checked && node.children.every(isSubtreeComplete);
 }
 
-/** Traverses the whole tree and computes per-line display metadata. */
 export function computeTaskMeta(content: string): Map<number, TaskMeta> {
   const meta = new Map<number, TaskMeta>();
   for (const node of buildTaskTree(parseLines(content))) {

@@ -20,7 +20,6 @@ interface LauncherProps {
 
 type Row = { kind: "new-file" } | { kind: "file"; name: string; index: number };
 
-/** File names always end in `.md`, so this can never collide with a real row's value. */
 const NEW_FILE_VALUE = "new-file";
 
 const itemClass =
@@ -149,7 +148,6 @@ export function Launcher({
     setMenu({ name, x: event.clientX, y: event.clientY });
   };
 
-  /** Fully isolated from the Command root: arrow/Home/End/Enter must edit text here, never drive list navigation. */
   const handleEditKeyDown = (event: React.KeyboardEvent) => {
     event.stopPropagation();
     if (event.key === "Enter") commit();
@@ -191,6 +189,7 @@ export function Launcher({
           }
         }}
       >
+        {error && <div className="px-[14px] py-2 text-[11px] text-danger">{error}</div>}
         <Command.Input
           ref={inputRef}
           value={query}
@@ -286,6 +285,7 @@ export function Launcher({
             role="menuitem"
             className="rounded-[5px] px-[10px] py-1.5 text-left text-xs text-danger hover:bg-danger/8"
             onClick={() => {
+              setError(null);
               void Promise.resolve(onDeleteFile(menu.name)).catch((error) =>
                 setError(error instanceof Error ? error.message : String(error)),
               );

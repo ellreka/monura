@@ -150,18 +150,8 @@ export function editorTheme(): Extension {
 
 /**
  * `defaultHighlightStyle` (from @codemirror/language) hardcodes dark, low-luminance colors
- * (e.g. comments at #940) designed for a light background — unreadable on this app's
- * dark-only background. Markdown headings/emphasis/strong/links carry no explicit color
- * here (they inherit `editorTheme`'s ink), so only the tags with hardcoded colors need
- * an override.
- *
- * Note: `@lezer/markdown` tags every syntax marker (`#`, `-`/`*` list bullets, `>` quote,
- * `[]`/`()` link brackets, `*`/`_` emphasis, `` ` `` code fences) as `tags.processingInstruction`
- * — NOT `tags.meta`. Styling `tags.meta` here would be a no-op for markdown.
  */
 const markdownHighlightStyle = HighlightStyle.define([
-  // Dims the raw markup characters (#, -, *, >, [], (), `) so document content reads
-  // more prominently than its syntax — mirrors muted UI chrome like the gutter/spent: tokens.
   { tag: tags.processingInstruction, color: palette.muted },
   { tag: tags.heading, textDecoration: "underline", fontWeight: "bold" },
   { tag: tags.emphasis, fontStyle: "italic" },

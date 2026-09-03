@@ -548,6 +548,35 @@ describe("rendered App write conflict resolution", () => {
   });
 });
 
+describe("launcher file operation failures", () => {
+  it("keeps App on the editor and shows backend create errors in the Launcher", async () => {
+    mocks.tauri = true;
+    mocks.initialDataDir = "dir";
+    mocks.invoke.mockImplementation((command: string) =>
+      command === "create_md_file"
+        ? Promise.reject(new Error("create failed"))
+        : Promise.resolve([]),
+    );
+    act(() => root?.unmount());
+    root = createRoot(container!);
+    act(() => root?.render(createElement(App)));
+    act(() =>
+      (mocks.effects.current?.setFiles as (files: unknown[]) => void)([
+        { name: "work.md", content: "", raw: "" },
+      ]),
+    );
+    act(() => container?.querySelector<HTMLButtonElement>("[aria-label='Open launcher']")?.click());
+    act(() => container?.querySelector<HTMLElement>("[data-value='new-file']")?.click());
+    const input = container?.querySelector<HTMLInputElement>("input:not([placeholder])");
+    await act(async () => {
+      input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      await Promise.resolve();
+    });
+    expect(container?.textContent).toContain("create failed");
+    expect(container?.textContent).not.toContain("Could not open the folder");
+  });
+});
+
 describe("data directory selection", () => {
   it("persists a first-run folder through App", async () => {
     mocks.tauri = true;
