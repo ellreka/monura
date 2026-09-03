@@ -3,6 +3,8 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_notification::NotificationExt;
 
+const EXPIRY_SOUND: &str = "Glass";
+
 /// Monotonically increasing token guarding the pending native alarm: arming a new timer or
 /// disarming the current one bumps the token, so an in-flight sleep whose token has gone stale
 /// silently becomes a no-op when it wakes.
@@ -41,6 +43,7 @@ pub fn timer_arm(
             .builder()
             .title(format!("{preset_label} elapsed"))
             .body(label)
+            .sound(EXPIRY_SOUND)
             .show();
         let _ = handle.emit("timer-expired-native", ());
     });

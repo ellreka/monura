@@ -5,14 +5,14 @@ export interface SampleFile {
 
 const WORK_MD = `## 2026-08-13
 
-- [ ] Parser addition +monura spent:1h10m
+- [ ] Parser addition spent:1h10m
   - [ ] Non-line-end spent: spent:45m
   - [ ] Invalid time notation
 Insert and handle it if a review comes back first thing in the morning.
 
-- [ ] Recalculate decorations +monura
-- [ ] Throttle notify events +monura
-- [x] Verify CodeMirror version +monura spent:20m
+- [ ] Recalculate decorations
+- [ ] Throttle notify events
+- [x] Verify CodeMirror version spent:20m
 - [x] Initial pnpm workspace setup spent:10m
 
 ## Later
@@ -23,10 +23,10 @@ Don't break the grep-able state.
 
 const MONURA_MD = `## Design notes
 
-- [ ] Make the timer icon dock-resident +monura
+- [ ] Make the timer icon dock-resident
   - [ ] Tray icon click event
   - [ ] Notification permission request timing
-- [ ] Session log JSONL rotation design +monura
+- [ ] Session log JSONL rotation design
 
 Write down ideas here. They don't have to be tasks yet.
 `;

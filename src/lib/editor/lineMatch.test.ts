@@ -16,24 +16,12 @@ describe("findLineByText", () => {
     expect(findLineByText(Text.of(["  - [ ] A"]), "- [ ] A")).toBeNull();
   });
 
-  it("prefers the match nearest to the previous line number", () => {
+  it("returns null when duplicate lines are ambiguous", () => {
     const target = "- [ ] duplicate";
-    const found = findLineByText(Text.of([target, "memo", target, "memo", target]), target, 5);
-    expect(found?.number).toBe(5);
+    expect(findLineByText(Text.of([target, "memo", target]), target)).toBeNull();
   });
 
-  it("prefers the earlier line when two matches are equally near", () => {
-    const target = "- [ ] duplicate";
-    const found = findLineByText(Text.of([target, "memo", target, "memo", target]), target, 4);
-    expect(found?.number).toBe(3);
-  });
-
-  it("falls back to the first match when no hint is given", () => {
-    const target = "- [ ] duplicate";
-    expect(findLineByText(Text.of([target, "memo", target]), target)?.number).toBe(1);
-  });
-
-  it("matches empty lines too", () => {
-    expect(findLineByText(Text.of(["- [ ] A", "", ""]), "", 3)?.number).toBe(3);
+  it("matches a unique empty line", () => {
+    expect(findLineByText(Text.of(["- [ ] A", "", "memo"]), "")?.number).toBe(2);
   });
 });

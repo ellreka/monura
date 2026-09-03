@@ -11,8 +11,6 @@ export interface SessionRecord {
   presetMinutes: number;
   elapsedSeconds: number;
   lineText: string;
-  projects: string[];
-  lineDeleted: boolean;
 }
 
 export interface CreateSessionRecordInput {
@@ -21,8 +19,6 @@ export interface CreateSessionRecordInput {
   presetMinutes: number;
   elapsedSeconds: number;
   lineText: string;
-  projects: string[];
-  lineDeleted: boolean;
 }
 
 /** Creates one session history record. Bakes in a snapshot at tracking time (no later re-resolution). */
@@ -36,8 +32,6 @@ export function createSessionRecord(input: CreateSessionRecordInput): SessionRec
     presetMinutes: input.presetMinutes,
     elapsedSeconds: input.elapsedSeconds,
     lineText: input.lineText,
-    projects: input.projects,
-    lineDeleted: input.lineDeleted,
   };
 }
 

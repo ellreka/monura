@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { addSpentToLine, extractSpentSeconds, formatDuration, formatDurationMinutes, matchSpentTokens } from "./spent";
+import {
+  addSpentToLine,
+  extractSpentSeconds,
+  formatDuration,
+  formatDurationMinutes,
+  matchSpentTokens,
+} from "./spent";
 
 describe("matchSpentTokens / extractSpentSeconds", () => {
   it("parses minutes-only notation", () => {
@@ -22,9 +28,12 @@ describe("matchSpentTokens / extractSpentSeconds", () => {
     expect(extractSpentSeconds("- [ ] task spent:1h10m30s")).toBe(3600 + 600 + 30);
   });
 
-  it("ignores spent: not followed by a digit (not at line end / invalid time)", () => {
+  it("ignores invalid and embedded tokens", () => {
     expect(extractSpentSeconds("- [ ] spent: mid-line")).toBe(0);
     expect(extractSpentSeconds("- [ ] spent:abc")).toBe(0);
+    expect(extractSpentSeconds("- [ ] task unspent:10m")).toBe(0);
+    expect(extractSpentSeconds("- [ ] task spent:10minutes")).toBe(0);
+    expect(extractSpentSeconds("- [ ] task spent:10mabc")).toBe(0);
   });
 
   it("finds a real token even when a bare 'spent:' appears earlier in the line", () => {
@@ -97,6 +106,10 @@ describe("addSpentToLine", () => {
     expect(addSpentToLine("- [ ] write README", 15 * 60)).toBe("- [ ] write README spent:15m");
   });
 
+  it("preserves trailing whitespace when appending", () => {
+    expect(addSpentToLine("- [ ] task  ", 60)).toBe("- [ ] task spent:1m  ");
+  });
+
   it("accumulates onto the existing token instead of adding a second one", () => {
     expect(addSpentToLine("- [ ] task spent:1h10m", 10 * 60)).toBe("- [ ] task spent:1h20m");
   });
@@ -111,9 +124,13 @@ describe("addSpentToLine", () => {
     expect(extractSpentSeconds(result)).toBe(35 * 60);
   });
 
-  it("does not touch a bare 'spent:' that has no digits, only the real token", () => {
-    const result = addSpentToLine("- [ ] mid-line  spent: spent:45m", 15 * 60);
-    expect(result).toBe("- [ ] mid-line  spent: spent:1h");
+  it("does not touch invalid or embedded spent text", () => {
+    expect(addSpentToLine("- [ ] mid-line  spent: spent:45m", 15 * 60)).toBe(
+      "- [ ] mid-line  spent: spent:1h",
+    );
+    expect(addSpentToLine("- [ ] task unspent:10m", 5 * 60)).toBe(
+      "- [ ] task unspent:10m spent:5m",
+    );
   });
 
   it("preserves trailing content after the spent token", () => {

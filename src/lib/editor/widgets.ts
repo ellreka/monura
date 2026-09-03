@@ -1,3 +1,5 @@
+import { isTauri } from "@tauri-apps/api/core";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { EditorView, WidgetType } from "@codemirror/view";
 import { formatDurationMinutes } from "../parser";
 
@@ -32,7 +34,7 @@ export class CheckboxWidget extends WidgetType {
 }
 
 function toggleCheckboxAtLine(view: EditorView, lineNumber: number): void {
-  if (lineNumber > view.state.doc.lines) return;
+  if (view.state.readOnly || lineNumber > view.state.doc.lines) return;
   const line = view.state.doc.line(lineNumber);
   const match = /\[( |x|X)\]/.exec(line.text);
   if (!match || match.index === undefined) return;
@@ -76,5 +78,62 @@ export class SpentWidget extends WidgetType {
     el.className = "cm-spent-token";
     el.textContent = `spent:${formatDurationMinutes(this.seconds)}`;
     return el;
+  }
+}
+
+export class LinkWidget extends WidgetType {
+  constructor(
+    private readonly text: string,
+    private readonly url: string,
+  ) {
+    super();
+  }
+
+  eq(other: LinkWidget): boolean {
+    return other.text === this.text && other.url === this.url;
+  }
+
+  toDOM(): HTMLElement {
+    const el = document.createElement("span");
+    el.className = "cm-md-link";
+    el.setAttribute("role", "link");
+    el.title = this.url;
+    el.textContent = this.text;
+    el.onmousedown = (event) => {
+      event.preventDefault();
+    };
+    el.onclick = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      void openLink(this.url);
+    };
+    return el;
+  }
+
+  ignoreEvent(): boolean {
+    return false;
+  }
+}
+
+async function openLink(url: string): Promise<void> {
+  try {
+    const parsed = new URL(url);
+    if (
+      parsed.protocol !== "http:" &&
+      parsed.protocol !== "https:" &&
+      parsed.protocol !== "mailto:"
+    )
+      return;
+    if (isTauri()) {
+      await openUrl(parsed.href);
+    } else {
+      const link = document.createElement("a");
+      link.href = parsed.href;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.click();
+    }
+  } catch (e) {
+    console.error("open link failed:", e);
   }
 }

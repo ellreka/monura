@@ -3,7 +3,6 @@ const FENCE_LINE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
 /**
  * Line numbers (1-based, inclusive of the fence delimiter lines themselves)
  * that fall inside a fenced code block (``` or ~~~). Content in there is
- * never task/spent/project syntax, even if it looks like it (e.g. a code
  * example showing `- [ ] like this`).
  *
  * A pure text scan is enough: fence detection only needs the marker lines,
@@ -33,7 +32,12 @@ export function fencedCodeLineNumbers(content: string): Set<number> {
 
     result.add(lineNumber);
     // Closing fence: same character, at least as long as the opener, nothing else on the line.
-    if (match && match[1][0] === fenceChar && match[1].length >= fenceLength && match[2].trim() === "") {
+    if (
+      match &&
+      match[1][0] === fenceChar &&
+      match[1].length >= fenceLength &&
+      match[2].trim() === ""
+    ) {
       fenceChar = null;
       fenceLength = 0;
     }

@@ -3,10 +3,7 @@ import {
   DEBUG_FAST_FORWARD_SECONDS,
   DEFAULT_PRESET_MINUTES,
   DEFAULT_PRESETS,
-  DEFAULT_TIMER_SHORTCUTS,
-  MAX_PRESETS,
-  compactPresets,
-  compactPresetShortcuts,
+  DEFAULT_START_STOP_SHORTCUT,
   computeElapsedMs,
   createIdleTimer,
   fastForwardToRemaining,
@@ -17,7 +14,7 @@ import {
   sanitizePresetMinutes,
   startTimer,
   stopTimer,
-  type TimerShortcuts,
+  type TimerPreset,
 } from "./timer";
 
 describe("startTimer / computeElapsedMs", () => {
@@ -115,77 +112,19 @@ describe("formatPresetLabel", () => {
 });
 
 describe("DEFAULT_PRESETS", () => {
-  it("ships 3 of the 4 configurable slots filled, the 4th empty", () => {
-    expect(DEFAULT_PRESETS).toHaveLength(MAX_PRESETS);
-    expect(DEFAULT_PRESETS).toEqual([10, 30, DEFAULT_PRESET_MINUTES, null]);
-  });
-});
-
-describe("compactPresets", () => {
-  it("drops empty slots while preserving order", () => {
-    expect(compactPresets([10, null, 30, null])).toEqual([10, 30]);
-  });
-});
-
-describe("compactPresetShortcuts", () => {
-  it("pairs each configured slot with its shortcut, dropping empty slots", () => {
-    expect(compactPresetShortcuts([10, null, 30], ["Meta-1", "Meta-2", "Meta-3"])).toEqual([
-      { minutes: 10, key: "Meta-1" },
-      { minutes: 30, key: "Meta-3" },
+  it("ships at least one preset, matching the historical Cmd-1..3 bindings", () => {
+    expect(DEFAULT_PRESETS.length).toBeGreaterThanOrEqual(1);
+    expect(DEFAULT_PRESETS).toEqual([
+      { minutes: 10, shortcut: "Meta-1" },
+      { minutes: 30, shortcut: "Meta-2" },
+      { minutes: DEFAULT_PRESET_MINUTES, shortcut: "Meta-3" },
     ]);
   });
-
-  it("treats a missing or undefined shortcut entry as unassigned", () => {
-    expect(compactPresetShortcuts([10], [])).toEqual([{ minutes: 10, key: null }]);
-  });
 });
 
-describe("reassignShortcut", () => {
-  const shortcuts: TimerShortcuts = { toggle: "Meta-Enter", presets: ["Meta-1", "Meta-2", null] };
-
-  it("assigns a key to a preset slot", () => {
-    expect(reassignShortcut(shortcuts, 2, "Meta-3")).toEqual({
-      toggle: "Meta-Enter",
-      presets: ["Meta-1", "Meta-2", "Meta-3"],
-    });
-  });
-
-  it("assigns a key to the toggle", () => {
-    expect(reassignShortcut(shortcuts, "toggle", "Meta-Space")).toEqual({
-      toggle: "Meta-Space",
-      presets: ["Meta-1", "Meta-2", null],
-    });
-  });
-
-  it("clears the key from whichever other slot held it (last write wins)", () => {
-    expect(reassignShortcut(shortcuts, 2, "Meta-1")).toEqual({
-      toggle: "Meta-Enter",
-      presets: [null, "Meta-2", "Meta-1"],
-    });
-  });
-
-  it("clears the key from the toggle when a preset claims it", () => {
-    expect(reassignShortcut(shortcuts, 2, "Meta-Enter")).toEqual({
-      toggle: null,
-      presets: ["Meta-1", "Meta-2", "Meta-Enter"],
-    });
-  });
-
-  it("clears a target without touching other bindings when key is null", () => {
-    expect(reassignShortcut(shortcuts, 0, null)).toEqual({
-      toggle: "Meta-Enter",
-      presets: [null, "Meta-2", null],
-    });
-  });
-});
-
-describe("DEFAULT_TIMER_SHORTCUTS", () => {
-  it("has one shortcut per preset slot plus the toggle, matching the historical bindings", () => {
-    expect(DEFAULT_TIMER_SHORTCUTS.presets).toHaveLength(MAX_PRESETS);
-    expect(DEFAULT_TIMER_SHORTCUTS).toEqual({
-      toggle: "Meta-Enter",
-      presets: ["Meta-1", "Meta-2", "Meta-3", "Meta-4"],
-    });
+describe("DEFAULT_START_STOP_SHORTCUT", () => {
+  it("matches the historical binding", () => {
+    expect(DEFAULT_START_STOP_SHORTCUT).toBe("Meta-Enter");
   });
 });
 
@@ -219,5 +158,60 @@ describe("sanitizePresetMinutes", () => {
     expect(sanitizePresetMinutes(-5)).toBeNull();
     expect(sanitizePresetMinutes(NaN)).toBeNull();
     expect(sanitizePresetMinutes(1441)).toBeNull();
+  });
+});
+
+describe("reassignShortcut", () => {
+  const presets: TimerPreset[] = [
+    { minutes: 10, shortcut: "Meta-1" },
+    { minutes: 30, shortcut: "Meta-2" },
+  ];
+  const startStop = "Meta-Enter";
+
+  it("assigns a key to a preset", () => {
+    expect(reassignShortcut(presets, startStop, 1, "Meta-3")).toEqual({
+      startStop: "Meta-Enter",
+      presets: [
+        { minutes: 10, shortcut: "Meta-1" },
+        { minutes: 30, shortcut: "Meta-3" },
+      ],
+    });
+  });
+
+  it("assigns a key to the start/stop toggle", () => {
+    expect(reassignShortcut(presets, startStop, "startStop", "Meta-Space")).toEqual({
+      startStop: "Meta-Space",
+      presets,
+    });
+  });
+
+  it("clears the key from whichever other preset held it (last write wins)", () => {
+    expect(reassignShortcut(presets, startStop, 1, "Meta-1")).toEqual({
+      startStop: "Meta-Enter",
+      presets: [
+        { minutes: 10, shortcut: null },
+        { minutes: 30, shortcut: "Meta-1" },
+      ],
+    });
+  });
+
+  it("clears the key from the toggle when a preset claims it", () => {
+    expect(reassignShortcut(presets, startStop, 1, "Meta-Enter")).toEqual({
+      startStop: null,
+      presets: [
+        { minutes: 10, shortcut: "Meta-1" },
+        { minutes: 30, shortcut: "Meta-Enter" },
+      ],
+    });
+  });
+
+  it("clears a target without touching other bindings when key is null", () => {
+    expect(reassignShortcut(presets, startStop, 0, null)).toEqual({
+      startStop: "Meta-Enter",
+      presets: [
+        { minutes: 10, shortcut: null },
+        { minutes: 30, shortcut: "Meta-2" },
+      ],
+    });
   });
 });

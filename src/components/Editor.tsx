@@ -1,22 +1,26 @@
-import { useEffect, useImperativeHandle, useRef, type Ref } from "react";
-import { Annotation, EditorState, MapMode } from "@codemirror/state";
+import { useEffect, useImperativeHandle, useLayoutEffect, useRef, type Ref } from "react";
+import {
+  Annotation,
+  EditorState,
+  EditorSelection as CMEditorSelection,
+  MapMode,
+} from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { getCM, vim } from "@replit/codemirror-vim";
 import {
   createMonuraExtensions,
-  editorTheme,
-  markdownHighlighting,
+  readOnlyCompartment,
   timerKeymapCompartment,
   setUiStateEffect,
-  themeCompartment,
   uiStateField,
   vimEditableCompartment,
   vimModeCompartment,
 } from "../lib/editor";
-import { findLineByText } from "../lib/editor/lineMatch";
 import { createTimerKeymap } from "../lib/editor/timerKeymap";
-import type { PresetKeymapEntry } from "../lib/timer";
-import { addSpentToLine, computeTaskMeta, parseLines } from "../lib/parser";
+import type { TimerPreset } from "../lib/timer";
+import { addSpentToLine, parseLines } from "../lib/parser";
+import { findLineByText } from "../lib/editor/lineMatch";
+import { applyEditorChanges, detectEol } from "../lib/files";
 
 /** Annotation marking a doc replacement that originates externally (from disk). Line tracking is handled by the imperative side. */
 const externalReloadAnnotation = Annotation.define<boolean>();
@@ -30,34 +34,25 @@ export interface CursorLineChangeInfo extends CursorLineInfo {
   isTask: boolean;
 }
 
-export interface TrackedLineChangeInfo {
-  lineNumber: number;
-  text: string;
-}
-
 export interface StopTrackingResult {
   deleted: boolean;
   lineText: string;
-  projects: string[];
 }
 
 export interface AppliedSpentResult {
   lineText: string;
-  projects: string[];
+}
+
+export interface EditorSelection {
+  ranges: { anchor: number; head: number }[];
+  mainIndex: number;
 }
 
 export interface EditorHandle {
   getCursorLine(): CursorLineInfo | null;
-  startTracking(lineNumber: number): void;
-  stopTracking(elapsedSeconds: number): StopTrackingResult;
-  /** Inheritance-resolved projects for the tracked line. null while not tracking. */
-  getTrackedProjects(): string[] | null;
-  /**
-   * Replaces the whole doc (used to reflect external edits; never called from our own edit path).
-   * While tracking, re-identifies the tracked line by exact text match; if not found,
-   * calls onTrackedLineLost (merging with the same flow as line deletion). Undo history is reset.
-   */
-  reloadContent(text: string): void;
+  startTracking(lineNumber?: number): CursorLineInfo | null;
+  stopTracking(elapsedSeconds: number, applySpent?: boolean): StopTrackingResult;
+  reloadContent(text: string, raw: string): void;
   /**
    * Adds spent: to the given line (used to pick a new recording target after the tracked line is lost).
    * Returns null if the line does not exist.
@@ -66,43 +61,75 @@ export interface EditorHandle {
   /** Moves DOM focus into the editor (e.g. after a click on a chrome button, like starting the timer). */
   focus(): void;
   setVimMode(enabled: boolean): void;
-  setTheme(dark: boolean): void;
-  setTimerKeymap(presets: readonly PresetKeymapEntry[], toggleKey: string | null): void;
+  setTimerKeymap(presets: readonly TimerPreset[], startStopShortcut: string | null): void;
 }
 
 interface EditorProps {
   ref?: Ref<EditorHandle>;
   initialContent: string;
-  onChange: (text: string) => void;
+  initialRaw: string;
+  onChange: (text: string, raw: string) => void;
   vimMode?: boolean;
-  theme?: "light" | "dark";
-  presets: readonly PresetKeymapEntry[];
+  presets: readonly TimerPreset[];
   /** null = no shortcut assigned. */
-  toggleKey?: string | null;
+  startStopShortcut?: string | null;
   onVimStatusChange?: (status: string | null) => void;
   onCursorLineChange?: (info: CursorLineChangeInfo) => void;
-  onTrackedLineChange?: (info: TrackedLineChangeInfo) => void;
-  /** Called when the tracked line is lost (deleted, or not re-identified after an external edit). */
-  onTrackedLineLost?: () => void;
   /** Changes the selected preset only — never starts tracking. */
   onSelectPreset?: (presetMinutes: number) => void;
   /** Starts tracking with the current preset when idle, stops when running. */
   onToggle?: () => void;
+  readOnly?: boolean;
+  autoFocus?: boolean;
+  getInitialSelection?: () => EditorSelection | null;
+  focusSignal?: number;
+  onSelectionChange?: (selection: EditorSelection) => void;
 }
 
-export function Editor({ ref, initialContent, onChange, vimMode = false, theme = "light", presets, toggleKey = null, onVimStatusChange, onCursorLineChange, onTrackedLineChange, onTrackedLineLost, onSelectPreset, onToggle }: EditorProps) {
+export function Editor({
+  ref,
+  initialContent,
+  initialRaw,
+  onChange,
+  vimMode = false,
+  presets,
+  startStopShortcut = null,
+  onVimStatusChange,
+  onCursorLineChange,
+  onSelectPreset,
+  onToggle,
+  readOnly = false,
+  autoFocus = false,
+  getInitialSelection,
+  focusSignal = 0,
+  onSelectionChange,
+}: EditorProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
   const trackedAnchorRef = useRef<number | null>(null);
-  const trackedSnapshotRef = useRef<{ text: string; projects: string[] } | null>(null);
+  const rawContentRef = useRef(initialRaw);
+  const trackedSnapshotRef = useRef<{ text: string } | null>(null);
   /** Latest text of the tracked line (the re-identification key after external edits). */
   const trackedTextRef = useRef<string | null>(null);
   const vimListenerCleanupRef = useRef<(() => void) | null>(null);
-
   // Latest callbacks for the mount-time effect and the imperative handle below.
-  const latest = useRef({ onChange, onVimStatusChange, onCursorLineChange, onTrackedLineChange, onTrackedLineLost, onSelectPreset, onToggle });
+  const latest = useRef({
+    onChange,
+    onVimStatusChange,
+    onCursorLineChange,
+    onSelectPreset,
+    onToggle,
+    onSelectionChange,
+  });
   useEffect(() => {
-    latest.current = { onChange, onVimStatusChange, onCursorLineChange, onTrackedLineChange, onTrackedLineLost, onSelectPreset, onToggle };
+    latest.current = {
+      onChange,
+      onVimStatusChange,
+      onCursorLineChange,
+      onSelectPreset,
+      onToggle,
+      onSelectionChange,
+    };
   });
 
   function notifyCursorLine(view: EditorView): void {
@@ -123,7 +150,9 @@ export function Editor({ ref, initialContent, onChange, vimMode = false, theme =
       queueMicrotask(() => {
         if (viewRef.current !== view) return;
         view.dispatch({
-          effects: vimEditableCompartment.reconfigure(EditorView.editable.of(!!cm.state.vim?.insertMode)),
+          effects: vimEditableCompartment.reconfigure(
+            EditorView.editable.of(!!cm.state.vim?.insertMode),
+          ),
         });
       });
     };
@@ -138,15 +167,28 @@ export function Editor({ ref, initialContent, onChange, vimMode = false, theme =
     const view = new EditorView({
       state: EditorState.create({
         doc: initialContent,
+        selection: (() => {
+          const initialSelection = getInitialSelection?.();
+          if (!initialSelection || initialSelection.ranges.length === 0) return undefined;
+          const ranges = initialSelection.ranges.map(({ anchor, head }) =>
+            CMEditorSelection.range(
+              Math.max(0, Math.min(anchor, initialContent.length)),
+              Math.max(0, Math.min(head, initialContent.length)),
+            ),
+          );
+          return CMEditorSelection.create(
+            ranges,
+            Math.max(0, Math.min(initialSelection.mainIndex, ranges.length - 1)),
+          );
+        })(),
         extensions: [
           createMonuraExtensions({
-            onDocChange: (text) => latest.current.onChange(text),
             vimMode,
-            dark: theme === "dark",
             presets,
-            toggleKey,
+            startStopShortcut,
             onSelectPreset: (presetMinutes) => latest.current.onSelectPreset?.(presetMinutes),
             onToggle: () => latest.current.onToggle?.(),
+            readOnly,
           }),
           // Keep the tracked line following position shifts caused by edits (in-memory tracking only; not persisted)
           EditorView.updateListener.of((update) => {
@@ -154,21 +196,110 @@ export function Editor({ ref, initialContent, onChange, vimMode = false, theme =
               (tr) => tr.annotation(externalReloadAnnotation) === true,
             );
             if (update.docChanged && !isExternalReload && trackedAnchorRef.current !== null) {
-              const mapped = update.changes.mapPos(trackedAnchorRef.current, -1, MapMode.TrackDel);
-              trackedAnchorRef.current = mapped;
-              const nextLine = mapped === null ? null : update.state.doc.lineAt(mapped).number;
+              const anchor = trackedAnchorRef.current;
+              const oldLine = update.startState.doc.lineAt(anchor);
+              let lost = false;
+              update.changes.iterChanges((fromA, toA, fromB, toB) => {
+                const touchesLine = fromA < oldLine.to && toA > oldLine.from;
+                const removed = update.startState.doc.sliceString(fromA, toA);
+                const inserted = update.state.doc.sliceString(fromB, toB);
+                const previousLine =
+                  oldLine.number > 1 ? update.startState.doc.line(oldLine.number - 1) : null;
+                const nextLine =
+                  oldLine.number < update.startState.doc.lines
+                    ? update.startState.doc.line(oldLine.number + 1)
+                    : null;
+                const deletesPreviousLine =
+                  inserted.length === 0 &&
+                  previousLine !== null &&
+                  fromA === previousLine.from &&
+                  toA === oldLine.from;
+                const deletesNextLine =
+                  inserted.length === 0 &&
+                  nextLine !== null &&
+                  fromA === oldLine.to &&
+                  toA === nextLine.to;
+                const deletesAdjacentLines =
+                  inserted.length === 0 &&
+                  ((fromA < oldLine.from &&
+                    toA === oldLine.from &&
+                    update.startState.doc.lineAt(fromA).from === fromA) ||
+                    (fromA === oldLine.to &&
+                      toA > oldLine.to &&
+                      update.startState.doc.lineAt(toA).to === toA));
+                const preservesPrecedingBoundary =
+                  fromA <= oldLine.from && toA === oldLine.from && inserted.endsWith("\n");
+                const preservesFollowingBoundary =
+                  fromA === oldLine.to && toA > oldLine.to && inserted.startsWith("\n");
+                const crossesBoundary =
+                  removed.includes("\n") &&
+                  fromA <= oldLine.to &&
+                  toA >= oldLine.from &&
+                  !deletesPreviousLine &&
+                  !deletesNextLine &&
+                  !preservesPrecedingBoundary &&
+                  !preservesFollowingBoundary;
+                if (crossesBoundary && !deletesAdjacentLines) lost = true;
+                if (
+                  inserted.includes("\n") &&
+                  ((fromA > oldLine.from && fromA < oldLine.to) ||
+                    (fromA === oldLine.from && toA === oldLine.to) ||
+                    (removed.includes("\n") &&
+                      touchesLine &&
+                      !preservesPrecedingBoundary &&
+                      !preservesFollowingBoundary))
+                )
+                  lost = true;
+                if (
+                  update.transactions.some((tr) => tr.isUserEvent("move.line")) &&
+                  (touchesLine ||
+                    (removed.includes("\n") && fromA <= oldLine.to && toA >= oldLine.from))
+                )
+                  lost = true;
+              });
+              const mappedAnchor = update.changes.mapPos(anchor, 1, MapMode.TrackDel);
+              trackedAnchorRef.current =
+                lost || mappedAnchor === null ? null : update.state.doc.lineAt(mappedAnchor).from;
+              const nextLine =
+                trackedAnchorRef.current === null
+                  ? null
+                  : update.state.doc.lineAt(trackedAnchorRef.current).number;
               const currentActiveLine = update.state.field(uiStateField).activeLine;
               if (currentActiveLine !== nextLine) {
                 update.view.dispatch({ effects: setUiStateEffect.of({ activeLine: nextLine }) });
               }
-              if (nextLine === null) {
-                // Line deletion is not blocking; the user picks the recording target when tracking ends
-                latest.current.onTrackedLineLost?.();
-              } else {
+              if (nextLine !== null) {
                 const trackedLine = update.state.doc.line(nextLine);
-                trackedTextRef.current = trackedLine.text;
-                latest.current.onTrackedLineChange?.({ lineNumber: nextLine, text: trackedLine.text });
+                if (!parseLines(update.state.doc.toString())[nextLine - 1]?.isTask) {
+                  trackedAnchorRef.current = null;
+                  trackedTextRef.current = null;
+                  update.view.dispatch({ effects: setUiStateEffect.of({ activeLine: null }) });
+                } else {
+                  trackedTextRef.current = trackedLine.text;
+                }
               }
+            }
+            if (update.docChanged && !isExternalReload) {
+              const changes: { from: number; to: number; insert: string }[] = [];
+              update.changes.iterChanges((fromA, toA, fromB, toB) => {
+                changes.push({
+                  from: fromA,
+                  to: toA,
+                  insert: update.state.doc.sliceString(fromB, toB),
+                });
+              });
+              rawContentRef.current = applyEditorChanges(
+                rawContentRef.current,
+                changes,
+                detectEol(rawContentRef.current),
+              );
+              latest.current.onChange(update.state.doc.toString(), rawContentRef.current);
+            }
+            if (update.docChanged || update.selectionSet) {
+              latest.current.onSelectionChange?.({
+                ranges: update.state.selection.ranges.map(({ anchor, head }) => ({ anchor, head })),
+                mainIndex: update.state.selection.mainIndex,
+              });
             }
             if (update.docChanged || update.selectionSet) {
               notifyCursorLine(update.view);
@@ -186,7 +317,7 @@ export function Editor({ ref, initialContent, onChange, vimMode = false, theme =
       view.contentDOM.tabIndex = -1;
       vimListenerCleanupRef.current = subscribeVimMode(view);
     }
-    view.focus();
+    if (autoFocus) view.focus();
 
     return () => {
       vimListenerCleanupRef.current?.();
@@ -196,6 +327,18 @@ export function Editor({ ref, initialContent, onChange, vimMode = false, theme =
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useLayoutEffect(() => {
+    if (autoFocus) viewRef.current?.focus();
+  }, [autoFocus, focusSignal]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (view)
+      view.dispatch({
+        effects: readOnlyCompartment.reconfigure(EditorState.readOnly.of(readOnly)),
+      });
+  }, [readOnly]);
 
   useImperativeHandle(
     ref,
@@ -209,16 +352,23 @@ export function Editor({ ref, initialContent, onChange, vimMode = false, theme =
 
       startTracking(lineNumber) {
         const view = viewRef.current;
-        if (!view || lineNumber > view.state.doc.lines) return;
-        const line = view.state.doc.line(lineNumber);
+        if (!view) return null;
+        const currentLine = view.state.doc.lineAt(view.state.selection.main.head);
+        const line =
+          lineNumber === undefined
+            ? currentLine
+            : lineNumber > view.state.doc.lines
+              ? null
+              : view.state.doc.line(lineNumber);
+        if (!line || !parseLines(view.state.doc.toString())[line.number - 1]?.isTask) return null;
         trackedAnchorRef.current = line.from;
         trackedTextRef.current = line.text;
-        const meta = computeTaskMeta(view.state.doc.toString()).get(lineNumber);
-        trackedSnapshotRef.current = { text: line.text, projects: meta?.projects ?? [] };
-        view.dispatch({ effects: setUiStateEffect.of({ activeLine: lineNumber }) });
+        trackedSnapshotRef.current = { text: line.text };
+        view.dispatch({ effects: setUiStateEffect.of({ activeLine: line.number }) });
+        return { lineNumber: line.number, text: line.text };
       },
 
-      stopTracking(elapsedSeconds) {
+      stopTracking(elapsedSeconds, applySpent = true) {
         const view = viewRef.current;
         const snapshot = trackedSnapshotRef.current;
         const anchor = trackedAnchorRef.current;
@@ -228,29 +378,46 @@ export function Editor({ ref, initialContent, onChange, vimMode = false, theme =
 
         if (!view || anchor === null) {
           view?.dispatch({ effects: setUiStateEffect.of({ activeLine: null }) });
-          return { deleted: true, lineText: snapshot?.text ?? "", projects: snapshot?.projects ?? [] };
+          return {
+            deleted: true,
+            lineText: snapshot?.text ?? "",
+          };
         }
 
         const line = view.state.doc.lineAt(anchor);
-        const updatedText = elapsedSeconds > 0 ? addSpentToLine(line.text, elapsedSeconds) : line.text;
+        if (!parseLines(view.state.doc.toString())[line.number - 1]?.isTask) {
+          view.dispatch({ effects: setUiStateEffect.of({ activeLine: null }) });
+          return {
+            deleted: true,
+            lineText: line.text,
+          };
+        }
+        const updatedText =
+          applySpent && elapsedSeconds > 0 ? addSpentToLine(line.text, elapsedSeconds) : line.text;
         view.dispatch({
-          changes: updatedText !== line.text ? { from: line.from, to: line.to, insert: updatedText } : undefined,
+          changes:
+            updatedText !== line.text
+              ? { from: line.from, to: line.to, insert: updatedText }
+              : undefined,
           effects: setUiStateEffect.of({ activeLine: null }),
         });
-        const meta = computeTaskMeta(view.state.doc.toString()).get(view.state.doc.lineAt(anchor).number);
-        return { deleted: false, lineText: updatedText, projects: meta?.projects ?? snapshot?.projects ?? [] };
+        return {
+          deleted: false,
+          lineText: updatedText,
+        };
       },
 
-      getTrackedProjects() {
-        return trackedSnapshotRef.current?.projects ?? null;
-      },
-
-      reloadContent(text) {
+      reloadContent(text, raw) {
         const view = viewRef.current;
-        if (!view || view.state.doc.toString() === text) return;
+        if (!view || view.state.doc.toString() === text) {
+          rawContentRef.current = raw;
+          return;
+        }
+        rawContentRef.current = raw;
         const trackedAnchor = trackedAnchorRef.current;
         const trackedText = trackedAnchor === null ? null : trackedTextRef.current;
-        const trackedLineNumber = trackedAnchor === null ? null : view.state.doc.lineAt(trackedAnchor).number;
+        const trackedWasUnique =
+          trackedText === null || findLineByText(view.state.doc, trackedText) !== null;
         const head = view.state.selection.main.head;
         const cursorLine = view.state.doc.lineAt(head);
         const cursorColumn = head - cursorLine.from;
@@ -269,30 +436,30 @@ export function Editor({ ref, initialContent, onChange, vimMode = false, theme =
 
         if (trackedText === null) return;
         // The design has no persistent ID, so re-identify the tracked line by exact text match
-        const found = findLineByText(view.state.doc, trackedText, trackedLineNumber);
+        const found = trackedWasUnique ? findLineByText(view.state.doc, trackedText) : null;
         if (found === null) {
           trackedAnchorRef.current = null;
           trackedTextRef.current = null;
           view.dispatch({ effects: setUiStateEffect.of({ activeLine: null }) });
-          latest.current.onTrackedLineLost?.();
           return;
         }
         trackedAnchorRef.current = found.from;
         trackedTextRef.current = found.text;
         view.dispatch({ effects: setUiStateEffect.of({ activeLine: found.number }) });
-        latest.current.onTrackedLineChange?.({ lineNumber: found.number, text: found.text });
       },
 
       applySpentToLine(lineNumber, elapsedSeconds) {
         const view = viewRef.current;
-        if (!view || lineNumber < 1 || lineNumber > view.state.doc.lines) return null;
+        if (!view || view.state.readOnly || lineNumber < 1 || lineNumber > view.state.doc.lines)
+          return null;
         const line = view.state.doc.line(lineNumber);
-        const updatedText = elapsedSeconds > 0 ? addSpentToLine(line.text, elapsedSeconds) : line.text;
+        if (!parseLines(view.state.doc.toString())[lineNumber - 1]?.isTask) return null;
+        const updatedText =
+          elapsedSeconds > 0 ? addSpentToLine(line.text, elapsedSeconds) : line.text;
         if (updatedText !== line.text) {
           view.dispatch({ changes: { from: line.from, to: line.to, insert: updatedText } });
         }
-        const meta = computeTaskMeta(view.state.doc.toString()).get(lineNumber);
-        return { lineText: updatedText, projects: meta?.projects ?? [] };
+        return { lineText: updatedText };
       },
 
       focus() {
@@ -319,22 +486,14 @@ export function Editor({ ref, initialContent, onChange, vimMode = false, theme =
         }
       },
 
-      setTheme(dark) {
-        const view = viewRef.current;
-        if (!view) return;
-        view.dispatch({
-          effects: themeCompartment.reconfigure([editorTheme(dark), markdownHighlighting(dark)]),
-        });
-      },
-
-      setTimerKeymap(nextPresets, nextToggleKey) {
+      setTimerKeymap(nextPresets, nextStartStopShortcut) {
         const view = viewRef.current;
         if (!view) return;
         view.dispatch({
           effects: timerKeymapCompartment.reconfigure(
             createTimerKeymap({
               presets: nextPresets,
-              toggleKey: nextToggleKey,
+              startStopShortcut: nextStartStopShortcut,
               onSelectPreset: (minutes) => latest.current.onSelectPreset?.(minutes),
               onToggle: () => latest.current.onToggle?.(),
             }),
@@ -344,5 +503,5 @@ export function Editor({ ref, initialContent, onChange, vimMode = false, theme =
     }),
     [],
   );
-  return <div className="monura-editor" ref={containerRef} />;
+  return <div className="monura-editor h-full" ref={containerRef} />;
 }

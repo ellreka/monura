@@ -1,156 +1,53 @@
-import { useEffect, useState } from "react";
-import { captureKeyBinding, formatKeyBindingLabel } from "../lib/keybinding";
-import {
-  MAX_PRESETS,
-  sanitizePresetMinutes,
-  type ShortcutTarget,
-  type TimerShortcuts,
-} from "../lib/timer";
-import {
-  updateButtonLabel,
-  updateDescription,
-  updateProgressPercent,
-  type AppUpdateState,
-} from "../lib/updater";
+import { type ReactNode } from "react";
+import { cn } from "../lib/cn";
+import { MAX_PRESETS, type TimerPreset } from "../lib/timer";
+import { PresetCard } from "./settings/PresetCard";
+import { ShortcutCaptureButton } from "./settings/ShortcutCaptureButton";
 
-interface SettingsViewProps {
+type SettingsViewProps = {
   vimMode: boolean;
   onToggleVimMode: () => void;
-  theme: "light" | "dark";
-  onSetTheme: (theme: "light" | "dark") => void;
-  presetSlots: (number | null)[];
-  onSetPresetSlot: (index: number, minutes: number | null) => void;
-  shortcuts: TimerShortcuts;
-  onSetShortcut: (target: ShortcutTarget, key: string | null) => void;
+  presets: readonly TimerPreset[];
+  onAddPreset: () => void;
+  onSetPresetMinutes: (index: number, minutes: number) => void;
+  onSetPresetShortcut: (index: number, key: string | null) => void;
+  onRemovePreset: (index: number) => void;
+  startStopShortcut: string | null;
+  onSetStartStopShortcut: (key: string | null) => void;
+  globalHotkey: string | null;
+  globalHotkeyError?: string | null;
+  globalHotkeyBusy?: boolean;
+  onSetGlobalHotkey: (key: string | null) => void | Promise<void>;
   shortcutsDisabled?: boolean;
   dataDir?: string | null;
   dataDirDisabled?: boolean;
   onPickDataDir?: () => void;
-  updateState: AppUpdateState;
-  updateBlocked?: boolean;
-  onCheckForUpdates: () => void;
-  onInstallUpdate: () => void;
-}
+  settingsFilePath?: string;
+};
 
-interface PresetSlotInputProps {
-  index: number;
-  value: number | null;
-  onCommit: (index: number, minutes: number | null) => void;
-}
+type SectionProps = { title: string; children: ReactNode };
 
-/** Local draft state so keystrokes aren't fought by the parent's committed value; commits on blur/Enter.
- * Keyed by `value` in the parent (not an effect) so external prop changes reset the draft cleanly. */
-function PresetSlotInput({ index, value, onCommit }: PresetSlotInputProps) {
-  const [draft, setDraft] = useState(value === null ? "" : String(value));
-
-  const commit = () => {
-    const trimmed = draft.trim();
-    if (trimmed === "") {
-      onCommit(index, null);
-      return;
-    }
-    const sanitized = sanitizePresetMinutes(Number(trimmed));
-    if (sanitized === null) {
-      setDraft(value === null ? "" : String(value));
-      return;
-    }
-    setDraft(String(sanitized));
-    onCommit(index, sanitized);
-  };
-
+function Section({ title, children }: SectionProps) {
   return (
-    <input
-      type="number"
-      min={1}
-      max={1440}
-      className="settings-preset-input"
-      placeholder="—"
-      value={draft}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") e.currentTarget.blur();
-      }}
-      aria-label={`Preset ${index + 1}`}
-    />
+    <section className="py-4">
+      <h3 className="m-0 mb-3 text-[11px] font-semibold tracking-wide text-muted uppercase">
+        {title}
+      </h3>
+      <div className="divide-y divide-border">{children}</div>
+    </section>
   );
 }
 
-interface ShortcutCaptureInputProps {
-  /** null = no shortcut assigned. */
-  value: string | null;
-  onCommit: (key: string | null) => void;
-  ariaLabel: string;
-  disabled?: boolean;
-}
+type RowProps = { label: string; description?: string; children: ReactNode };
 
-/**
- * Click to record: the next keydown becomes the shortcut. Escape cancels without changing
- * anything; Backspace/Delete clears it.
- *
- * Listens on `document` in the capture phase instead of the button's own `onKeyDown`
- * (bubble phase, requires the button itself to hold DOM focus): a plain per-element bubble
- * handler was observed to silently miss keydowns in the Tauri/WKWebView shell (the key
- * simply did nothing, and Escape fell through to the app's global handler and closed the
- * settings view instead of just cancelling the recording). A document-level capture
- * listener sees every keydown before it can reach anything else — the button's own focus
- * state, CodeMirror's editor keymap, or the window-level Escape handler — regardless of
- * which element the webview actually considers focused.
- */
-function ShortcutCaptureInput({
-  value,
-  onCommit,
-  ariaLabel,
-  disabled = false,
-}: ShortcutCaptureInputProps) {
-  const [recording, setRecording] = useState(false);
-
-  useEffect(() => {
-    if (!recording) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (e.code === "Escape") {
-        setRecording(false);
-        return;
-      }
-      if (e.code === "Backspace" || e.code === "Delete") {
-        setRecording(false);
-        onCommit(null);
-        return;
-      }
-      const captured = captureKeyBinding(e);
-      if (captured === null) return; // bare modifier press — keep waiting
-      setRecording(false);
-      onCommit(captured);
-    };
-    document.addEventListener("keydown", handleKeyDown, { capture: true });
-    return () => document.removeEventListener("keydown", handleKeyDown, { capture: true });
-  }, [recording, onCommit]);
-
+function Row({ label, description, children }: RowProps) {
   return (
-    <div className="settings-shortcut">
-      <button
-        type="button"
-        className={"settings-shortcut-input" + (recording ? " is-recording" : "")}
-        onClick={() => setRecording(true)}
-        onBlur={() => setRecording(false)}
-        aria-label={ariaLabel}
-        disabled={disabled}
-        title={disabled ? "Disabled in this live demo" : undefined}
-      >
-        {recording ? "Press a key…" : value ? formatKeyBindingLabel(value) : "Not set"}
-      </button>
-      {!disabled && !recording && value !== null && (
-        <button
-          type="button"
-          className="settings-shortcut-clear"
-          onClick={() => onCommit(null)}
-          aria-label={`Clear ${ariaLabel}`}
-        >
-          ×
-        </button>
-      )}
+    <div className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <div className="text-[13px] font-semibold">{label}</div>
+        {description && <div className="text-[11px] text-muted">{description}</div>}
+      </div>
+      {children}
     </div>
   );
 }
@@ -158,182 +55,137 @@ function ShortcutCaptureInput({
 export function SettingsView({
   vimMode,
   onToggleVimMode,
-  theme,
-  onSetTheme,
-  presetSlots,
-  onSetPresetSlot,
-  shortcuts,
-  onSetShortcut,
+  presets,
+  onAddPreset,
+  onSetPresetMinutes,
+  onSetPresetShortcut,
+  onRemovePreset,
+  startStopShortcut,
+  onSetStartStopShortcut,
+  globalHotkey,
+  globalHotkeyError,
+  globalHotkeyBusy = false,
+  onSetGlobalHotkey,
   shortcutsDisabled = false,
   dataDir,
   dataDirDisabled = false,
   onPickDataDir,
-  updateState,
-  updateBlocked = false,
-  onCheckForUpdates,
-  onInstallUpdate,
+  settingsFilePath,
 }: SettingsViewProps) {
   return (
-    <div className="settings-view">
-      <h2 className="view-title">Settings</h2>
-      <div className="settings-body">
-        <section className="settings-section">
-          <div className="settings-row">
-            <div className="settings-row-text">
-              <div className="settings-row-title">Theme</div>
-              <div className="settings-row-desc">Choose the app's color scheme</div>
+    <div className="h-full overflow-y-auto px-7 py-5">
+      <h2 className="m-0 mb-1 text-sm font-bold">Settings</h2>
+      <div className="max-w-[560px] divide-y divide-border">
+        {dataDir !== undefined && (
+          <Section title="Files">
+            <Row label="Data folder">
+              <div className="flex min-w-0 flex-col items-end gap-1">
+                <button
+                  type="button"
+                  className="flex-none cursor-pointer rounded-md border border-border bg-pill px-3 py-[5px] text-xs text-ink enabled:hover:border-accent disabled:cursor-default disabled:opacity-50"
+                  onClick={onPickDataDir}
+                  disabled={dataDirDisabled}
+                  title={dataDirDisabled ? "Cannot change while tracking" : undefined}
+                >
+                  Change…
+                </button>
+                {dataDir && (
+                  <span className="max-w-[280px] truncate text-[11px] text-muted">{dataDir}</span>
+                )}
+                {settingsFilePath && (
+                  <span className="max-w-[280px] truncate text-[11px] text-muted">
+                    {settingsFilePath}
+                  </span>
+                )}
+              </div>
+            </Row>
+          </Section>
+        )}
+        <Section title="Timer">
+          <div className="py-3 first:pt-0 last:pb-0">
+            <div className="mb-2 flex flex-col gap-0.5">
+              <div className="text-[13px] font-semibold">Presets</div>
+              <div className="text-[11px] text-muted">
+                Up to {MAX_PRESETS} quick-start durations (minutes) and their shortcuts.
+              </div>
             </div>
-            <div className="settings-segmented" role="radiogroup" aria-label="Theme">
-              <button
-                type="button"
-                role="radio"
-                aria-checked={theme === "light"}
-                className={theme === "light" ? "is-active" : undefined}
-                onClick={() => onSetTheme("light")}
-              >
-                Light
-              </button>
-              <button
-                type="button"
-                role="radio"
-                aria-checked={theme === "dark"}
-                className={theme === "dark" ? "is-active" : undefined}
-                onClick={() => onSetTheme("dark")}
-              >
-                Dark
-              </button>
+            <div className="flex flex-wrap items-start gap-2">
+              {presets.map((preset, index) => (
+                <PresetCard
+                  key={`${index}-${preset.minutes}`}
+                  index={index}
+                  preset={preset}
+                  onSetMinutes={onSetPresetMinutes}
+                  onSetShortcut={onSetPresetShortcut}
+                  onRemove={onRemovePreset}
+                  canRemove={presets.length > 1}
+                  disabled={shortcutsDisabled}
+                />
+              ))}
+              {presets.length < MAX_PRESETS && !shortcutsDisabled && (
+                <button
+                  type="button"
+                  onClick={onAddPreset}
+                  aria-label="Add preset"
+                  className="flex h-7 w-7 flex-none cursor-pointer items-center justify-center rounded-full border border-dashed border-border text-muted hover:border-accent hover:text-accent"
+                >
+                  +
+                </button>
+              )}
             </div>
           </div>
-        </section>
-
-        <section className="settings-section">
-          <div className="settings-row">
-            <div className="settings-row-text">
-              <div className="settings-row-title">Vim key bindings</div>
-              <div className="settings-row-desc">Enable Vim-style editing in the editor</div>
+        </Section>
+        <Section title="Shortcuts">
+          <Row
+            label="Start / stop"
+            description="Starts tracking the task under the cursor, or stops the running timer."
+          >
+            <ShortcutCaptureButton
+              value={startStopShortcut}
+              onCommit={onSetStartStopShortcut}
+              ariaLabel="Start / stop shortcut"
+              disabled={shortcutsDisabled}
+            />
+          </Row>
+          <Row
+            label="Global hotkey"
+            description="Works from anywhere, even while Monura isn't focused. Must include Cmd, Ctrl, or Option."
+          >
+            <div className="flex flex-col items-end gap-1">
+              <ShortcutCaptureButton
+                value={globalHotkey}
+                onCommit={onSetGlobalHotkey}
+                ariaLabel="Global hotkey"
+                disabled={shortcutsDisabled || globalHotkeyBusy}
+                requireModifier
+              />
+              {globalHotkeyError && (
+                <span className="max-w-[220px] text-right text-[10px] text-danger">
+                  {globalHotkeyError}
+                </span>
+              )}
             </div>
+          </Row>
+        </Section>
+        <Section title="Editor">
+          <Row label="Vim key bindings" description="Enable Vim-style editing in the editor.">
             <button
               type="button"
               role="switch"
               aria-checked={vimMode}
-              className={"settings-switch" + (vimMode ? " is-on" : "")}
+              className={cn(
+                "flex h-[22px] w-[38px] flex-none items-center rounded-full p-0.5",
+                vimMode ? "justify-end bg-accent" : "justify-start bg-border",
+              )}
               onClick={onToggleVimMode}
               aria-label="Vim key bindings"
             >
-              <span className="settings-switch-knob" />
+              <span className="h-[18px] w-[18px] rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,0.2)]" />
             </button>
-          </div>
-        </section>
-
-        <section className="settings-section">
-          <div className="settings-row">
-            <div className="settings-row-text">
-              <div className="settings-row-title">Start / stop shortcut</div>
-              <div className="settings-row-desc">
-                Starts tracking the task under the cursor, or stops the running timer
-                {shortcutsDisabled && " (disabled in this live demo)"}
-              </div>
-            </div>
-            <ShortcutCaptureInput
-              value={shortcuts.toggle}
-              onCommit={(key) => onSetShortcut("toggle", key)}
-              ariaLabel="Start / stop shortcut"
-              disabled={shortcutsDisabled}
-            />
-          </div>
-        </section>
-
-        <section className="settings-section">
-          <div className="settings-row">
-            <div className="settings-row-text">
-              <div className="settings-row-title">Timer presets</div>
-              <div className="settings-row-desc">
-                Up to {MAX_PRESETS} quick-start durations (minutes) and their shortcuts. A preset
-                shortcut only changes the selection — it never starts the timer. Leave a slot blank
-                to hide it.
-                {shortcutsDisabled && " Shortcuts are disabled in this live demo."}
-              </div>
-            </div>
-          </div>
-          <div className="settings-preset-grid">
-            {Array.from({ length: MAX_PRESETS }, (_, index) => presetSlots[index] ?? null).map(
-              (minutes, index) => (
-                <div key={index} className="settings-preset-slot">
-                  <span className="settings-preset-slot-label">Preset {index + 1}</span>
-                  <PresetSlotInput
-                    key={minutes ?? "empty"}
-                    index={index}
-                    value={minutes}
-                    onCommit={onSetPresetSlot}
-                  />
-                  <ShortcutCaptureInput
-                    value={shortcuts.presets[index] ?? null}
-                    onCommit={(key) => onSetShortcut(index, key)}
-                    ariaLabel={`Preset ${index + 1} shortcut`}
-                    disabled={shortcutsDisabled}
-                  />
-                </div>
-              ),
-            )}
-          </div>
-        </section>
-        {dataDir !== undefined && (
-          <section className="settings-section">
-            <div className="settings-row">
-              <div className="settings-row-text">
-                <div className="settings-row-title">Data folder</div>
-                <div className="settings-row-desc">
-                  Folder containing the .md files Monura edits. Session logs are stored separately
-                  in Monura's app data.
-                </div>
-              </div>
-              <button
-                type="button"
-                className="settings-button"
-                onClick={onPickDataDir}
-                disabled={dataDirDisabled}
-                title={dataDirDisabled ? "Cannot change while tracking" : undefined}
-              >
-                Change…
-              </button>
-            </div>
-            {dataDir && <span className="settings-path">{dataDir}</span>}
-          </section>
-        )}
-        <section className="settings-section">
-          <div className="settings-row">
-            <div className="settings-row-text">
-              <div className="settings-row-title">Software update</div>
-              <div className="settings-row-desc" aria-live="polite">
-                {updateDescription(updateState, updateBlocked)}
-              </div>
-              {updateState.phase === "downloading" && (
-                <progress
-                  className="settings-update-progress"
-                  max={100}
-                  value={updateProgressPercent(updateState) ?? undefined}
-                  aria-label="Update download progress"
-                />
-              )}
-            </div>
-            <button
-              type="button"
-              className="settings-button"
-              onClick={updateState.phase === "available" ? onInstallUpdate : onCheckForUpdates}
-              disabled={
-                updateState.phase === "unavailable" ||
-                updateState.phase === "checking" ||
-                updateState.phase === "downloading" ||
-                updateState.phase === "installing" ||
-                (updateState.phase === "available" && updateBlocked)
-              }
-            >
-              {updateButtonLabel(updateState, updateBlocked)}
-            </button>
-          </div>
-        </section>
+          </Row>
+        </Section>
       </div>
-      <div className="settings-footer">Changes apply immediately.</div>
+      <div className="mt-4 max-w-[560px] text-[11px] text-muted">Changes apply immediately.</div>
     </div>
   );
 }

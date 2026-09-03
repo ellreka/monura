@@ -10,7 +10,12 @@ import {
 } from "@codemirror/view";
 import { bracketMatching, indentOnInput } from "@codemirror/language";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
-import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
+import {
+  autocompletion,
+  closeBrackets,
+  closeBracketsKeymap,
+  completionKeymap,
+} from "@codemirror/autocomplete";
 import { lintKeymap } from "@codemirror/lint";
 
 /**
@@ -44,5 +49,11 @@ export const editorBaseSetup = [
   closeBrackets(),
   autocompletion(),
   highlightActiveLine(),
-  keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...historyKeymap, ...completionKeymap, ...lintKeymap]),
+  keymap.of([
+    ...closeBracketsKeymap,
+    ...defaultKeymap,
+    ...historyKeymap,
+    ...completionKeymap,
+    ...lintKeymap,
+  ]),
 ];

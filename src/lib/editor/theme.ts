@@ -1,6 +1,6 @@
 import type { Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { defaultHighlightStyle, HighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
 
 /**
@@ -16,7 +16,6 @@ interface EditorPalette {
   muted: string;
   accent: string;
   accentSoft: string;
-  project: string;
   bg: string;
   gutterInk: string;
   activeLineWash: string;
@@ -24,34 +23,20 @@ interface EditorPalette {
   sumBadgeInk: string;
 }
 
-const lightPalette: EditorPalette = {
-  ink: "#332e26",
-  muted: "#9a9184",
-  accent: "#dd9292",
-  accentSoft: "#f8e7e7",
-  project: "#4f8f72",
-  bg: "#fdfbf6",
-  gutterInk: "#c7bfae",
-  activeLineWash: "rgba(221, 146, 146, 0.06)",
-  sumBadgeBg: "#f1ece0",
-  sumBadgeInk: "#948c7c",
+const palette: EditorPalette = {
+  ink: "var(--ink)",
+  muted: "var(--muted)",
+  accent: "var(--accent)",
+  accentSoft: "var(--accent-soft)",
+  bg: "transparent",
+  gutterInk: "var(--gutter-ink)",
+  activeLineWash: "var(--active-line-wash)",
+  sumBadgeBg: "var(--sum-badge-bg)",
+  sumBadgeInk: "var(--sum-badge-ink)",
 };
 
-const darkPalette: EditorPalette = {
-  ink: "#ece7df",
-  muted: "#9a9184",
-  accent: "#dd9292",
-  accentSoft: "#4a3232",
-  project: "#4f8f72",
-  bg: "#201c17",
-  gutterInk: "#857a68",
-  activeLineWash: "rgba(221, 146, 146, 0.1)",
-  sumBadgeBg: "#332c24",
-  sumBadgeInk: "#b3a996",
-};
-
-export function editorTheme(dark: boolean): Extension {
-  const p = dark ? darkPalette : lightPalette;
+export function editorTheme(): Extension {
+  const p = palette;
   return EditorView.theme(
     {
       "&": {
@@ -64,12 +49,17 @@ export function editorTheme(dark: boolean): Extension {
         fontFamily:
           "'SF Mono', 'Menlo', 'Consolas', ui-monospace, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', sans-serif",
         caretColor: p.accent,
-        // Reserve padding so the final line isn't hidden by the floating timer bar at the bottom
-        padding: "12px 0 90px 0",
+        padding: "12px 0",
       },
       ".cm-cursor": {
         borderLeftColor: p.accent,
         borderLeftWidth: "2px",
+      },
+      ".cm-selectionBackground": {
+        backgroundColor: "rgba(var(--accent-rgb), 0.35) !important",
+      },
+      "&.cm-focused .cm-selectionBackground": {
+        backgroundColor: "rgba(var(--accent-rgb), 0.4) !important",
       },
       "&.cm-focused": {
         outline: "none",
@@ -119,13 +109,26 @@ export function editorTheme(dark: boolean): Extension {
         borderWidth: "0 1.5px 1.5px 0",
         transform: "rotate(45deg)",
       },
+      ".cm-task-checked": {
+        textDecoration: "line-through",
+        color: p.muted,
+        opacity: "0.65",
+      },
       ".cm-spent-token": {
         color: p.muted,
         fontSize: "0.92em",
       },
-      ".cm-project-tag": {
-        color: p.project,
-        fontWeight: "600",
+      ".cm-md-link": {
+        color: p.accent,
+        textDecoration: "underline",
+        textUnderlineOffset: "2px",
+        cursor: "pointer",
+      },
+      ".cm-md-link:hover": {
+        textDecoration: "none",
+      },
+      ".cm-md-link-focused": {
+        color: p.accent,
       },
       ".cm-sum-badge": {
         marginLeft: "10px",
@@ -141,29 +144,31 @@ export function editorTheme(dark: boolean): Extension {
         borderLeft: `3px solid ${p.accent}`,
       },
     },
-    { dark },
+    { dark: true },
   );
 }
 
 /**
  * `defaultHighlightStyle` (from @codemirror/language) hardcodes dark, low-luminance colors
- * (headings' `#` marker at #404740, comments at #940, …) designed for a light background —
- * on a dark background they drop to near-unreadable contrast. Markdown headings/emphasis/
- * strong/links carry no explicit color in either style (they inherit `editorTheme`'s ink,
- * which already flips per theme), so only the tags with hardcoded colors need a dark variant.
  */
-const darkHighlightStyle = HighlightStyle.define([
-  { tag: tags.meta, color: "#8fa38f" },
-  { tag: tags.link, textDecoration: "underline" },
+const markdownHighlightStyle = HighlightStyle.define([
+  { tag: tags.processingInstruction, color: palette.muted },
   { tag: tags.heading, textDecoration: "underline", fontWeight: "bold" },
   { tag: tags.emphasis, fontStyle: "italic" },
   { tag: tags.strong, fontWeight: "bold" },
   { tag: tags.strikethrough, textDecoration: "line-through" },
   { tag: tags.keyword, color: "#d68fc9" },
-  { tag: [tags.atom, tags.bool, tags.url, tags.contentSeparator, tags.labelName], color: "#7aa6d6" },
+  {
+    tag: [tags.atom, tags.bool, tags.contentSeparator, tags.labelName],
+    color: "#7aa6d6",
+  },
+  { tag: tags.url, color: palette.accent },
   { tag: [tags.literal, tags.inserted], color: "#7dbf8e" },
   { tag: [tags.string, tags.deleted], color: "#e08a8a" },
-  { tag: [tags.regexp, tags.escape, tags.special(tags.string)], color: "#e0a06a" },
+  {
+    tag: [tags.regexp, tags.escape, tags.special(tags.string)],
+    color: "#e0a06a",
+  },
   { tag: tags.definition(tags.variableName), color: "#7aa6ff" },
   { tag: tags.local(tags.variableName), color: "#b58cf0" },
   { tag: [tags.typeName, tags.namespace], color: "#5fc1a0" },
@@ -174,6 +179,6 @@ const darkHighlightStyle = HighlightStyle.define([
   { tag: tags.invalid, color: "#ff6b6b" },
 ]);
 
-export function markdownHighlighting(dark: boolean): Extension {
-  return syntaxHighlighting(dark ? darkHighlightStyle : defaultHighlightStyle, { fallback: true });
+export function markdownHighlighting(): Extension {
+  return syntaxHighlighting(markdownHighlightStyle, { fallback: true });
 }

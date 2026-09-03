@@ -1,6 +1,7 @@
 import type { Extension } from "@codemirror/state";
-import { Compartment } from "@codemirror/state";
+import { Compartment, EditorState } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
+import { Autolink } from "@lezer/markdown";
 import { EditorView, keymap } from "@codemirror/view";
 import { indentWithTab } from "@codemirror/commands";
 import { editorBaseSetup } from "./baseSetup";
@@ -11,16 +12,16 @@ import { editorTheme, markdownHighlighting } from "./theme";
 import { listContinuationKeymap } from "./listContinuation";
 import { vimNormalModeGuardKeymap } from "./vimGuard";
 import { createTimerKeymap } from "./timerKeymap";
-import type { PresetKeymapEntry } from "../timer";
+import type { TimerPreset } from "../timer";
 
 export interface CreateMonuraExtensionsOptions {
   onDocChange?: (text: string) => void;
   vimMode?: boolean;
-  dark?: boolean;
-  presets?: readonly PresetKeymapEntry[];
-  toggleKey?: string | null;
+  presets?: readonly TimerPreset[];
+  startStopShortcut?: string | null;
   onSelectPreset?: (presetMinutes: number) => void;
   onToggle?: () => void;
+  readOnly?: boolean;
 }
 
 export const vimModeCompartment = new Compartment();
@@ -32,21 +33,23 @@ export const vimModeCompartment = new Compartment();
  * workaround documented on the CodeMirror forum for this exact bug.
  */
 export const vimEditableCompartment = new Compartment();
-export const themeCompartment = new Compartment();
+
 export const timerKeymapCompartment = new Compartment();
+export const readOnlyCompartment = new Compartment();
 
 // Disable the `:`-triggered Ex commands (:w, :q, etc.), because they don't mesh with this
 // app's file operation model of auto-save and tab switching. Vim state is module-level
 // global, so unbinding once at load time is enough.
 // The type definition makes ctx a required string, but `:` is registered with no context
 // (undefined), so we need to pass undefined.
-Vim.unmap(":", undefined as unknown as string);
+Vim.unmap(":", undefined!);
 
 export function createMonuraExtensions(options: CreateMonuraExtensionsOptions = {}): Extension[] {
   return [
     // vim must take effect before the keymaps that come from editorBaseSetup
     vimModeCompartment.of(options.vimMode ? [vim()] : []),
     vimEditableCompartment.of(EditorView.editable.of(!options.vimMode)),
+    readOnlyCompartment.of(EditorState.readOnly.of(!!options.readOnly)),
     vimNormalModeGuardKeymap,
     editorBaseSetup,
     keymap.of([indentWithTab]),
@@ -54,20 +57,17 @@ export function createMonuraExtensions(options: CreateMonuraExtensionsOptions = 
     timerKeymapCompartment.of(
       createTimerKeymap({
         presets: options.presets ?? [],
-        toggleKey: options.toggleKey ?? null,
+        startStopShortcut: options.startStopShortcut ?? null,
         onSelectPreset: (minutes) => options.onSelectPreset?.(minutes),
         onToggle: () => options.onToggle?.(),
       }),
     ),
-    markdown({ addKeymap: false }),
+    markdown({ addKeymap: false, extensions: [Autolink] }),
     uiStateField,
     taskDecorationsField,
     activeLineField,
-    themeCompartment.of([editorTheme(!!options.dark), markdownHighlighting(!!options.dark)]),
+    [editorTheme(), markdownHighlighting()],
     EditorView.lineWrapping,
-    // Keep the tracked line clear of the floating timer bar when scrolling into
-    // view (e.g. Vim's G), since CodeMirror ignores CSS scroll-padding here.
-    EditorView.scrollMargins.of(() => ({ bottom: 90 })),
     EditorView.updateListener.of((update) => {
       if (update.docChanged) {
         options.onDocChange?.(update.state.doc.toString());

@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { captureKeyBinding, formatKeyBindingLabel } from "./keybinding";
+import { captureKeyBinding, formatKeyBindingParts, toAccelerator } from "./keybinding";
 
-function keydown(code: string, mods: Partial<Record<"meta" | "ctrl" | "alt" | "shift", boolean>> = {}) {
+function keydown(
+  code: string,
+  mods: Partial<Record<"meta" | "ctrl" | "alt" | "shift", boolean>> = {},
+) {
   return {
     code,
     metaKey: !!mods.meta,
@@ -27,9 +30,9 @@ describe("captureKeyBinding", () => {
   });
 
   it("orders combined modifiers as Alt-Ctrl-Meta-Shift", () => {
-    expect(captureKeyBinding(keydown("Digit1", { alt: true, ctrl: true, meta: true, shift: true }))).toBe(
-      "Alt-Ctrl-Meta-Shift-1",
-    );
+    expect(
+      captureKeyBinding(keydown("Digit1", { alt: true, ctrl: true, meta: true, shift: true })),
+    ).toBe("Alt-Ctrl-Meta-Shift-1");
   });
 
   it("uses the physical key position (code), not the character the layout/modifier produces", () => {
@@ -55,23 +58,44 @@ describe("captureKeyBinding", () => {
   });
 });
 
-describe("formatKeyBindingLabel", () => {
-  it("renders Meta as Cmd", () => {
-    expect(formatKeyBindingLabel("Meta-Enter")).toBe("Cmd+Enter");
-    expect(formatKeyBindingLabel("Meta-1")).toBe("Cmd+1");
+describe("toAccelerator", () => {
+  it("converts Meta to Cmd and joins with +", () => {
+    expect(toAccelerator("Meta-K")).toBe("Cmd+K");
+    expect(toAccelerator("Meta-1")).toBe("Cmd+1");
   });
 
-  it("renders a captured literal modifier combo", () => {
-    expect(formatKeyBindingLabel("Ctrl-Enter")).toBe("Ctrl+Enter");
-    expect(formatKeyBindingLabel("Alt-Ctrl-Meta-Shift-1")).toBe("Alt+Ctrl+Cmd+Shift+1");
+  it("preserves literal modifier names that already match the accelerator vocabulary", () => {
+    expect(toAccelerator("Ctrl-Enter")).toBe("Ctrl+Enter");
+    expect(toAccelerator("Alt-Ctrl-Meta-Shift-1")).toBe("Alt+Ctrl+Cmd+Shift+1");
   });
 
-  it("uppercases single-letter keys", () => {
-    expect(formatKeyBindingLabel("Meta-S")).toBe("Cmd+S");
+  it("passes named keys through unchanged (already valid accelerator key tokens)", () => {
+    expect(toAccelerator("Meta-Space")).toBe("Cmd+Space");
+    expect(toAccelerator("Meta-Escape")).toBe("Cmd+Escape");
   });
 
-  it("renders Space and preserves a trailing literal minus key", () => {
-    expect(formatKeyBindingLabel("Meta-Space")).toBe("Cmd+Space");
-    expect(formatKeyBindingLabel("Meta--")).toBe("Cmd+-");
+  it("preserves a trailing literal minus key", () => {
+    expect(toAccelerator("Meta--")).toBe("Cmd+-");
+  });
+});
+
+describe("formatKeyBindingParts", () => {
+  it("renders each modifier and the key as separate symbol tokens", () => {
+    expect(formatKeyBindingParts("Meta-Enter")).toEqual(["⌘", "↵"]);
+    expect(formatKeyBindingParts("Meta-Shift-G")).toEqual(["⌘", "⇧", "G"]);
+  });
+
+  it("uppercases a bare single-letter key", () => {
+    expect(formatKeyBindingParts("Meta-S")).toEqual(["⌘", "S"]);
+  });
+
+  it("passes digits and punctuation through unchanged", () => {
+    expect(formatKeyBindingParts("Meta-1")).toEqual(["⌘", "1"]);
+    expect(formatKeyBindingParts("Meta--")).toEqual(["⌘", "-"]);
+  });
+
+  it("maps named keys to their symbol", () => {
+    expect(formatKeyBindingParts("Meta-Space")).toEqual(["⌘", "␣"]);
+    expect(formatKeyBindingParts("Ctrl-Escape")).toEqual(["⌃", "⎋"]);
   });
 });

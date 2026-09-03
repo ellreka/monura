@@ -27,13 +27,29 @@ export function parseSessionLines(lines: string[]): SessionRecord[] {
 function isSessionRecord(v: unknown): v is SessionRecord {
   if (typeof v !== "object" || v === null) return false;
   const r = v as Record<string, unknown>;
+  const offset = r.tzOffsetMinutes;
+  const preset = r.presetMinutes;
+  const elapsed = r.elapsedSeconds;
+  const startedAt = r.startedAt;
+  const validStartedAt =
+    typeof startedAt === "string" &&
+    Number.isFinite(Date.parse(startedAt)) &&
+    new Date(startedAt).toISOString() === startedAt;
   return (
-    typeof r.startedAt === "string" &&
-    typeof r.elapsedSeconds === "number" &&
-    typeof r.presetMinutes === "number" &&
-    typeof r.lineText === "string" &&
-    Array.isArray(r.projects) &&
-    typeof r.lineDeleted === "boolean"
+    r.v === 1 &&
+    typeof r.file === "string" &&
+    validStartedAt &&
+    typeof offset === "number" &&
+    Number.isInteger(offset) &&
+    offset >= -14 * 60 &&
+    offset <= 14 * 60 &&
+    typeof preset === "number" &&
+    Number.isFinite(preset) &&
+    preset > 0 &&
+    typeof elapsed === "number" &&
+    Number.isFinite(elapsed) &&
+    elapsed >= 0 &&
+    typeof r.lineText === "string"
   );
 }
 
@@ -54,14 +70,10 @@ export function localDateKey(r: SessionRecord): string {
   return format(recordDate(r), "yyyy-MM-dd");
 }
 
-/** Extracts just the title from a line's text (removes checkbox, spent:, and +project). */
 export function baseTitle(lineText: string): string {
   const parsed = parseLine(lineText, 1);
   const text = parsed.isTask ? parsed.text : lineText;
-  return text
-    .replace(/\s*spent:\S+/g, "")
-    .replace(/\s*\+\S+/g, "")
-    .trim();
+  return text.replace(/\s*spent:\S+/g, "").trim();
 }
 
 /** Elapsed-time label in "1h25m" / "45m" form. Falls back to seconds ("8s") when it would round to 0m. */
@@ -98,31 +110,12 @@ export function groupByDay(records: SessionRecord[]): DayBucket[] {
   return groups.sort((a, b) => a.day.localeCompare(b.day));
 }
 
-export interface ProjectTotal {
-  project: string;
-  seconds: number;
-}
-
-/** Per-project totals (descending seconds). */
-export function projectTotals(records: SessionRecord[]): ProjectTotal[] {
-  const totals = new Map<string, number>();
-  for (const r of records) {
-    const project = r.projects[0] ?? "";
-    totals.set(project, (totals.get(project) ?? 0) + r.elapsedSeconds);
-  }
-  return [...totals.entries()]
-    .map(([project, seconds]) => ({ project, seconds }))
-    .sort((a, b) => b.seconds - a.seconds);
-}
-
 export interface TaskGroup {
   title: string;
-  project: string;
   sessions: number;
   seconds: number;
   firstDay: string;
   lastDay: string;
-  /** A same-project group whose title shares a common prefix (candidate rename split). */
   renamed: boolean;
 }
 
@@ -142,7 +135,6 @@ export function taskGroups(records: SessionRecord[]): TaskGroup[] {
     if (!group) {
       group = {
         title,
-        project: r.projects[0] ?? "",
         sessions: 0,
         seconds: 0,
         firstDay: day,
@@ -160,7 +152,6 @@ export function taskGroups(records: SessionRecord[]): TaskGroup[] {
     for (let j = i + 1; j < groups.length; j++) {
       const a = groups[i];
       const b = groups[j];
-      if (a.project !== b.project) continue;
       if (commonPrefixLength(a.title, b.title) >= RENAME_PREFIX_THRESHOLD) {
         a.renamed = true;
         b.renamed = true;
