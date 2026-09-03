@@ -62,11 +62,6 @@ type PendingCommit = {
   needsMarkdownSave: boolean;
 };
 
-type ExternalConflict = {
-  name: string;
-  file: MdFile | null;
-};
-
 function toTrackingLabel(text: string): string {
   const title = baseTitle(text);
   return title.length > 0 ? title : "(blank line)";
@@ -235,8 +230,6 @@ function App() {
   const [isSavingBoundary, setIsSavingBoundary] = useState(false);
   const [isWorkspaceLoading, setIsWorkspaceLoading] = useState(false);
   const [workspaceReloadKey, setWorkspaceReloadKey] = useState(0);
-  const [externalConflict, setExternalConflict] = useState<ExternalConflict | null>(null);
-
   const sessionLogRef = useRef(createInitialSessionLog());
   const saveTimerRef = useRef<number | undefined>(undefined);
   const pendingSaveRef = useRef<MdFile | null>(null);
@@ -248,11 +241,9 @@ function App() {
   const trackedLostRef = useRef(false);
   const fileOperationRef = useRef(Promise.resolve());
   const activeSessionRef = useRef<ActiveSession | null>(null);
-  const externalConflictRef = useRef<ExternalConflict | null>(null);
   const lastSavedContentsRef = useRef(new Map<string, string | null>());
   const commitInFlightRef = useRef(false);
   const pendingCommitRef = useRef<PendingCommit | null>(null);
-  const conflictResolutionRef = useRef(false);
   const saveBoundaryRef = useRef(false);
   const timerRunningRef = useRef(false);
   const pendingResolutionRef = useRef<PendingResolution | null>(null);
@@ -311,7 +302,6 @@ function App() {
   const presetMinutesList = presets.map((preset) => preset.minutes);
   const isFileOperationBlocked =
     isRunning ||
-    externalConflict !== null ||
     pendingCommit !== null ||
     isCommitting ||
     isSavingBoundary ||
@@ -319,7 +309,6 @@ function App() {
     saveError !== null ||
     commitError !== null;
   const isEditorReadOnly =
-    externalConflict !== null ||
     pendingCommit !== null ||
     isCommitting ||
     isSavingBoundary ||
@@ -330,7 +319,6 @@ function App() {
     view === "editor" &&
     isCursorOnTask &&
     !isEditorReadOnly &&
-    externalConflict === null &&
     !isWorkspaceLoading &&
     !isSavingBoundary;
 
@@ -362,8 +350,12 @@ function App() {
         });
       })
       .catch((error) => {
-        if (saveRevisionRef.current === revision) pendingSaveRef.current ??= pending;
-        if (isWriteConflict(error)) setDiskRefreshKey((key) => key + 1);
+        if (isWriteConflict(error)) {
+          pendingSaveRef.current = null;
+          setDiskRefreshKey((key) => key + 1);
+        } else if (saveRevisionRef.current === revision) {
+          pendingSaveRef.current ??= pending;
+        }
         throw error;
       })
       .finally(() => {
@@ -376,7 +368,9 @@ function App() {
   const flushSaveBestEffort = useCallback(() => {
     void flushSave()
       .then(() => setSaveError(null))
-      .catch((error) => setSaveError(`Could not save: ${errorMessage(error)}`));
+      .catch((error) => {
+        if (!isWriteConflict(error)) setSaveError(`Could not save: ${errorMessage(error)}`);
+      });
   }, [flushSave]);
 
   const flushSaveAtBoundary = async (after?: () => Promise<void>): Promise<boolean> => {
@@ -389,6 +383,10 @@ function App() {
       setSaveError(null);
       return true;
     } catch (error) {
+      if (isWriteConflict(error)) {
+        setSaveError(null);
+        return false;
+      }
       setSaveError(`Could not save: ${errorMessage(error)}`);
       return false;
     } finally {
@@ -400,7 +398,6 @@ function App() {
   const scheduleSave = useCallback(
     (file: MdFile) => {
       if (!isTauri() || !dataDir) return;
-      if (externalConflictRef.current) return;
       saveRevisionRef.current += 1;
       pendingSaveRef.current = file;
       clearTimeout(saveTimerRef.current);
@@ -413,7 +410,6 @@ function App() {
     const blockedNow = (ignoreBoundary = false) =>
       timerRunningRef.current ||
       activeSessionRef.current !== null ||
-      externalConflictRef.current !== null ||
       pendingCommitRef.current !== null ||
       pendingResolutionRef.current !== null ||
       commitInFlightRef.current ||
@@ -450,87 +446,29 @@ function App() {
     if (current) scheduleSave({ ...current, content: text, raw });
   };
 
-  const setExternalConflictCandidate = (conflict: ExternalConflict) => {
-    if (!externalConflictRef.current) {
-      clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = undefined;
-      pendingSaveRef.current = null;
-    }
-    externalConflictRef.current = conflict;
-    setExternalConflict(conflict);
+  const discardPendingSave = () => {
+    saveRevisionRef.current += 1;
+    clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = undefined;
+    pendingSaveRef.current = null;
   };
 
-  const handleExternalConflict = (file: MdFile) => {
-    setExternalConflictCandidate({ name: file.name, file });
+  const handleExternalFileAdopted = (file: MdFile) => {
+    applyingExternalRef.current = true;
+    try {
+      editorRef.current?.reloadContent(file.content, file.raw);
+    } finally {
+      applyingExternalRef.current = false;
+    }
+    setSaveError(null);
   };
 
   const handleExternalFileMissing = (name: string) => {
-    setExternalConflictCandidate({ name, file: null });
-  };
-
-  const useExternalContent = async () => {
-    const conflict = externalConflictRef.current;
-    if (!conflict || conflictResolutionRef.current || commitInFlightRef.current) return;
-    conflictResolutionRef.current = true;
-    try {
-      await saveInFlightRef.current.catch(() => undefined);
-      if (externalConflictRef.current !== conflict) return;
-      pendingSaveRef.current = null;
-      if (conflict.file) {
-        setFiles((current) =>
-          current.map((file) => (file.name === conflict.name ? conflict.file! : file)),
-        );
-        applyingExternalRef.current = true;
-        try {
-          editorRef.current?.reloadContent(conflict.file.content, conflict.file.raw);
-        } finally {
-          applyingExternalRef.current = false;
-        }
-        lastSavedContentsRef.current.set(conflict.name, conflict.file.raw);
-      } else {
-        if (activeSessionRef.current?.file === conflict.name) {
-          trackedLostRef.current = true;
-          setTrackedLost(true);
-        }
-        lastSavedContentsRef.current.set(conflict.name, null);
-        setFiles((current) => current.filter((file) => file.name !== conflict.name));
-        setActiveIndex(0);
-      }
-      const unresolvedCommit = pendingCommitRef.current;
-      if (unresolvedCommit?.needsMarkdownSave) {
-        const record = unresolvedCommit.record;
-        setPendingCommitSync(null);
-        setCommitError(null);
-        setPendingResolutionSync({
-          file: record.file,
-          startedAt: new Date(record.startedAt).getTime(),
-          presetMinutes: record.presetMinutes,
-          elapsedSeconds: record.elapsedSeconds,
-          lineText: record.lineText,
-          projects: record.projects,
-        });
-      }
-      saveInFlightRef.current = Promise.resolve();
-      setSaveError(null);
-      externalConflictRef.current = null;
-      setExternalConflict(null);
-      setDiskRefreshKey((key) => key + 1);
-    } catch (error) {
-      setSaveError(`Could not apply external changes: ${errorMessage(error)}`);
-    } finally {
-      conflictResolutionRef.current = false;
+    if (activeSessionRef.current?.file === name) {
+      trackedLostRef.current = true;
+      setTrackedLost(true);
     }
-  };
-
-  const keepLocalContent = () => {
-    const conflict = externalConflictRef.current;
-    if (!conflict || commitInFlightRef.current || conflictResolutionRef.current) return;
-    externalConflictRef.current = null;
-    setExternalConflict(null);
-    if (conflict.file) lastSavedContentsRef.current.set(conflict.name, conflict.file.raw);
-    else lastSavedContentsRef.current.set(conflict.name, null);
-    const current = filesRef.current.find((file) => file.name === conflict.name);
-    if (current) scheduleSave(current);
+    setSaveError(null);
   };
 
   const handleSelectFile = async (index: number) => {
@@ -642,8 +580,22 @@ function App() {
       setCommitError(null);
       return true;
     } catch (error) {
-      setPendingCommitSync(commit);
-      setCommitError(`Could not finish session: ${errorMessage(error)}`);
+      if (isWriteConflict(error)) {
+        const record = commit.record;
+        setPendingCommitSync(null);
+        setPendingResolutionSync({
+          file: record.file,
+          startedAt: new Date(record.startedAt).getTime(),
+          presetMinutes: record.presetMinutes,
+          elapsedSeconds: record.elapsedSeconds,
+          lineText: record.lineText,
+          projects: record.projects,
+        });
+        setCommitError(null);
+      } else {
+        setPendingCommitSync(commit);
+        setCommitError(`Could not finish session: ${errorMessage(error)}`);
+      }
       return false;
     } finally {
       commitInFlightRef.current = false;
@@ -696,7 +648,6 @@ function App() {
       commitInFlightRef.current ||
       saveBoundaryRef.current ||
       workspaceLoadingRef.current ||
-      externalConflictRef.current !== null ||
       saveErrorRef.current !== null ||
       commitErrorRef.current !== null
     )
@@ -745,7 +696,7 @@ function App() {
     const now = Date.now();
     const session = activeSessionRef.current;
     const { elapsedSeconds } = stopTimer(timerState, now);
-    const safeTarget = !trackedLostRef.current && externalConflictRef.current === null;
+    const safeTarget = !trackedLostRef.current;
     const stopped = editorRef.current?.stopTracking(elapsedSeconds, safeTarget);
 
     let completed = false;
@@ -786,7 +737,6 @@ function App() {
 
   const handleQuit = async (): Promise<boolean> => {
     if (
-      externalConflictRef.current ||
       pendingCommitRef.current ||
       pendingResolutionRef.current ||
       commitInFlightRef.current ||
@@ -826,7 +776,6 @@ function App() {
       !pending ||
       viewRef.current !== "editor" ||
       !currentFile ||
-      externalConflictRef.current !== null ||
       pendingCommitRef.current !== null ||
       commitInFlightRef.current ||
       saveBoundaryRef.current ||
@@ -872,16 +821,10 @@ function App() {
     flushSaveBestEffort,
     pendingSaveRef,
     activeWritesRef,
-    applyingExternalRef,
-    reloadActiveEditor: (content, raw) => editorRef.current?.reloadContent(content, raw),
-    onExternalConflict: handleExternalConflict,
+    onExternalFileAdopted: handleExternalFileAdopted,
     onExternalFileMissing: handleExternalFileMissing,
-    externalConflictRef,
+    discardPendingSave,
     lastSavedContentsRef,
-    onTrackedFileMissing: () => {
-      trackedLostRef.current = true;
-      setTrackedLost(true);
-    },
     workspaceReloadKey,
     onWorkspaceLoading: () => setWorkspaceLoadingSync(true),
     onWorkspaceLoaded: () => setWorkspaceLoadingSync(false),
@@ -1080,52 +1023,23 @@ function App() {
           )}
         </div>
       </div>
-      {(externalConflict || commitError || saveError || refreshError) && (
+      {(commitError || saveError || refreshError) && (
         <div
           className="relative z-10 flex flex-none items-center justify-between gap-3 border-t border-danger/40 bg-timer-bg px-4 py-2 text-xs text-muted"
           role="status"
           aria-live="polite"
         >
-          <span>
-            {externalConflict
-              ? externalConflict.file
-                ? `External changes detected in ${externalConflict.name}.`
-                : `${externalConflict.name} was deleted externally.`
-              : (commitError ?? saveError ?? refreshError)}
-          </span>
-          <div className="flex flex-none gap-2">
-            {externalConflict ? (
-              <>
-                <button
-                  type="button"
-                  className="text-ink hover:text-accent"
-                  onClick={useExternalContent}
-                  disabled={isCommitting}
-                >
-                  Use external
-                </button>
-                <button
-                  type="button"
-                  className="text-ink hover:text-accent"
-                  onClick={keepLocalContent}
-                  disabled={isCommitting}
-                >
-                  Keep local
-                </button>
-              </>
-            ) : (
-              (commitError || saveError) && (
-                <button
-                  type="button"
-                  className="text-ink hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
-                  onClick={retryPendingCommit}
-                  disabled={isCommitting}
-                >
-                  Retry
-                </button>
-              )
-            )}
-          </div>
+          <span>{commitError ?? saveError ?? refreshError}</span>
+          {(commitError || saveError) && (
+            <button
+              type="button"
+              className="text-ink hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={retryPendingCommit}
+              disabled={isCommitting}
+            >
+              Retry
+            </button>
+          )}
         </div>
       )}
       <TimerBar
@@ -1140,7 +1054,6 @@ function App() {
           !isCommitting &&
           !isSavingBoundary &&
           !isWorkspaceLoading &&
-          externalConflict === null &&
           saveError === null &&
           commitError === null
         }

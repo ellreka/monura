@@ -83,7 +83,12 @@ vi.mock("./components/Editor", () => ({
       setVimMode: vi.fn(),
       setTimerKeymap: vi.fn(),
     };
-    mocks.editor = { onTrackedLineLost, onChange, onCursorLineChange };
+    mocks.editor = {
+      onTrackedLineLost,
+      onChange,
+      onCursorLineChange,
+      reloadContent: handle.reloadContent,
+    };
     if (ref) ref.current = handle;
     useEffect(
       () => onCursorLineChange?.({ isTask: true, text: "- [ ] start +old" }),
@@ -195,17 +200,39 @@ afterEach(() => {
 });
 
 describe("rendered App timer resolution", () => {
-  it("does not stop for an external content conflict", () => {
+  it("adopts external content without stopping the timer", () => {
     start();
+    const external = {
+      name: "work.md",
+      content: "- [ ] external",
+      raw: "- [ ] external",
+    };
     act(() =>
-      (mocks.effects.current?.onExternalConflict as (file: unknown) => void)({
-        name: "work.md",
-        content: "changed",
-        raw: "changed",
-      }),
+      (mocks.effects.current?.onExternalFileAdopted as (file: typeof external) => void)(external),
     );
-    expect(mocks.stopTracking).not.toHaveBeenCalled();
+    expect(mocks.editor?.reloadContent).toHaveBeenCalledWith(external.content, external.raw);
     expect(container?.querySelector("[data-testid=running]")?.textContent).toBe("true");
+  });
+
+  it("marks an externally deleted target lost and logs only its start snapshot", async () => {
+    start();
+    act(() => (mocks.effects.current?.onExternalFileMissing as (name: string) => void)("work.md"));
+    expect(container?.querySelector("[data-testid=lost]")?.textContent).toBe("true");
+    expect(container?.querySelector("[data-testid=running]")?.textContent).toBe("true");
+    await stop();
+    expect(mocks.stopTracking).toHaveBeenLastCalledWith(expect.any(Number), false);
+    await act(async () => {
+      container?.querySelector<HTMLButtonElement>("[data-testid=log-only]")?.click();
+      await Promise.resolve();
+    });
+    await openLog();
+    expect(await sessionRecords()).toHaveLength(1);
+    expect((await sessionRecords())[0]).toMatchObject({
+      file: "work.md",
+      lineText: "- [ ] start +old",
+      projects: ["old"],
+      lineDeleted: true,
+    });
   });
 
   it("commits the start snapshot after the tracked row is renamed", async () => {
@@ -231,39 +258,9 @@ describe("rendered App timer resolution", () => {
     });
   });
 
-  it("resolves an external missing-file conflict without stopping the timer", async () => {
+  it("assigns once after the target file disappears and keeps the start snapshot", async () => {
     start();
     act(() => (mocks.effects.current?.onExternalFileMissing as (name: string) => void)("work.md"));
-    expect(container?.querySelector("[data-testid=lost]")?.textContent).toBe("false");
-    expect(container?.querySelector("[data-testid=running]")?.textContent).toBe("true");
-    await act(async () => {
-      Array.from(container?.querySelectorAll("button") ?? [])
-        .find((b) => b.textContent === "Use external")
-        ?.click();
-      await Promise.resolve();
-    });
-    expect(container?.querySelector("[data-testid=lost]")?.textContent).toBe("true");
-    expect(container?.querySelector("[data-testid=running]")?.textContent).toBe("true");
-    await stop();
-    expect(mocks.stopTracking).toHaveBeenLastCalledWith(expect.any(Number), false);
-    await openLog();
-    expect(await sessionRecords()).toHaveLength(0);
-    await act(async () => {
-      container?.querySelector<HTMLButtonElement>("[data-testid=log-only]")?.click();
-      await Promise.resolve();
-    });
-    await openLog();
-    expect(await sessionRecords()).toHaveLength(1);
-    expect((await sessionRecords())[0]).toMatchObject({
-      lineText: "- [ ] start +old",
-      projects: ["old"],
-      lineDeleted: true,
-    });
-  });
-
-  it("assigns once to the current file but keeps the start snapshot", async () => {
-    start();
-    act(() => (mocks.effects.current?.onTrackedFileMissing as () => void)());
     await stop();
     await act(async () => {
       container?.querySelector<HTMLButtonElement>("[data-testid=assign]")?.click();
@@ -279,25 +276,78 @@ describe("rendered App timer resolution", () => {
       projects: ["old"],
     });
   });
+});
 
-  it("keeps local content and records the original snapshot", async () => {
-    start();
-    act(() => (mocks.effects.current?.onExternalFileMissing as (name: string) => void)("work.md"));
-    await act(async () => {
-      Array.from(container?.querySelectorAll("button") ?? [])
-        .find((b) => b.textContent === "Keep local")
-        ?.click();
-      await Promise.resolve();
+describe("rendered App write conflict resolution", () => {
+  it("offers resolution without logging automatically and keeps the start snapshot", async () => {
+    mocks.tauri = true;
+    mocks.initialDataDir = "dir";
+    mocks.invoke.mockResolvedValue([]);
+    mocks.writeMdFile.mockRejectedValue({
+      kind: "conflict",
+      name: "work.md",
+      disk: { kind: "content", raw: "external" },
     });
-    expect(container?.querySelector("[data-testid=lost]")?.textContent).toBe("false");
+    act(() => root?.unmount());
+    root = createRoot(container!);
+    act(() => root?.render(createElement(App)));
+    const file = { name: "work.md", content: "old", raw: "old" };
+    act(() => (mocks.effects.current?.setFiles as (files: unknown[]) => void)([file]));
+    (mocks.effects.current?.filesRef as { current: unknown[] }).current = [file];
+    await act(async () => await Promise.resolve());
+    start();
+    act(() =>
+      (mocks.editor?.onChange as (text: string, raw: string) => void)("- [ ] newer", "- [ ] newer"),
+    );
+    (mocks.effects.current?.pendingSaveRef as { current: unknown }).current = {
+      name: "work.md",
+      content: "- [ ] newer",
+      raw: "- [ ] newer",
+    };
     expect(container?.querySelector("[data-testid=running]")?.textContent).toBe("true");
     await stop();
-    expect(mocks.stopTracking).toHaveBeenLastCalledWith(expect.any(Number), true);
-    await openLog();
-    expect(await sessionRecords()).toHaveLength(1);
-    expect((await sessionRecords())[0]).toMatchObject({
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(mocks.stopTracking).toHaveBeenCalled();
+    expect(mocks.writeMdFile).toHaveBeenCalled();
+    expect(container?.querySelector("[data-testid=pending]")?.textContent).not.toBe("null");
+    expect(container?.querySelector("[data-testid=log-only]")).toBeTruthy();
+    expect(container?.querySelector("[data-testid=assign]")).toBeTruthy();
+    expect(mocks.effects.current?.diskRefreshKey).toBe(1);
+    expect(container?.textContent).not.toContain("Could not finish session");
+    expect(
+      Array.from(container?.querySelectorAll("button") ?? []).some(
+        (button) => button.textContent === "Retry",
+      ),
+    ).toBe(false);
+    expect(mocks.invoke).not.toHaveBeenCalledWith("append_session_log", expect.anything());
+    act(() =>
+      (mocks.effects.current?.onExternalFileAdopted as (file: unknown) => void)({
+        name: "work.md",
+        content: "external",
+        raw: "external",
+      }),
+    );
+    expect(mocks.editor?.reloadContent).toHaveBeenCalledWith("external", "external");
+    await act(async () => {
+      container?.querySelector<HTMLButtonElement>("[data-testid=log-only]")?.click();
+      await Promise.resolve();
+    });
+    const appendCalls = mocks.invoke.mock.calls.filter(
+      ([command]) => command === "append_session_log",
+    );
+    expect(appendCalls).toHaveLength(1);
+    const payload = appendCalls[0][1] as { line: string };
+    expect(JSON.parse(payload.line)).toMatchObject({
+      file: "work.md",
+      presetMinutes: 10,
+      startedAt: expect.any(String),
+      elapsedSeconds: expect.any(Number),
       lineText: "- [ ] start +old",
       projects: ["old"],
+      lineDeleted: true,
     });
   });
 });
@@ -318,7 +368,7 @@ describe("data directory selection", () => {
     expect(mocks.persistDataDir).toHaveBeenCalledWith("first");
   });
 
-  it("does not persist when a blocker appears while the save boundary is pending", async () => {
+  it("persists a folder after a pending save boundary settles", async () => {
     mocks.tauri = true;
     mocks.initialDataDir = "old";
     mocks.pickDataDir.mockResolvedValue("next");
@@ -352,18 +402,11 @@ describe("data directory selection", () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    act(() =>
-      (mocks.effects.current?.onExternalConflict as (file: unknown) => void)({
-        name: "work.md",
-        content: "external",
-        raw: "external",
-      }),
-    );
     releaseSave();
     await act(async () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    expect(mocks.persistDataDir).not.toHaveBeenCalled();
+    expect(mocks.persistDataDir).toHaveBeenCalledWith("next");
   });
 });

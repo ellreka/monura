@@ -132,13 +132,10 @@ type Options = {
   flushSaveBestEffort: () => void;
   pendingSaveRef: MutableRef<MdFile | null>;
   activeWritesRef: MutableRef<number>;
-  applyingExternalRef: MutableRef<boolean>;
-  reloadActiveEditor: (content: string, raw: string) => void;
-  onExternalConflict: (file: MdFile) => void;
+  onExternalFileAdopted: (file: MdFile) => void;
   onExternalFileMissing: (name: string) => void;
-  externalConflictRef: MutableRef<unknown>;
+  discardPendingSave: () => void;
   lastSavedContentsRef: MutableRef<Map<string, string | null>>;
-  onTrackedFileMissing: () => void;
   workspaceReloadKey: number;
   onWorkspaceLoading: () => void;
   onWorkspaceLoaded: () => void;
@@ -167,13 +164,10 @@ export function useAppEffects({
   flushSaveBestEffort,
   pendingSaveRef,
   activeWritesRef,
-  applyingExternalRef,
-  reloadActiveEditor,
-  onExternalConflict,
+  onExternalFileAdopted,
   onExternalFileMissing,
-  externalConflictRef,
+  discardPendingSave,
   lastSavedContentsRef,
-  onTrackedFileMissing,
   workspaceReloadKey,
   onWorkspaceLoading,
   onWorkspaceLoaded,
@@ -193,51 +187,44 @@ export function useAppEffects({
   const workspaceLoading = useEffectEvent(onWorkspaceLoading);
   const workspaceLoaded = useEffectEvent(onWorkspaceLoaded);
   const applyDiskFiles = useEffectEvent((diskFiles: MdFile[]) => {
+    if (activeWritesRef.current > 0) {
+      window.setTimeout(() => setDiskRefreshKey((key) => key + 1), 300);
+      return;
+    }
     const activeName = filesRef.current[activeIndexRef.current]?.name;
     const nextIndex = activeName ? diskFiles.findIndex((file) => file.name === activeName) : -1;
     const active = nextIndex >= 0 ? diskFiles[nextIndex] : undefined;
     const current = filesRef.current[activeIndexRef.current];
-    const activeRaw = active?.raw ?? null;
-    const currentRaw = current?.raw ?? null;
-    if (externalConflictRef.current) {
-      if (active) onExternalConflict(active);
-      else if (activeName) onExternalFileMissing(activeName);
-      return;
+    const changed =
+      active &&
+      current?.name === active.name &&
+      (current.content !== active.content || current.raw !== active.raw);
+    const pending = pendingSaveRef.current !== null;
+    const expected = activeName ? lastSavedContentsRef.current.get(activeName) : undefined;
+    const pendingFile = pendingSaveRef.current;
+    const pendingDisk = pendingFile && diskFiles.find((file) => file.name === pendingFile.name);
+    if (
+      !changed &&
+      pendingFile &&
+      pendingDisk &&
+      lastSavedContentsRef.current.get(pendingFile.name) !== pendingDisk.raw
+    ) {
+      discardPendingSave();
     }
-    if (!active && activeName && (pendingSaveRef.current !== null || activeWritesRef.current > 0)) {
-      if (lastSavedContentsRef.current.get(activeName) !== null) onExternalFileMissing(activeName);
-      else window.setTimeout(() => setDiskRefreshKey((key) => key + 1), 300);
-      return;
-    }
-    if (pendingSaveRef.current !== null || activeWritesRef.current > 0) {
-      if (
-        active &&
-        current?.name === active.name &&
-        (current.content !== active.content || currentRaw !== activeRaw)
-      ) {
-        if (lastSavedContentsRef.current.get(active.name) === activeRaw)
-          window.setTimeout(() => setDiskRefreshKey((key) => key + 1), 300);
-        else onExternalConflict(active);
-        return;
-      }
+    if (changed && pending && expected === active.raw) {
       window.setTimeout(() => setDiskRefreshKey((key) => key + 1), 300);
       return;
     }
-    if (!active && activeName && timerState.status === "running") onTrackedFileMissing();
     for (const file of diskFiles) lastSavedContentsRef.current.set(file.name, file.raw);
     setFiles(diskFiles);
     setActiveIndex(nextIndex >= 0 ? nextIndex : 0);
-    if (
-      active &&
-      current?.name === active.name &&
-      (current.content !== active.content || currentRaw !== activeRaw)
-    ) {
-      applyingExternalRef.current = true;
-      try {
-        reloadActiveEditor(active.content, active.raw);
-      } finally {
-        applyingExternalRef.current = false;
-      }
+    if (!active && activeName) {
+      discardPendingSave();
+      onExternalFileMissing(activeName);
+    }
+    if (changed) {
+      discardPendingSave();
+      onExternalFileAdopted(active);
     }
   });
   const loadedDataDirRef = useRef<string | null>(null);
@@ -344,12 +331,15 @@ export function useAppEffects({
   useEffect(() => {
     if (!isTauri() || !dataDir) return;
     let disposed = false;
-    let debounce: number | undefined;
     let unlisten: (() => void) | undefined;
+    let debounceTimer: number | undefined;
     void watchMdFiles(dataDir, () => {
       if (disposed) return;
-      clearTimeout(debounce);
-      debounce = window.setTimeout(() => void refreshFromDisk(), 300);
+      clearTimeout(debounceTimer);
+      debounceTimer = window.setTimeout(() => {
+        debounceTimer = undefined;
+        if (!disposed) void refreshFromDisk();
+      }, 300);
     })
       .then((unsubscribe) => {
         if (disposed) unsubscribe();
@@ -361,7 +351,7 @@ export function useAppEffects({
       .catch((error) => console.error("watch start failed:", error));
     return () => {
       disposed = true;
-      clearTimeout(debounce);
+      clearTimeout(debounceTimer);
       unlisten?.();
     };
   }, [dataDir, setDiskRefreshKey, workspaceReloadKey]);

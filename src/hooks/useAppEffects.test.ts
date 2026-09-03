@@ -16,7 +16,8 @@ import { listMdFiles, readMdFile } from "../lib/files";
 const tauri = vi.hoisted(() => ({
   value: false,
   quit: null as (() => void) | null,
-  listen: vi.fn(),
+  watch: null as (() => void) | null,
+  listen: vi.fn().mockResolvedValue(() => {}),
 }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn(), isTauri: () => tauri.value }));
 vi.mock("@tauri-apps/api/event", () => ({
@@ -36,7 +37,10 @@ vi.mock("../lib/files", () => ({
     !!error && typeof error === "object" && (error as { kind?: string }).kind === "not_found",
   listMdFiles: vi.fn(),
   readMdFile: vi.fn(),
-  watchMdFiles: vi.fn().mockResolvedValue(() => {}),
+  watchMdFiles: vi.fn((_directory: string, callback: () => void) => {
+    tauri.watch = callback;
+    return Promise.resolve(() => {});
+  }),
 }));
 
 describe("quit request handling", () => {
@@ -57,13 +61,10 @@ describe("quit request handling", () => {
       flushSaveBestEffort: vi.fn(),
       pendingSaveRef: { current: null },
       activeWritesRef: { current: 0 },
-      applyingExternalRef: { current: false },
-      reloadActiveEditor: vi.fn(),
-      onExternalConflict: vi.fn(),
+      onExternalFileAdopted: vi.fn(),
       onExternalFileMissing: vi.fn(),
-      externalConflictRef: { current: null },
+      discardPendingSave: vi.fn(),
       lastSavedContentsRef: { current: new Map() },
-      onTrackedFileMissing: vi.fn(),
       workspaceReloadKey: 0,
       onWorkspaceLoading: vi.fn(),
       onWorkspaceLoaded: vi.fn(),
@@ -264,6 +265,142 @@ describe("createWorkspaceLoadCoordinator", () => {
     });
     await coordinator.initial("dir");
     await expect(coordinator.refresh("dir")).rejects.toBe(error);
+  });
+});
+
+describe("mounted watcher disk handling", () => {
+  const oldFile = { name: "work.md", content: "old", raw: "old" };
+  const externalFile = { name: "work.md", content: "external", raw: "external" };
+  const writtenFile = { name: "work.md", content: "written", raw: "written" };
+  const makeOptions = (activeWrites: number, pending: typeof oldFile | null) => {
+    const filesRef = { current: [oldFile] };
+    const activeIndexRef = { current: 0 };
+    return {
+      dataDir: "dir",
+      files: [oldFile],
+      activeIndex: 0,
+      filesRef,
+      activeIndexRef,
+      setFiles: vi.fn(),
+      setActiveIndex: vi.fn(),
+      setLoadError: vi.fn(),
+      setRefreshError: vi.fn(),
+      flushSaveBestEffort: vi.fn(),
+      pendingSaveRef: { current: pending },
+      activeWritesRef: { current: activeWrites },
+      onExternalFileAdopted: vi.fn(),
+      onExternalFileMissing: vi.fn(),
+      discardPendingSave: vi.fn(),
+      lastSavedContentsRef: { current: new Map([["work.md", "old"]]) },
+      workspaceReloadKey: 0,
+      onWorkspaceLoading: vi.fn(),
+      onWorkspaceLoaded: vi.fn(),
+      diskRefreshKey: 0,
+      setDiskRefreshKey: vi.fn(),
+      setLauncherOpen: vi.fn(),
+      setView: vi.fn(),
+      timerState: { status: "idle", presetMinutes: 10, startedAt: null, durationSeconds: 600 },
+      setElapsedMs: vi.fn(),
+      lastTraySecRef: { current: null },
+      trayTick: vi.fn(),
+      stopTracking: vi.fn(),
+      onQuit: () => Promise.resolve(false),
+    } as Parameters<typeof useAppEffects>[0];
+  };
+
+  beforeEach(() => {
+    tauri.value = true;
+    tauri.watch = null;
+    vi.mocked(listMdFiles).mockResolvedValue(["work.md"]);
+    vi.mocked(readMdFile).mockResolvedValue(oldFile);
+  });
+
+  it("defers an unstable watcher snapshot while an app write is active", async () => {
+    vi.useFakeTimers();
+    vi.mocked(readMdFile).mockResolvedValue(writtenFile);
+    const options = makeOptions(1, { name: "work.md", content: "new", raw: "new" });
+    function Harness() {
+      useAppEffects(options);
+      return null;
+    }
+    const root = createRoot(document.createElement("div"));
+    act(() => root.render(createElement(Harness)));
+    await act(async () => await Promise.resolve());
+    vi.clearAllMocks();
+    act(() => tauri.watch?.());
+    await act(async () => await Promise.resolve());
+    expect(options.discardPendingSave).not.toHaveBeenCalled();
+    expect(options.onExternalFileAdopted).not.toHaveBeenCalled();
+    expect(options.setFiles).not.toHaveBeenCalled();
+    expect(options.onExternalFileMissing).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(300));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    act(() => vi.advanceTimersByTime(300));
+    expect(options.setDiskRefreshKey).toHaveBeenCalledTimes(1);
+    act(() => root.unmount());
+    vi.useRealTimers();
+  });
+
+  it("debounces rapid watcher events before adopting disk changes", async () => {
+    vi.useFakeTimers();
+    vi.mocked(readMdFile).mockResolvedValueOnce(oldFile).mockResolvedValue(externalFile);
+    const options = makeOptions(0, { name: "work.md", content: "new", raw: "new" });
+    function Harness() {
+      useAppEffects(options);
+      return null;
+    }
+    const root = createRoot(document.createElement("div"));
+    act(() => root.render(createElement(Harness)));
+    await act(async () => await Promise.resolve());
+    vi.clearAllMocks();
+    act(() => {
+      tauri.watch?.();
+      tauri.watch?.();
+    });
+    await act(async () => await Promise.resolve());
+    expect(readMdFile).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(299));
+    expect(readMdFile).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(1));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(listMdFiles).toHaveBeenCalledTimes(1);
+    expect(options.onExternalFileAdopted).toHaveBeenCalledTimes(1);
+    expect(options.onExternalFileAdopted).toHaveBeenCalledWith(externalFile);
+    act(() => root.unmount());
+    vi.useRealTimers();
+  });
+
+  it("adopts a stable deletion after the debounce and discards the pending save", async () => {
+    vi.useFakeTimers();
+    vi.mocked(listMdFiles).mockResolvedValueOnce(["work.md"]).mockResolvedValue([]);
+    vi.mocked(readMdFile).mockResolvedValue(oldFile);
+    const options = makeOptions(0, { name: "work.md", content: "new", raw: "new" });
+    function Harness() {
+      useAppEffects(options);
+      return null;
+    }
+    const root = createRoot(document.createElement("div"));
+    act(() => root.render(createElement(Harness)));
+    await act(async () => await Promise.resolve());
+    vi.clearAllMocks();
+    act(() => tauri.watch?.());
+    act(() => vi.advanceTimersByTime(300));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(options.setFiles).toHaveBeenCalledWith([]);
+    expect(options.discardPendingSave).toHaveBeenCalledTimes(1);
+    expect(options.onExternalFileMissing).toHaveBeenCalledTimes(1);
+    expect(options.onExternalFileMissing).toHaveBeenCalledWith("work.md");
+    act(() => root.unmount());
+    vi.useRealTimers();
   });
 });
 
