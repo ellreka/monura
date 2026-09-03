@@ -201,6 +201,7 @@ function App() {
     presetMinutes,
     presets,
     startStopShortcut,
+    toggleCheckboxShortcut,
     globalHotkey,
     globalHotkeyError,
     globalHotkeyBusy,
@@ -212,6 +213,7 @@ function App() {
     setPresetShortcut: handleSetPresetShortcut,
     removePreset: handleRemovePreset,
     setStartStop: handleSetStartStopShortcut,
+    setToggleCheckbox: handleSetToggleCheckboxShortcut,
     setGlobal: handleSetGlobalHotkey,
   } = useAppSettings(editorRef);
   const [files, setFiles] = useState<MdFile[]>(() =>
@@ -939,8 +941,8 @@ function App() {
         <div className="relative z-[1] flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
           <h1 className="m-0 text-[22px]">monura</h1>
           <p className="m-0 max-w-[420px] text-[13px] text-muted">
-            Choose a folder for your .md files. It can also be a folder inside iCloud Drive or
-            Dropbox.
+            Choose a folder for your .md files. An Obsidian vault is recommended, but a folder in
+            iCloud Drive or Dropbox works too.
           </p>
           {loadError && (
             <p className="m-0 max-w-[420px] text-xs break-all text-danger">
@@ -1003,6 +1005,7 @@ function App() {
                   setFocusedTaskLabel(info.isTask ? toTrackingLabel(info.text) : null)
                 }
                 startStopShortcut={startStopShortcut}
+                toggleCheckboxShortcut={toggleCheckboxShortcut}
                 onSelectPreset={setPresetMinutes}
                 onToggle={handleToggleTracking}
               />
@@ -1037,6 +1040,8 @@ function App() {
               onRemovePreset={handleRemovePreset}
               startStopShortcut={startStopShortcut}
               onSetStartStopShortcut={handleSetStartStopShortcut}
+              toggleCheckboxShortcut={toggleCheckboxShortcut}
+              onSetToggleCheckboxShortcut={handleSetToggleCheckboxShortcut}
               globalHotkey={globalHotkey}
               globalHotkeyError={globalHotkeyError}
               globalHotkeyBusy={globalHotkeyBusy}

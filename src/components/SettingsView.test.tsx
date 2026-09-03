@@ -1,7 +1,7 @@
 import { act, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import type { TimerPreset } from "../lib/timer";
+import { DEFAULT_TOGGLE_CHECKBOX_SHORTCUT, type TimerPreset } from "../lib/timer";
 import { SettingsView } from "./SettingsView";
 
 beforeAll(() => {
@@ -34,6 +34,7 @@ function renderSettings(overrides: Partial<ComponentProps<typeof SettingsView>> 
     onSetPresetShortcut: vi.fn(),
     onRemovePreset: vi.fn(),
     onSetStartStopShortcut: vi.fn(),
+    onSetToggleCheckboxShortcut: vi.fn(),
     onSetGlobalHotkey: vi.fn(),
     onPickDataDir: vi.fn(),
   };
@@ -49,6 +50,14 @@ function renderSettings(overrides: Partial<ComponentProps<typeof SettingsView>> 
         settingsFilePath="/Users/example/Library/Application Support/net.ellreka.monura/settings.json"
         {...handlers}
         {...overrides}
+        toggleCheckboxShortcut={
+          overrides.toggleCheckboxShortcut === undefined
+            ? DEFAULT_TOGGLE_CHECKBOX_SHORTCUT
+            : overrides.toggleCheckboxShortcut
+        }
+        onSetToggleCheckboxShortcut={
+          overrides.onSetToggleCheckboxShortcut ?? handlers.onSetToggleCheckboxShortcut
+        }
       />,
     );
   });
@@ -161,6 +170,29 @@ describe("SettingsView", () => {
     });
 
     expect(onRemovePreset).toHaveBeenCalledWith(0);
+  });
+
+  it("renders and captures the default toggle checkbox shortcut", async () => {
+    const { container, onSetToggleCheckboxShortcut } = renderSettings();
+    const button = container.querySelector<HTMLButtonElement>(
+      '[aria-label="Toggle checkbox shortcut"]',
+    )!;
+    expect(button.textContent).toBe("⌘⇧↵");
+    await act(async () => {
+      button.click();
+    });
+    await act(async () => {
+      dispatchKeydown({ code: "KeyT", metaKey: true });
+    });
+    expect(onSetToggleCheckboxShortcut).toHaveBeenCalledWith("Meta-T");
+  });
+
+  it("disables the toggle checkbox shortcut in the demo", () => {
+    const { container } = renderSettings({ shortcutsDisabled: true });
+    expect(
+      container.querySelector<HTMLButtonElement>('[aria-label="Toggle checkbox shortcut"]')
+        ?.disabled,
+    ).toBe(true);
   });
 
   it("captures a new start/stop shortcut", async () => {

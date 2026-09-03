@@ -2,6 +2,7 @@ export {
   DEFAULT_PRESETS,
   MAX_PRESETS,
   DEFAULT_START_STOP_SHORTCUT,
+  DEFAULT_TOGGLE_CHECKBOX_SHORTCUT,
   fastForwardToRemaining,
   sanitizePresetMinutes,
   reassignShortcut,

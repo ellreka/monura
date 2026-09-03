@@ -14,8 +14,6 @@ export const DEFAULT_PRESET_MINUTES = 60;
 
 export const MAX_PRESETS = 4;
 
-/**
- */
 export interface TimerPreset {
   minutes: number;
   shortcut: string | null;
@@ -28,6 +26,7 @@ export const DEFAULT_PRESETS: readonly TimerPreset[] = [
 ];
 
 export const DEFAULT_START_STOP_SHORTCUT = "Meta-Enter";
+export const DEFAULT_TOGGLE_CHECKBOX_SHORTCUT = "Meta-Shift-Enter";
 
 export function sanitizePresetMinutes(value: number): number | null {
   if (!Number.isFinite(value)) return null;
@@ -35,20 +34,20 @@ export function sanitizePresetMinutes(value: number): number | null {
   return rounded >= 1 && rounded <= 1440 ? rounded : null;
 }
 
-export type ShortcutTarget = "startStop" | number;
+export type ShortcutTarget = "toggleCheckbox" | "startStop" | number;
 
-/**
- */
 export function reassignShortcut(
   presets: readonly TimerPreset[],
   startStop: string | null,
+  toggleCheckbox: string | null,
   target: ShortcutTarget,
   key: string | null,
-): { presets: TimerPreset[]; startStop: string | null } {
+): { presets: TimerPreset[]; startStop: string | null; toggleCheckbox: string | null } {
   const releaseIfTaken = (existing: string | null) =>
     key !== null && existing === key ? null : existing;
   return {
     startStop: target === "startStop" ? key : releaseIfTaken(startStop),
+    toggleCheckbox: target === "toggleCheckbox" ? key : releaseIfTaken(toggleCheckbox),
     presets: presets.map((preset, index) => ({
       ...preset,
       shortcut: target === index ? key : releaseIfTaken(preset.shortcut),
@@ -56,10 +55,6 @@ export function reassignShortcut(
   };
 }
 
-/**
- * Rewinds `startedAt` so only `remainingSeconds` remain until expiry (preset duration unchanged).
- * No-op while idle.
- */
 export function fastForwardToRemaining(
   state: TimerState,
   now: number,
@@ -79,7 +74,6 @@ export function startTimer(presetMinutes: number, now: number): TimerState {
   return { status: "running", presetMinutes, startedAt: now };
 }
 
-/** Elapsed milliseconds at the given time; always 0 when idle. */
 export function computeElapsedMs(state: TimerState, now: number): number {
   if (state.status !== "running" || state.startedAt === null) return 0;
   return Math.max(0, now - state.startedAt);
@@ -90,19 +84,16 @@ export interface StopResult {
   elapsedSeconds: number;
 }
 
-/** Stops the timer and returns the elapsed seconds to add (floored) plus the idle state. */
 export function stopTimer(state: TimerState, now: number): StopResult {
   const elapsedMs = computeElapsedMs(state, now);
   const elapsedSeconds = Math.floor(elapsedMs / 1000);
   return { state: createIdleTimer(state.presetMinutes), elapsedSeconds };
 }
 
-/** Whether the preset time has been reached. */
 export function isExpired(state: TimerState, now: number): boolean {
   return computeElapsedMs(state, now) >= state.presetMinutes * 60000;
 }
 
-/** Formats milliseconds as mm:ss (clock display). */
 export function formatClock(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
   const m = Math.floor(totalSeconds / 60);
@@ -110,7 +101,6 @@ export function formatClock(ms: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-/** Formats preset minutes as a label like "5s" / "10m" / "1h". */
 export function formatPresetLabel(minutes: number): string {
   if (minutes < 1) return `${Math.round(minutes * 60)}s`;
   if (minutes >= 60 && minutes % 60 === 0) return `${minutes / 60}h`;

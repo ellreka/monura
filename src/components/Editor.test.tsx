@@ -35,6 +35,12 @@ function mountEditor(
     onSelectionChange?: (selection: EditorSelection) => void;
     autoFocus?: boolean;
     focusSignal?: number;
+    startStopShortcut?: string | null;
+    toggleCheckboxShortcut?: string | null;
+    readOnly?: boolean;
+    onToggle?: () => void;
+    onSelectPreset?: (minutes: number) => void;
+    presets?: readonly { minutes: number; shortcut: string | null }[];
   } = {},
 ): MountedEditor {
   const container = document.createElement("div");
@@ -52,11 +58,18 @@ function mountEditor(
         onSelectionChange={props.onSelectionChange}
         autoFocus={props.autoFocus}
         focusSignal={props.focusSignal}
-        presets={[
-          { minutes: 10, shortcut: null },
-          { minutes: 30, shortcut: null },
-          { minutes: 60, shortcut: null },
-        ]}
+        startStopShortcut={props.startStopShortcut}
+        toggleCheckboxShortcut={props.toggleCheckboxShortcut}
+        readOnly={props.readOnly}
+        onToggle={props.onToggle}
+        onSelectPreset={props.onSelectPreset}
+        presets={
+          props.presets ?? [
+            { minutes: 10, shortcut: null },
+            { minutes: 30, shortcut: null },
+            { minutes: 60, shortcut: null },
+          ]
+        }
       />,
     );
   });
@@ -69,6 +82,87 @@ function mountEditor(
 }
 
 const CONTENT = ["## Schedule", "- [ ] tracked line +foo", "Memo"].join("\n");
+
+function keydown(view: EditorView, code: string, modifiers: Partial<KeyboardEventInit> = {}) {
+  const event = new KeyboardEvent("keydown", {
+    bubbles: true,
+    cancelable: true,
+    code,
+    ...modifiers,
+  });
+  view.contentDOM.dispatchEvent(event);
+  return event;
+}
+
+describe("Editor local shortcuts", () => {
+  it("toggles tasks, consumes successes, preserves selection and focus, and reconfigures", () => {
+    const { handle, view } = mountEditor(
+      "- [ ] task\n- [x] done\nmemo\n```\n- [ ] code\n```",
+      "- [ ] task\n- [x] done\nmemo\n```\n- [ ] code\n```",
+      {
+        toggleCheckboxShortcut: "Meta-T",
+      },
+    );
+    const selection = CMEditorSelection.create(
+      [CMEditorSelection.range(2, 4), CMEditorSelection.range(7, 8)],
+      1,
+    );
+    act(() => {
+      view.dispatch({ selection });
+      view.focus();
+    });
+    const before = view.state.selection;
+    const event = keydown(view, "KeyT", { metaKey: true });
+    expect(event.defaultPrevented).toBe(true);
+    expect(view.state.doc.line(1).text).toBe("- [x] task");
+    expect(view.state.selection.ranges.map(({ anchor, head }) => ({ anchor, head }))).toEqual(
+      before.ranges.map(({ anchor, head }) => ({ anchor, head })),
+    );
+    expect(document.activeElement).toBe(view.contentDOM);
+    act(() => view.dispatch({ selection: { anchor: view.state.doc.line(2).from } }));
+    expect(keydown(view, "KeyT", { metaKey: true }).defaultPrevented).toBe(true);
+    expect(view.state.doc.line(2).text).toBe("- [ ] done");
+    act(() => view.dispatch({ selection: { anchor: view.state.doc.line(3).from } }));
+    expect(keydown(view, "KeyT", { metaKey: true }).defaultPrevented).toBe(false);
+    act(() => view.dispatch({ selection: { anchor: view.state.doc.line(5).from } }));
+    expect(keydown(view, "KeyT", { metaKey: true }).defaultPrevented).toBe(false);
+    act(() => handle.setEditorKeymap([], null, "Meta-Y"));
+    expect(keydown(view, "KeyT", { metaKey: true }).defaultPrevented).toBe(false);
+    act(() => view.dispatch({ selection: { anchor: view.state.doc.line(1).from } }));
+    expect(keydown(view, "KeyY", { metaKey: true }).defaultPrevented).toBe(true);
+  });
+
+  it("handles start-stop and preset shortcuts through the editor", () => {
+    const onToggle = vi.fn();
+    const onSelectPreset = vi.fn();
+    const { view } = mountEditor("- [ ] task", "- [ ] task", {
+      startStopShortcut: "Meta-S",
+      onToggle,
+      onSelectPreset,
+      presets: [{ minutes: 25, shortcut: "Meta-P" }],
+    });
+    expect(keydown(view, "KeyS", { metaKey: true }).defaultPrevented).toBe(true);
+    expect(onToggle).toHaveBeenCalledOnce();
+    expect(keydown(view, "KeyP", { metaKey: true }).defaultPrevented).toBe(true);
+    expect(onSelectPreset).toHaveBeenCalledWith(25);
+  });
+
+  it("leaves read-only and fenced checklist-looking lines unchanged", () => {
+    const { view } = mountEditor(
+      "memo\n```\n- [ ] code\n```\n- [ ] task",
+      "memo\n```\n- [ ] code\n```\n- [ ] task",
+      {
+        toggleCheckboxShortcut: "Meta-T",
+        readOnly: true,
+      },
+    );
+    view.dispatch({ selection: { anchor: view.state.doc.line(3).from } });
+    expect(keydown(view, "KeyT", { metaKey: true }).defaultPrevented).toBe(false);
+    view.dispatch({ selection: { anchor: view.state.doc.line(5).from } });
+    expect(keydown(view, "KeyT", { metaKey: true }).defaultPrevented).toBe(false);
+    view.destroy();
+  });
+});
 
 describe("Editor selection lifecycle", () => {
   it("does not focus on mount when autoFocus is false", () => {

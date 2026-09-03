@@ -5,7 +5,7 @@ export {
   vimModeCompartment,
   vimEditableCompartment,
   readOnlyCompartment,
-  timerKeymapCompartment,
+  editorKeymapCompartment,
   DEFAULT_UI_STATE,
 } from "./extensions";
 export { editorTheme, markdownHighlighting } from "./theme";

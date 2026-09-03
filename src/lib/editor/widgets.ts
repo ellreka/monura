@@ -1,7 +1,7 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { EditorView, WidgetType } from "@codemirror/view";
-import { formatDurationMinutes } from "../parser";
+import { formatDurationMinutes, parseLines } from "../parser";
 
 /** Clickable checkbox that replaces the checklist's `[ ]` / `[x]`. */
 export class CheckboxWidget extends WidgetType {
@@ -33,15 +33,23 @@ export class CheckboxWidget extends WidgetType {
   }
 }
 
-function toggleCheckboxAtLine(view: EditorView, lineNumber: number): void {
-  if (view.state.readOnly || lineNumber > view.state.doc.lines) return;
+export function toggleCheckboxAtLine(view: EditorView, lineNumber: number): boolean {
+  if (view.state.readOnly || lineNumber < 1 || lineNumber > view.state.doc.lines) return false;
+  const lines = parseLines(view.state.doc.toString());
+  if (!lines[lineNumber - 1]?.isTask) return false;
   const line = view.state.doc.line(lineNumber);
   const match = /\[( |x|X)\]/.exec(line.text);
-  if (!match || match.index === undefined) return;
+  if (!match || match.index === undefined) return false;
   const from = line.from + match.index;
-  const to = from + match[0].length;
-  const isChecked = match[1].toLowerCase() === "x";
-  view.dispatch({ changes: { from, to, insert: isChecked ? "[ ]" : "[x]" } });
+  view.dispatch({
+    changes: {
+      from,
+      to: from + match[0].length,
+      insert: match[1].toLowerCase() === "x" ? "[ ]" : "[x]",
+    },
+    selection: view.state.selection,
+  });
+  return true;
 }
 
 /** Σ aggregation badge shown at the end of a parent task line. */

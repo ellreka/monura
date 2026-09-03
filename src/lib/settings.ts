@@ -1,7 +1,12 @@
 import { appDataDir, join } from "@tauri-apps/api/path";
 import { LazyStore } from "@tauri-apps/plugin-store";
 import * as v from "valibot";
-import { DEFAULT_PRESETS, DEFAULT_START_STOP_SHORTCUT, MAX_PRESETS } from "./timer";
+import {
+  DEFAULT_PRESETS,
+  DEFAULT_START_STOP_SHORTCUT,
+  DEFAULT_TOGGLE_CHECKBOX_SHORTCUT,
+  MAX_PRESETS,
+} from "./timer";
 
 const nullableShortcut = v.nullable(v.pipe(v.string(), v.minLength(1)));
 const MODIFIER_PARTS: Record<string, true> = { Meta: true, Ctrl: true, Alt: true, Shift: true };
@@ -22,6 +27,7 @@ export const AppSettingsSchema = v.strictObject({
   presets: presetList,
   shortcuts: v.strictObject({
     startStop: nullableShortcut,
+    toggleCheckbox: nullableShortcut,
   }),
   globalHotkey: nullableShortcut,
 });
@@ -41,6 +47,7 @@ function validateSettingsRules(settings: AppSettings): string[] {
   const errors: string[] = [];
   const assigned = [
     settings.shortcuts.startStop,
+    settings.shortcuts.toggleCheckbox,
     ...settings.presets.map((preset) => preset.shortcut),
   ].filter((shortcut): shortcut is string => shortcut !== null);
   if (new Set(assigned).size !== assigned.length) {
@@ -90,7 +97,10 @@ export async function loadSettings(): Promise<AppSettings> {
     dataDir: null,
     vimMode: false,
     presets: DEFAULT_PRESETS.map((preset) => ({ ...preset })),
-    shortcuts: { startStop: DEFAULT_START_STOP_SHORTCUT },
+    shortcuts: {
+      startStop: DEFAULT_START_STOP_SHORTCUT,
+      toggleCheckbox: DEFAULT_TOGGLE_CHECKBOX_SHORTCUT,
+    },
     globalHotkey: null,
   };
   const candidate = {

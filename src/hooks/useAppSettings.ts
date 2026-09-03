@@ -7,6 +7,7 @@ import {
   DEFAULT_PRESET_MINUTES,
   DEFAULT_PRESETS,
   DEFAULT_START_STOP_SHORTCUT,
+  DEFAULT_TOGGLE_CHECKBOX_SHORTCUT,
   MAX_PRESETS,
   reassignShortcut,
 } from "../lib/timer";
@@ -25,6 +26,9 @@ export function useAppSettings(editorRef: RefObject<EditorHandle | null>) {
   const [startStopShortcut, setStartStopShortcut] = useState<string | null>(
     DEFAULT_START_STOP_SHORTCUT,
   );
+  const [toggleCheckboxShortcut, setToggleCheckboxShortcut] = useState<string | null>(
+    DEFAULT_TOGGLE_CHECKBOX_SHORTCUT,
+  );
   const [globalHotkey, setGlobalHotkey] = useState<string | null>(null);
   const [globalHotkeyError, setGlobalHotkeyError] = useState<string | null>(null);
   const [globalHotkeyBusy, setGlobalHotkeyBusy] = useState(false);
@@ -34,7 +38,7 @@ export function useAppSettings(editorRef: RefObject<EditorHandle | null>) {
     dataDir,
     vimMode,
     presets,
-    shortcuts: { startStop: startStopShortcut },
+    shortcuts: { startStop: startStopShortcut, toggleCheckbox: toggleCheckboxShortcut },
     globalHotkey,
   });
 
@@ -54,6 +58,12 @@ export function useAppSettings(editorRef: RefObject<EditorHandle | null>) {
         setPresets(next.presets);
         setPresetMinutes(next.presets[0]?.minutes ?? DEFAULT_PRESET_MINUTES);
         setStartStopShortcut(next.shortcuts.startStop);
+        setToggleCheckboxShortcut(next.shortcuts.toggleCheckbox);
+        editorRef.current?.setEditorKeymap(
+          next.presets,
+          next.shortcuts.startStop,
+          next.shortcuts.toggleCheckbox,
+        );
         try {
           await invoke("set_global_hotkey", {
             accelerator: next.globalHotkey ? toAccelerator(next.globalHotkey) : null,
@@ -82,7 +92,7 @@ export function useAppSettings(editorRef: RefObject<EditorHandle | null>) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [editorRef]);
 
   const setDataDir = (next: string) => {
     persist({ ...settings(), dataDir: next });
@@ -100,7 +110,7 @@ export function useAppSettings(editorRef: RefObject<EditorHandle | null>) {
     if (presets.length >= MAX_PRESETS) return;
     const next = [...presets, { minutes: 15, shortcut: null }];
     setPresets(next);
-    editorRef.current?.setTimerKeymap(next, startStopShortcut);
+    editorRef.current?.setEditorKeymap(next, startStopShortcut, toggleCheckboxShortcut);
     persist({ ...settings(), presets: next });
   };
 
@@ -110,17 +120,22 @@ export function useAppSettings(editorRef: RefObject<EditorHandle | null>) {
       current === index ? { ...preset, minutes } : preset,
     );
     setPresets(next);
-    editorRef.current?.setTimerKeymap(next, startStopShortcut);
+    editorRef.current?.setEditorKeymap(next, startStopShortcut, toggleCheckboxShortcut);
     setPresetMinutes((current) => (current === previous ? minutes : current));
     persist({ ...settings(), presets: next });
   };
 
   const setPresetShortcut = (index: number, key: string | null) => {
-    const { presets: next, startStop } = reassignShortcut(presets, startStopShortcut, index, key);
+    const {
+      presets: next,
+      startStop,
+      toggleCheckbox,
+    } = reassignShortcut(presets, startStopShortcut, toggleCheckboxShortcut, index, key);
     setPresets(next);
     setStartStopShortcut(startStop);
-    editorRef.current?.setTimerKeymap(next, startStop);
-    persist({ ...settings(), presets: next, shortcuts: { startStop } });
+    setToggleCheckboxShortcut(toggleCheckbox);
+    editorRef.current?.setEditorKeymap(next, startStop, toggleCheckbox);
+    persist({ ...settings(), presets: next, shortcuts: { startStop, toggleCheckbox } });
   };
 
   const removePreset = (index: number) => {
@@ -128,7 +143,7 @@ export function useAppSettings(editorRef: RefObject<EditorHandle | null>) {
     const removed = presets[index]?.minutes;
     const next = presets.filter((_, current) => current !== index);
     setPresets(next);
-    editorRef.current?.setTimerKeymap(next, startStopShortcut);
+    editorRef.current?.setEditorKeymap(next, startStopShortcut, toggleCheckboxShortcut);
     setPresetMinutes((current) =>
       current === removed ? (next[0]?.minutes ?? DEFAULT_PRESET_MINUTES) : current,
     );
@@ -136,16 +151,29 @@ export function useAppSettings(editorRef: RefObject<EditorHandle | null>) {
   };
 
   const setStartStop = (key: string | null) => {
-    const { presets: next, startStop } = reassignShortcut(
-      presets,
-      startStopShortcut,
-      "startStop",
-      key,
-    );
+    const {
+      presets: next,
+      startStop,
+      toggleCheckbox,
+    } = reassignShortcut(presets, startStopShortcut, toggleCheckboxShortcut, "startStop", key);
     setPresets(next);
     setStartStopShortcut(startStop);
-    editorRef.current?.setTimerKeymap(next, startStop);
-    persist({ ...settings(), presets: next, shortcuts: { startStop } });
+    setToggleCheckboxShortcut(toggleCheckbox);
+    editorRef.current?.setEditorKeymap(next, startStop, toggleCheckbox);
+    persist({ ...settings(), presets: next, shortcuts: { startStop, toggleCheckbox } });
+  };
+
+  const setToggleCheckbox = (key: string | null) => {
+    const {
+      presets: next,
+      startStop,
+      toggleCheckbox,
+    } = reassignShortcut(presets, startStopShortcut, toggleCheckboxShortcut, "toggleCheckbox", key);
+    setPresets(next);
+    setStartStopShortcut(startStop);
+    setToggleCheckboxShortcut(toggleCheckbox);
+    editorRef.current?.setEditorKeymap(next, startStop, toggleCheckbox);
+    persist({ ...settings(), presets: next, shortcuts: { startStop, toggleCheckbox } });
   };
 
   const setGlobal = async (key: string | null) => {
@@ -196,6 +224,7 @@ export function useAppSettings(editorRef: RefObject<EditorHandle | null>) {
     presetMinutes,
     presets,
     startStopShortcut,
+    toggleCheckboxShortcut,
     globalHotkey,
     globalHotkeyError,
     globalHotkeyBusy,
@@ -207,6 +236,7 @@ export function useAppSettings(editorRef: RefObject<EditorHandle | null>) {
     setPresetShortcut,
     removePreset,
     setStartStop,
+    setToggleCheckbox,
     setGlobal,
   };
 }

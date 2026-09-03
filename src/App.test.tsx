@@ -73,6 +73,7 @@ vi.mock("./hooks/useAppSettings", () => ({
     presetMinutes: 10,
     presets: [{ minutes: 10, shortcut: null }],
     startStopShortcut: null,
+    toggleCheckboxShortcut: "Meta-T",
     globalHotkey: null,
     setDataDir: mocks.persistDataDir,
     setPresetMinutes: vi.fn(),
@@ -94,6 +95,7 @@ vi.mock("./components/Editor", () => ({
     focusSignal,
     getInitialSelection,
     onSelectionChange,
+    toggleCheckboxShortcut,
   }: {
     onCursorLineChange?: (info: { isTask: boolean; text: string }) => void;
     ref?: { current: EditorHandle | null };
@@ -102,6 +104,7 @@ vi.mock("./components/Editor", () => ({
     focusSignal?: number;
     getInitialSelection?: () => unknown;
     onSelectionChange?: (selection: unknown) => void;
+    toggleCheckboxShortcut?: string | null;
   }) => {
     const instanceRef = useRef<EditorHandle | null>(null);
     const trackedRef = useRef(false);
@@ -121,7 +124,7 @@ vi.mock("./components/Editor", () => ({
         applySpentToLine: mocks.applySpentToLine,
         focus: vi.fn(),
         setVimMode: vi.fn(),
-        setTimerKeymap: vi.fn(),
+        setEditorKeymap: vi.fn(),
       };
       mocks.editors.push({
         handle: instanceRef.current,
@@ -134,6 +137,7 @@ vi.mock("./components/Editor", () => ({
       onChange,
       onSelectionChange,
       onCursorLineChange,
+      toggleCheckboxShortcut,
       reloadContent: handle.reloadContent,
       stopTracking: handle.stopTracking,
     };
@@ -249,6 +253,10 @@ afterEach(() => {
 });
 
 describe("editor focus ownership", () => {
+  it("passes the checkbox shortcut to the Editor", () => {
+    expect(mocks.editor?.toggleCheckboxShortcut).toBe("Meta-T");
+  });
+
   it("restores focus after Escape closes the launcher and returns from another view", () => {
     const focus = (mocks.editor?.handle as { focus: ReturnType<typeof vi.fn> }).focus;
     focus.mockClear();

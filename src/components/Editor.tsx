@@ -10,13 +10,13 @@ import { getCM, vim } from "@replit/codemirror-vim";
 import {
   createMonuraExtensions,
   readOnlyCompartment,
-  timerKeymapCompartment,
+  editorKeymapCompartment,
   setUiStateEffect,
   uiStateField,
   vimEditableCompartment,
   vimModeCompartment,
 } from "../lib/editor";
-import { createTimerKeymap } from "../lib/editor/timerKeymap";
+import { createLocalKeymap } from "../lib/editor/localKeymap";
 import type { TimerPreset } from "../lib/timer";
 import { addSpentToLine, parseLines } from "../lib/parser";
 import { findLineByText } from "../lib/editor/lineMatch";
@@ -61,7 +61,11 @@ export interface EditorHandle {
   /** Moves DOM focus into the editor (e.g. after a click on a chrome button, like starting the timer). */
   focus(): void;
   setVimMode(enabled: boolean): void;
-  setTimerKeymap(presets: readonly TimerPreset[], startStopShortcut: string | null): void;
+  setEditorKeymap(
+    presets: readonly TimerPreset[],
+    startStopShortcut: string | null,
+    toggleCheckboxShortcut: string | null,
+  ): void;
 }
 
 interface EditorProps {
@@ -73,6 +77,7 @@ interface EditorProps {
   presets: readonly TimerPreset[];
   /** null = no shortcut assigned. */
   startStopShortcut?: string | null;
+  toggleCheckboxShortcut?: string | null;
   onVimStatusChange?: (status: string | null) => void;
   onCursorLineChange?: (info: CursorLineChangeInfo) => void;
   /** Changes the selected preset only — never starts tracking. */
@@ -94,6 +99,7 @@ export function Editor({
   vimMode = false,
   presets,
   startStopShortcut = null,
+  toggleCheckboxShortcut = null,
   onVimStatusChange,
   onCursorLineChange,
   onSelectPreset,
@@ -186,6 +192,7 @@ export function Editor({
             vimMode,
             presets,
             startStopShortcut,
+            toggleCheckboxShortcut,
             onSelectPreset: (presetMinutes) => latest.current.onSelectPreset?.(presetMinutes),
             onToggle: () => latest.current.onToggle?.(),
             readOnly,
@@ -486,14 +493,15 @@ export function Editor({
         }
       },
 
-      setTimerKeymap(nextPresets, nextStartStopShortcut) {
+      setEditorKeymap(nextPresets, nextStartStopShortcut, nextToggleCheckboxShortcut) {
         const view = viewRef.current;
         if (!view) return;
         view.dispatch({
-          effects: timerKeymapCompartment.reconfigure(
-            createTimerKeymap({
+          effects: editorKeymapCompartment.reconfigure(
+            createLocalKeymap({
               presets: nextPresets,
               startStopShortcut: nextStartStopShortcut,
+              toggleCheckboxShortcut: nextToggleCheckboxShortcut,
               onSelectPreset: (minutes) => latest.current.onSelectPreset?.(minutes),
               onToggle: () => latest.current.onToggle?.(),
             }),
