@@ -249,10 +249,18 @@ describe("rendered App timer resolution", () => {
     });
     await openLog();
     expect(await sessionRecords()).toHaveLength(1);
-    expect((await sessionRecords())[0]).toMatchObject({
-      ...snapshot,
-      lineDeleted: true,
-    });
+    const record = (await sessionRecords())[0];
+    expect(record).toMatchObject(snapshot);
+    expect(Object.keys(record as Record<string, unknown>).sort()).toEqual([
+      "elapsedSeconds",
+      "file",
+      "lineText",
+      "presetMinutes",
+      "projects",
+      "startedAt",
+      "tzOffsetMinutes",
+      "v",
+    ]);
   });
 
   it("commits the start snapshot after the tracked row is renamed", async () => {
@@ -382,8 +390,17 @@ describe("rendered App write conflict resolution", () => {
       elapsedSeconds: expect.any(Number),
       lineText: "- [ ] start +old",
       projects: ["old"],
-      lineDeleted: true,
     });
+    expect(Object.keys(JSON.parse(payload.line)).sort()).toEqual([
+      "elapsedSeconds",
+      "file",
+      "lineText",
+      "presetMinutes",
+      "projects",
+      "startedAt",
+      "tzOffsetMinutes",
+      "v",
+    ]);
   });
 });
 

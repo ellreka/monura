@@ -21,7 +21,6 @@ export const SAMPLE_SESSION_RECORDS: SessionRecord[] = [
     elapsedSeconds: 30 * 60,
     lineText: "- [ ] Parser addition +monura spent:1h10m",
     projects: ["monura"],
-    lineDeleted: false,
   }),
   createSessionRecord({
     file: "work.md",
@@ -30,7 +29,6 @@ export const SAMPLE_SESSION_RECORDS: SessionRecord[] = [
     elapsedSeconds: 40 * 60,
     lineText: "- [ ] Parser addition +monura spent:40m",
     projects: ["monura"],
-    lineDeleted: false,
   }),
   createSessionRecord({
     file: "work.md",
@@ -39,7 +37,6 @@ export const SAMPLE_SESSION_RECORDS: SessionRecord[] = [
     elapsedSeconds: 10 * 60,
     lineText: "- [ ] Throttle notify events +monura",
     projects: ["monura"],
-    lineDeleted: false,
   }),
   createSessionRecord({
     file: "work.md",
@@ -48,7 +45,6 @@ export const SAMPLE_SESSION_RECORDS: SessionRecord[] = [
     elapsedSeconds: 20 * 60,
     lineText: "- [x] Verify CodeMirror version +monura spent:20m",
     projects: ["monura"],
-    lineDeleted: false,
   }),
   createSessionRecord({
     file: "work.md",
@@ -57,7 +53,6 @@ export const SAMPLE_SESSION_RECORDS: SessionRecord[] = [
     elapsedSeconds: 10 * 60,
     lineText: "- [x] Initial pnpm workspace setup spent:10m",
     projects: [],
-    lineDeleted: false,
   }),
   createSessionRecord({
     file: "monura.md",
@@ -66,7 +61,6 @@ export const SAMPLE_SESSION_RECORDS: SessionRecord[] = [
     elapsedSeconds: 25 * 60,
     lineText: "- [ ] Session log JSONL rotation design +monura",
     projects: ["monura"],
-    lineDeleted: false,
   }),
   createSessionRecord({
     file: "inbox.md",
@@ -75,6 +69,5 @@ export const SAMPLE_SESSION_RECORDS: SessionRecord[] = [
     elapsedSeconds: 8 * 60,
     lineText: "- [ ] Review Tauri fs permission settings",
     projects: [],
-    lineDeleted: false,
   }),
 ];

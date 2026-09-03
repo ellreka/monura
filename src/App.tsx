@@ -47,7 +47,7 @@ import { cn } from "./lib/cn";
 import { useAppEffects } from "./hooks/useAppEffects";
 import { useAppSettings } from "./hooks/useAppSettings";
 
-type PendingResolution = Omit<CreateSessionRecordInput, "lineDeleted">;
+type PendingResolution = CreateSessionRecordInput;
 
 type ActiveSession = {
   file: string;
@@ -688,7 +688,6 @@ function App() {
         elapsedSeconds,
         lineText: session.lineText,
         projects: session.projects,
-        lineDeleted: false,
       });
       completed = await commitSession({ record, needsMarkdownSave: true });
     } else if (session) {
@@ -743,7 +742,7 @@ function App() {
     )
       return;
     setPendingResolutionSync(null);
-    const record = createSessionRecord({ ...pending, lineDeleted: true });
+    const record = createSessionRecord(pending);
     void commitSession({ record, needsMarkdownSave: false });
   };
 
@@ -775,7 +774,6 @@ function App() {
     const record = createSessionRecord({
       ...pending,
       file: currentFile.name,
-      lineDeleted: false,
     });
     void commitSession({ record, needsMarkdownSave: true });
   };

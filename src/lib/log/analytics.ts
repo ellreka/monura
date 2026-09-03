@@ -32,8 +32,7 @@ function isSessionRecord(v: unknown): v is SessionRecord {
     typeof r.elapsedSeconds === "number" &&
     typeof r.presetMinutes === "number" &&
     typeof r.lineText === "string" &&
-    Array.isArray(r.projects) &&
-    typeof r.lineDeleted === "boolean"
+    Array.isArray(r.projects)
   );
 }
 

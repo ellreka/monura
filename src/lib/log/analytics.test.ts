@@ -20,7 +20,6 @@ function record(overrides: Partial<SessionRecord>): SessionRecord {
     elapsedSeconds: 1800,
     lineText: "- [ ] API error handling fix spent:20m +backend",
     projects: ["backend"],
-    lineDeleted: false,
     ...overrides,
   };
 }

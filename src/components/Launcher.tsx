@@ -24,7 +24,7 @@ type Row = { kind: "new-file" } | { kind: "file"; name: string; index: number };
 const NEW_FILE_VALUE = "new-file";
 
 const itemClass =
-  "flex w-full cursor-pointer items-center gap-2 rounded-md bg-transparent px-[10px] py-[7px] text-left text-xs text-ink data-[selected=true]:bg-accent/16 data-[disabled=true]:cursor-not-allowed data-[disabled=true]:text-muted";
+  "flex w-full cursor-pointer items-center gap-2 rounded-md bg-transparent px-[10px] py-[7px] text-left text-xs text-ink data-[selected=true]:bg-white/5 hover:bg-white/5 data-[disabled=true]:cursor-not-allowed data-[disabled=true]:text-muted";
 
 export function Launcher({
   onClose,
@@ -153,7 +153,7 @@ export function Launcher({
     <>
       <input
         ref={editRef}
-        className="w-full rounded-sm border border-accent bg-pill px-1.5 py-[3px] text-xs text-ink"
+        className="w-full rounded-sm border border-border bg-pill px-1.5 py-[3px] text-xs text-ink"
         value={draft}
         onChange={(e) => {
           setDraft(e.target.value);
@@ -176,7 +176,7 @@ export function Launcher({
         role="dialog"
         aria-label="Launcher"
         shouldFilter={false}
-        className="flex h-fit max-h-[60vh] w-[90%] flex-col overflow-hidden rounded-2xl border border-border bg-timer-bg/72 shadow-[0_24px_48px_rgba(0,0,0,0.45)] backdrop-blur-[28px] backdrop-saturate-[1.6]"
+        className="flex h-fit max-h-[60vh] w-[90%] flex-col overflow-hidden rounded-2xl border border-border bg-timer-bg shadow-[0_24px_48px_rgba(0,0,0,0.45)]"
         onMouseDown={(event) => event.stopPropagation()}
         onKeyDown={(event) => {
           if (event.key === "Escape") {

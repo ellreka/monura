@@ -198,9 +198,6 @@ function SessionRow({ record: r }: { record: SessionRecord }) {
             {p}
           </span>
         ))}
-        {r.lineDeleted && (
-          <span className="ml-1.5 inline-block text-[10px] text-danger">line deleted</span>
-        )}
       </span>
       <span className="flex-none tabular-nums">{formatDuration(r.elapsedSeconds)}</span>
     </div>
