@@ -1,12 +1,6 @@
 import { EditorState, RangeSetBuilder, StateField } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView } from "@codemirror/view";
-import {
-  computeTaskMeta,
-  fencedCodeLineNumbers,
-  matchProjectTokens,
-  matchSpentTokens,
-  parseLines,
-} from "../parser";
+import { computeTaskMeta, fencedCodeLineNumbers, matchSpentTokens, parseLines } from "../parser";
 import { collectLinkMatches } from "./links";
 import { CheckboxWidget, LinkWidget, SpentWidget, SumBadgeWidget } from "./widgets";
 import { setUiStateEffect, uiStateField } from "./uiState";
@@ -70,15 +64,6 @@ function buildDecorations(state: EditorState): DecorationSet {
           ? { from, to, side: 0, deco: Decoration.mark({ class: "cm-spent-token" }) }
           : { from, to, side: 0, deco: Decoration.replace({ widget: new SpentWidget(m.seconds) }) },
       );
-    }
-
-    for (const p of matchProjectTokens(lineInfo.text)) {
-      items.push({
-        from: lineInfo.from + p.index,
-        to: lineInfo.from + p.index + p.length,
-        side: 0,
-        deco: Decoration.mark({ class: "cm-project-tag" }),
-      });
     }
 
     const lineMeta = meta.get(line.lineNumber);

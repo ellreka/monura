@@ -14,7 +14,7 @@ describe("parseLine", () => {
     expect(line.isTask).toBe(true);
     expect(line.checked).toBe(false);
     expect(line.spentSeconds).toBe(15 * 60);
-    expect(line.ownProjects).toEqual(["proj"]);
+    expect(line.text).toBe("task spent:15m +proj");
   });
 
   it("recognizes a checked task", () => {
@@ -102,12 +102,6 @@ describe("isSubtreeComplete", () => {
 });
 
 describe("computeTaskMeta", () => {
-  it("inherits +project tags from ancestors for display/aggregation only", () => {
-    const content = ["- [ ] parent +monura", "  - [ ] child spent:10m"].join("\n");
-    const meta = computeTaskMeta(content);
-    expect(meta.get(2)?.projects).toEqual(["monura"]);
-  });
-
   it("marks hasChildren correctly", () => {
     const content = ["- [ ] parent", "  - [ ] child", "- [ ] leaf"].join("\n");
     const meta = computeTaskMeta(content);

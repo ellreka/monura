@@ -16,7 +16,6 @@ interface EditorPalette {
   muted: string;
   accent: string;
   accentSoft: string;
-  project: string;
   bg: string;
   gutterInk: string;
   activeLineWash: string;
@@ -29,7 +28,6 @@ const palette: EditorPalette = {
   muted: "var(--muted)",
   accent: "var(--accent)",
   accentSoft: "var(--accent-soft)",
-  project: "var(--project)",
   bg: "transparent",
   gutterInk: "var(--gutter-ink)",
   activeLineWash: "var(--active-line-wash)",
@@ -119,10 +117,6 @@ export function editorTheme(): Extension {
       ".cm-spent-token": {
         color: p.muted,
         fontSize: "0.92em",
-      },
-      ".cm-project-tag": {
-        color: p.project,
-        fontWeight: "600",
       },
       ".cm-md-link": {
         color: p.accent,

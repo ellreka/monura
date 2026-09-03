@@ -5,7 +5,6 @@ import {
   groupByDay,
   localDateKey,
   parseSessionLines,
-  projectTotals,
   taskGroups,
 } from "./analytics";
 import type { SessionRecord } from "./session";
@@ -19,7 +18,6 @@ function record(overrides: Partial<SessionRecord>): SessionRecord {
     presetMinutes: 30,
     elapsedSeconds: 1800,
     lineText: "- [ ] API error handling fix spent:20m +backend",
-    projects: ["backend"],
     ...overrides,
   };
 }
@@ -49,9 +47,9 @@ describe("localDateKey", () => {
 });
 
 describe("baseTitle", () => {
-  it("removes checkbox, spent:, and +project", () => {
+  it("removes checkbox and spent while preserving ordinary text", () => {
     expect(baseTitle("- [ ] API error handling fix spent:20m +backend")).toBe(
-      "API error handling fix",
+      "API error handling fix +backend",
     );
     expect(baseTitle("- [x] Write README")).toBe("Write README");
     expect(baseTitle("A plain note")).toBe("A plain note");
@@ -61,7 +59,7 @@ describe("baseTitle", () => {
 describe("groupByDay", () => {
   it("groups records by day and orders days and records chronologically", () => {
     const records = [
-      record({ startedAt: "2026-08-14T05:00:00.000Z", projects: [], elapsedSeconds: 600 }),
+      record({ startedAt: "2026-08-14T05:00:00.000Z", elapsedSeconds: 600 }),
       record({ startedAt: "2026-08-14T01:00:00.000Z" }),
       record({ startedAt: "2026-08-15T01:00:00.000Z", elapsedSeconds: 300 }),
     ];
@@ -76,20 +74,6 @@ describe("groupByDay", () => {
   });
 });
 
-describe("projectTotals", () => {
-  it("returns per-project totals in descending order", () => {
-    const records = [
-      record({ projects: ["a"], elapsedSeconds: 100 }),
-      record({ projects: ["b"], elapsedSeconds: 300 }),
-      record({ projects: ["a"], elapsedSeconds: 200 }),
-    ];
-    expect(projectTotals(records)).toEqual([
-      { project: "a", seconds: 300 },
-      { project: "b", seconds: 300 },
-    ]);
-  });
-});
-
 describe("taskGroups", () => {
   it("groups identical titles and keeps the period", () => {
     const records = [
@@ -99,7 +83,7 @@ describe("taskGroups", () => {
     const groups = taskGroups(records);
     expect(groups).toHaveLength(1);
     expect(groups[0]).toMatchObject({
-      title: "API error handling fix",
+      title: "API error handling fix +backend",
       sessions: 2,
       seconds: 3600,
       firstDay: "2026-08-10",
@@ -108,7 +92,7 @@ describe("taskGroups", () => {
     });
   });
 
-  it("marks same-project groups with similar titles as rename candidates", () => {
+  it("marks groups with similar titles as rename candidates", () => {
     const records = [
       record({ lineText: "- [ ] API error handling fix +backend" }),
       record({ lineText: "- [ ] API retry design +backend" }),
@@ -116,14 +100,6 @@ describe("taskGroups", () => {
     const groups = taskGroups(records);
     expect(groups).toHaveLength(2);
     expect(groups.every((g) => g.renamed)).toBe(true);
-  });
-
-  it("does not mark rename candidates across different projects", () => {
-    const records = [
-      record({ lineText: "- [ ] API error handling fix +backend", projects: ["backend"] }),
-      record({ lineText: "- [ ] API retry design +frontend", projects: ["frontend"] }),
-    ];
-    expect(taskGroups(records).every((g) => !g.renamed)).toBe(true);
   });
 });
 

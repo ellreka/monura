@@ -75,17 +75,16 @@ vi.mock("./components/Editor", () => ({
     const trackedRef = useRef(false);
     if (!instanceRef.current) {
       instanceRef.current = {
-        getCursorLine: () => ({ lineNumber: 1, text: "- [ ] start +old" }),
+        getCursorLine: () => ({ lineNumber: 1, text: "- [ ] start +foo" }),
         startTracking: vi.fn(() => {
           trackedRef.current = true;
-          return { lineNumber: 1, text: "- [ ] start +old" };
+          return { lineNumber: 1, text: "- [ ] start +foo" };
         }),
         stopTracking: vi.fn((elapsedSeconds: number) => {
-          if (!trackedRef.current) return { deleted: true, lineText: "", projects: [] };
+          if (!trackedRef.current) return { deleted: true, lineText: "" };
           trackedRef.current = false;
           return mocks.stopTracking(elapsedSeconds);
         }),
-        getTrackedProjects: () => ["old"],
         reloadContent: vi.fn(),
         applySpentToLine: mocks.applySpentToLine,
         focus: vi.fn(),
@@ -104,7 +103,7 @@ vi.mock("./components/Editor", () => ({
     };
     useImperativeHandle(ref, () => handle, [handle]);
     useEffect(
-      () => onCursorLineChange?.({ isTask: true, text: "- [ ] start +old" }),
+      () => onCursorLineChange?.({ isTask: true, text: "- [ ] start +foo" }),
       [onCursorLineChange],
     );
     return createElement("div", { "data-testid": "editor" });
@@ -178,7 +177,7 @@ const openLog = async () => {
 };
 const sessionRecords = async () => {
   const all = (await mocks.loadRecords?.()) ?? [];
-  return all.filter((record) => (record as { lineText?: string }).lineText === "- [ ] start +old");
+  return all.filter((record) => (record as { lineText?: string }).lineText === "- [ ] start +foo");
 };
 
 beforeEach(() => {
@@ -191,12 +190,10 @@ beforeEach(() => {
   mocks.loadRecords = null;
   mocks.stopTracking.mockReturnValue({
     deleted: false,
-    lineText: "- [ ] renamed +new",
-    projects: ["new"],
+    lineText: "- [ ] renamed +bar",
   });
   mocks.applySpentToLine.mockReturnValue({
     lineText: "- [ ] destination",
-    projects: ["destination"],
   });
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -229,8 +226,7 @@ describe("rendered App timer resolution", () => {
     start();
     const snapshot = {
       file: "work.md",
-      lineText: "- [ ] start +old",
-      projects: ["old"],
+      lineText: "- [ ] start +foo",
     };
     act(() => (mocks.effects.current?.setFiles as (files: unknown[]) => void)([]));
     expect(container?.querySelector("[data-testid=editor]")).toBeNull();
@@ -256,7 +252,6 @@ describe("rendered App timer resolution", () => {
       "file",
       "lineText",
       "presetMinutes",
-      "projects",
       "startedAt",
       "tzOffsetMinutes",
       "v",
@@ -267,22 +262,23 @@ describe("rendered App timer resolution", () => {
     start();
     act(() => {
       (mocks.editor?.onChange as (text: string, raw: string) => void)(
-        "- [ ] renamed +new",
-        "- [ ] renamed +new",
+        "- [ ] renamed +bar",
+        "- [ ] renamed +bar",
       );
       (mocks.editor?.onCursorLineChange as (info: { isTask: boolean; text: string }) => void)({
         isTask: true,
-        text: "- [ ] renamed +new",
+        text: "- [ ] renamed +bar",
       });
     });
-    expect(container?.querySelector("[data-testid=tracking-label]")?.textContent).toBe("start");
+    expect(container?.querySelector("[data-testid=tracking-label]")?.textContent).toBe(
+      "start +foo",
+    );
     await stop();
     expect(mocks.stopTracking).toHaveBeenCalledWith(expect.any(Number));
     await openLog();
     expect(await sessionRecords()).toHaveLength(1);
     expect((await sessionRecords())[0]).toMatchObject({
-      lineText: "- [ ] start +old",
-      projects: ["old"],
+      lineText: "- [ ] start +foo",
     });
   });
 
@@ -301,7 +297,6 @@ describe("rendered App timer resolution", () => {
     expect((replacementEditor.handle as EditorHandle).stopTracking).toHaveReturnedWith({
       deleted: true,
       lineText: "",
-      projects: [],
     });
     await act(async () => {
       container?.querySelector<HTMLButtonElement>("[data-testid=assign]")?.click();
@@ -313,8 +308,7 @@ describe("rendered App timer resolution", () => {
     expect(await sessionRecords()).toHaveLength(1);
     expect((await sessionRecords())[0]).toMatchObject({
       file: "next.md",
-      lineText: "- [ ] start +old",
-      projects: ["old"],
+      lineText: "- [ ] start +foo",
     });
   });
 });
@@ -388,15 +382,13 @@ describe("rendered App write conflict resolution", () => {
       presetMinutes: 10,
       startedAt: expect.any(String),
       elapsedSeconds: expect.any(Number),
-      lineText: "- [ ] start +old",
-      projects: ["old"],
+      lineText: "- [ ] start +foo",
     });
     expect(Object.keys(JSON.parse(payload.line)).sort()).toEqual([
       "elapsedSeconds",
       "file",
       "lineText",
       "presetMinutes",
-      "projects",
       "startedAt",
       "tzOffsetMinutes",
       "v",
@@ -436,7 +428,7 @@ describe("data directory selection", () => {
     act(() => root?.render(createElement(App)));
     act(() =>
       (mocks.effects.current?.setFiles as (files: unknown[]) => void)([
-        { name: "work.md", content: "- [ ] start +old", raw: "- [ ] start +old" },
+        { name: "work.md", content: "- [ ] start +foo", raw: "- [ ] start +foo" },
       ]),
     );
     await act(async () => {

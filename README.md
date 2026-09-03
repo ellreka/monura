@@ -44,7 +44,7 @@ The build is not code-signed by Apple:
 5. Stop the timer to append the tracked duration as `spent:`.
 
 ```markdown
-- [ ] Ship the next release +monura spent:20m
+- [ ] Ship the next release spent:20m
   - [ ] Test the updater spent:15m
   - [x] Write release notes spent:5m
 ```
@@ -57,7 +57,7 @@ The build is not code-signed by Apple:
 
 **Task hierarchy.** Indented checklists form parent and child tasks. Aggregate time is calculated for display without modifying parent task lines.
 
-**Session history.** Review tracked time by month, day, or `+project` tag.
+**Session history.** Review tracked time by month and day.
 
 **Keyboard-first.** CodeMirror editing, configurable shortcuts, and built-in Vim mode.
 

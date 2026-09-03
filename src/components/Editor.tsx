@@ -13,7 +13,7 @@ import {
 } from "../lib/editor";
 import { createTimerKeymap } from "../lib/editor/timerKeymap";
 import type { TimerPreset } from "../lib/timer";
-import { addSpentToLine, computeTaskMeta, parseLines } from "../lib/parser";
+import { addSpentToLine, parseLines } from "../lib/parser";
 import { findLineByText } from "../lib/editor/lineMatch";
 import { applyEditorChanges, detectEol } from "../lib/files";
 
@@ -32,20 +32,16 @@ export interface CursorLineChangeInfo extends CursorLineInfo {
 export interface StopTrackingResult {
   deleted: boolean;
   lineText: string;
-  projects: string[];
 }
 
 export interface AppliedSpentResult {
   lineText: string;
-  projects: string[];
 }
 
 export interface EditorHandle {
   getCursorLine(): CursorLineInfo | null;
   startTracking(lineNumber?: number): CursorLineInfo | null;
   stopTracking(elapsedSeconds: number, applySpent?: boolean): StopTrackingResult;
-  /** Inheritance-resolved projects for the tracked line. null while not tracking. */
-  getTrackedProjects(): string[] | null;
   /** Replaces the whole doc (used to reflect external edits; never called from our own edit path). */
   reloadContent(text: string, raw: string): void;
   /**
@@ -95,7 +91,7 @@ export function Editor({
   const viewRef = useRef<EditorView | null>(null);
   const trackedAnchorRef = useRef<number | null>(null);
   const rawContentRef = useRef(initialRaw);
-  const trackedSnapshotRef = useRef<{ text: string; projects: string[] } | null>(null);
+  const trackedSnapshotRef = useRef<{ text: string } | null>(null);
   /** Latest text of the tracked line (the re-identification key after external edits). */
   const trackedTextRef = useRef<string | null>(null);
   const vimListenerCleanupRef = useRef<(() => void) | null>(null);
@@ -325,8 +321,7 @@ export function Editor({
         if (!line || !parseLines(view.state.doc.toString())[line.number - 1]?.isTask) return null;
         trackedAnchorRef.current = line.from;
         trackedTextRef.current = line.text;
-        const meta = computeTaskMeta(view.state.doc.toString()).get(line.number);
-        trackedSnapshotRef.current = { text: line.text, projects: meta?.projects ?? [] };
+        trackedSnapshotRef.current = { text: line.text };
         view.dispatch({ effects: setUiStateEffect.of({ activeLine: line.number }) });
         return { lineNumber: line.number, text: line.text };
       },
@@ -344,7 +339,6 @@ export function Editor({
           return {
             deleted: true,
             lineText: snapshot?.text ?? "",
-            projects: snapshot?.projects ?? [],
           };
         }
 
@@ -354,7 +348,6 @@ export function Editor({
           return {
             deleted: true,
             lineText: line.text,
-            projects: snapshot?.projects ?? [],
           };
         }
         const updatedText =
@@ -366,18 +359,10 @@ export function Editor({
               : undefined,
           effects: setUiStateEffect.of({ activeLine: null }),
         });
-        const meta = computeTaskMeta(view.state.doc.toString()).get(
-          view.state.doc.lineAt(anchor).number,
-        );
         return {
           deleted: false,
           lineText: updatedText,
-          projects: meta?.projects ?? snapshot?.projects ?? [],
         };
-      },
-
-      getTrackedProjects() {
-        return trackedSnapshotRef.current?.projects ?? null;
       },
 
       reloadContent(text, raw) {
@@ -432,8 +417,7 @@ export function Editor({
         if (updatedText !== line.text) {
           view.dispatch({ changes: { from: line.from, to: line.to, insert: updatedText } });
         }
-        const meta = computeTaskMeta(view.state.doc.toString()).get(lineNumber);
-        return { lineText: updatedText, projects: meta?.projects ?? [] };
+        return { lineText: updatedText };
       },
 
       focus() {

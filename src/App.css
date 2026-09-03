@@ -1,9 +1,8 @@
 @import "tailwindcss";
 
 /*
- * Bare, unprefixed tokens. `src/lib/editor/theme.ts` (CodeMirror's theme extension) and
- * `LogView`'s project color palette read these directly as `var(--x)` strings — that code
- * runs outside Tailwind's className pipeline and can't consume `--color-*` utilities.
+ * Bare, unprefixed tokens. `src/lib/editor/theme.ts` (CodeMirror's theme extension) reads
+ * these directly as `var(--x)` strings because it runs outside Tailwind's className pipeline.
  */
 :root {
   color-scheme: dark;
@@ -12,7 +11,6 @@
   --accent: #ec9ca9;
   --accent-rgb: 236, 156, 169;
   --accent-soft: rgba(236, 156, 169, 0.16);
-  --project: #72d8aa;
   --gutter-ink: #716d7d;
   --active-line-wash: rgba(255, 255, 255, 0.045);
   --sum-badge-bg: rgba(255, 255, 255, 0.08);
@@ -25,7 +23,6 @@
   --color-ink: var(--ink);
   --color-muted: var(--muted);
   --color-accent: var(--accent);
-  --color-project: var(--project);
 
   /* Tailwind-only tokens: nothing outside the className pipeline reads these. */
   --color-on-accent: #28161c;

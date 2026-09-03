@@ -1,5 +1,4 @@
 import { extractSpentSeconds } from "./spent";
-import { extractProjects } from "./projects";
 import { fencedCodeLineNumbers } from "./codeBlocks";
 
 const TASK_LINE = /^(\s*)-\s\[([ xX])\]\s?(.*)$/;
@@ -12,7 +11,6 @@ export interface TaskLine {
   checked: boolean;
   text: string;
   spentSeconds: number;
-  ownProjects: string[];
 }
 
 export interface TaskNode extends TaskLine {
@@ -23,7 +21,6 @@ export interface TaskMeta {
   aggregateSeconds: number;
   subtreeComplete: boolean;
   hasChildren: boolean;
-  projects: string[];
 }
 
 /** The shape of a line that is not task syntax (plain memo, or content inside a fenced code block). */
@@ -36,7 +33,6 @@ function nonTaskLine(raw: string, lineNumber: number): TaskLine {
     checked: false,
     text: raw,
     spentSeconds: 0,
-    ownProjects: [],
   };
 }
 
@@ -55,7 +51,6 @@ export function parseLine(raw: string, lineNumber: number): TaskLine {
     checked: checkChar.toLowerCase() === "x",
     text: rest,
     spentSeconds: extractSpentSeconds(rest),
-    ownProjects: extractProjects(rest),
   };
 }
 
@@ -102,28 +97,19 @@ export function isSubtreeComplete(node: TaskNode): boolean {
   return node.checked && node.children.every(isSubtreeComplete);
 }
 
-/** Resolved tag list inheriting the parent's project tags into descendants (display/aggregation only). */
-export function resolveProjects(node: TaskNode, inherited: readonly string[] = []): string[] {
-  return Array.from(new Set([...inherited, ...node.ownProjects]));
-}
-
-/** Traverses the whole tree and computes per-line display metadata (aggregation, completion, inherited tags). */
+/** Traverses the whole tree and computes per-line display metadata. */
 export function computeTaskMeta(content: string): Map<number, TaskMeta> {
-  const lines = parseLines(content);
-  const roots = buildTaskTree(lines);
   const meta = new Map<number, TaskMeta>();
-
-  const visit = (node: TaskNode, inheritedProjects: readonly string[]) => {
-    const projects = resolveProjects(node, inheritedProjects);
-    meta.set(node.lineNumber, {
-      aggregateSeconds: aggregateSpent(node),
-      subtreeComplete: isSubtreeComplete(node),
-      hasChildren: node.children.length > 0,
-      projects,
-    });
-    for (const child of node.children) visit(child, projects);
-  };
-
-  for (const root of roots) visit(root, []);
+  for (const node of buildTaskTree(parseLines(content))) {
+    const visit = (current: TaskNode) => {
+      meta.set(current.lineNumber, {
+        aggregateSeconds: aggregateSpent(current),
+        subtreeComplete: isSubtreeComplete(current),
+        hasChildren: current.children.length > 0,
+      });
+      current.children.forEach(visit);
+    };
+    visit(node);
+  }
   return meta;
 }

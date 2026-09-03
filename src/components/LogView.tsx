@@ -1,17 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { addMonths, format, isSameMonth, parseISO, startOfMonth } from "date-fns";
 import type { SessionRecord } from "../lib/log/session";
-import {
-  baseTitle,
-  formatDuration,
-  groupByDay,
-  projectTotals,
-  recordDate,
-} from "../lib/log/analytics";
+import { baseTitle, formatDuration, groupByDay, recordDate } from "../lib/log/analytics";
 import { sessionLogFilename } from "../lib/log/session";
-
-const NO_PROJECT = "";
-const PALETTE = ["var(--accent)", "var(--project)", "#4f8fbb", "#b05c8a", "#8a6fc9"];
 
 interface LogViewProps {
   loadRecords: () => Promise<SessionRecord[]>;
@@ -24,7 +15,6 @@ interface LogViewProps {
 interface RunningSession {
   label: string;
   startedAt: number;
-  projects: string[];
 }
 
 /** Local date key of the in-progress session (browser local time is fine). */
@@ -42,14 +32,7 @@ function RunningRow({ running }: { running: RunningSession }) {
       <span className="w-[42px] flex-none tabular-nums text-muted">
         {format(new Date(running.startedAt), "H:mm")}
       </span>
-      <span className="min-w-0 flex-1 truncate">
-        {baseTitle(running.label)}
-        {running.projects.map((p) => (
-          <span key={p} className="ml-1.5 inline-block text-[10px] text-project">
-            {p}
-          </span>
-        ))}
-      </span>
+      <span className="min-w-0 flex-1 truncate">{baseTitle(running.label)}</span>
       <span className="flex-none tabular-nums text-[11px] font-semibold text-accent">Tracking</span>
     </div>
   );
@@ -79,12 +62,10 @@ export function LogView({ loadRecords, refreshKey, running = null }: LogViewProp
   );
 
   const days = useMemo(() => groupByDay(filtered).reverse(), [filtered]);
-  const projects = useMemo(() => projectTotals(filtered), [filtered]);
   const totalSec = useMemo(
     () => filtered.reduce((sum, r) => sum + r.elapsedSeconds, 0),
     [filtered],
   );
-  const maxProjectSec = projects[0]?.seconds ?? 0;
   const activeMonthLabel = format(activeMonth, "yyyy/MM");
 
   if (records.length === 0 && !running) {
@@ -121,30 +102,6 @@ export function LogView({ loadRecords, refreshKey, running = null }: LogViewProp
         <div className="text-[13px] font-semibold tabular-nums">{formatDuration(totalSec)}</div>
       </div>
 
-      {projects.length > 0 && (
-        <div className="mb-[18px] flex flex-wrap gap-7">
-          {projects.map((p, i) => (
-            <div key={p.project} className="max-w-[240px] min-w-[120px] flex-1">
-              <div className="mb-1 flex justify-between gap-2 text-[11px]">
-                <span className="text-ink">
-                  {p.project === NO_PROJECT ? "Untagged" : p.project}
-                </span>
-                <span className="tabular-nums text-muted">{formatDuration(p.seconds)}</span>
-              </div>
-              <div className="h-[3px] overflow-hidden rounded-[2px] bg-border">
-                <div
-                  className="h-full rounded-[2px]"
-                  style={{
-                    width: `${(p.seconds / maxProjectSec) * 100}%`,
-                    background: PALETTE[i % PALETTE.length],
-                  }}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
       <div className="flex flex-col">
         {filtered.length === 0 && !running && (
           <div className="p-8 text-center text-[13px] text-muted">
@@ -178,8 +135,7 @@ export function LogView({ loadRecords, refreshKey, running = null }: LogViewProp
       </div>
 
       <p className="mt-[18px] border-t border-border pt-3 text-[11px] text-muted">
-        {sessionLogFilename(activeMonth)} (append-only). Line text and tags are snapshots from
-        tracking time.
+        {sessionLogFilename(activeMonth)} (append-only). Line text is a snapshot from tracking time.
       </p>
     </div>
   );
@@ -191,14 +147,7 @@ function SessionRow({ record: r }: { record: SessionRecord }) {
       <span className="w-[42px] flex-none tabular-nums text-muted">
         {format(recordDate(r), "H:mm")}
       </span>
-      <span className="min-w-0 flex-1 truncate">
-        {baseTitle(r.lineText)}
-        {r.projects.map((p) => (
-          <span key={p} className="ml-1.5 inline-block text-[10px] text-project">
-            {p}
-          </span>
-        ))}
-      </span>
+      <span className="min-w-0 flex-1 truncate">{baseTitle(r.lineText)}</span>
       <span className="flex-none tabular-nums">{formatDuration(r.elapsedSeconds)}</span>
     </div>
   );

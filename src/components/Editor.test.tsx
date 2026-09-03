@@ -54,7 +54,7 @@ function mountEditor(initialContent: string, initialRaw = initialContent): Mount
   return { handle, view };
 }
 
-const CONTENT = ["## Schedule", "- [ ] tracked line +monura", "Memo"].join("\n");
+const CONTENT = ["## Schedule", "- [ ] tracked line +foo", "Memo"].join("\n");
 
 describe("Editor tracking across external reloads", () => {
   it("re-identifies the tracked line by exact text after an external reload", () => {
@@ -64,19 +64,14 @@ describe("Editor tracking across external reloads", () => {
     // Simulate an external editor inserting a line above
     act(() =>
       handle.reloadContent(
-        ["externally added heading", "## Schedule", "- [ ] tracked line +monura", "Memo"].join(
-          "\n",
-        ),
-        ["externally added heading", "## Schedule", "- [ ] tracked line +monura", "Memo"].join(
-          "\n",
-        ),
+        ["externally added heading", "## Schedule", "- [ ] tracked line +foo", "Memo"].join("\n"),
+        ["externally added heading", "## Schedule", "- [ ] tracked line +foo", "Memo"].join("\n"),
       ),
     );
 
     const stopped = handle.stopTracking(600);
     expect(stopped.deleted).toBe(false);
-    expect(stopped.lineText).toBe("- [ ] tracked line +monura spent:10m");
-    expect(stopped.projects).toEqual(["monura"]);
+    expect(stopped.lineText).toBe("- [ ] tracked line +foo spent:10m");
   });
 
   it("reports the tracked line as lost when the reloaded doc no longer contains it", () => {
@@ -93,8 +88,7 @@ describe("Editor tracking across external reloads", () => {
     // Even when the line is lost, keep the snapshot from tracking time for the log
     expect(stopped).toEqual({
       deleted: true,
-      lineText: "- [ ] tracked line +monura",
-      projects: ["monura"],
+      lineText: "- [ ] tracked line +foo",
     });
   });
 
@@ -104,8 +98,8 @@ describe("Editor tracking across external reloads", () => {
 
     act(() =>
       handle.reloadContent(
-        ["- [ ] tracked line +monura", "- [ ] tracked line +monura", "Memo"].join("\n"),
-        ["- [ ] tracked line +monura", "- [ ] tracked line +monura", "Memo"].join("\n"),
+        ["- [ ] tracked line +foo", "- [ ] tracked line +foo", "Memo"].join("\n"),
+        ["- [ ] tracked line +foo", "- [ ] tracked line +foo", "Memo"].join("\n"),
       ),
     );
     expect(handle.stopTracking(60).deleted).toBe(true);
@@ -118,14 +112,14 @@ describe("Editor tracking across external reloads", () => {
 
     act(() =>
       handle.reloadContent(
-        ["- [ ] tracked line +monura spent:5m", "## Schedule", "Memo"].join("\n"),
-        ["- [ ] tracked line +monura spent:5m", "## Schedule", "Memo"].join("\n"),
+        ["- [ ] tracked line +foo spent:5m", "## Schedule", "Memo"].join("\n"),
+        ["- [ ] tracked line +foo spent:5m", "## Schedule", "Memo"].join("\n"),
       ),
     );
 
     expect(handle.stopTracking(60)).toMatchObject({
       deleted: false,
-      lineText: "- [ ] tracked line +monura spent:6m",
+      lineText: "- [ ] tracked line +foo spent:6m",
     });
   });
 
@@ -260,7 +254,7 @@ describe("Editor tracking across external reloads", () => {
   it("can stop tracking without applying spent", () => {
     const { handle } = mountEditor(CONTENT);
     act(() => handle.startTracking(2));
-    expect(handle.stopTracking(60, false).lineText).toBe("- [ ] tracked line +monura");
+    expect(handle.stopTracking(60, false).lineText).toBe("- [ ] tracked line +foo");
   });
 
   it("loses the target when a full-line replacement splits it", () => {
@@ -325,7 +319,6 @@ describe("Editor tracking across external reloads", () => {
     expect(handle.stopTracking(60)).toEqual({
       deleted: true,
       lineText: "- [ ] tracked",
-      projects: [],
     });
     expect(view.state.doc.toString()).toBe("- [ ] first\n- [ ] next");
   });
@@ -339,7 +332,6 @@ describe("Editor tracking across external reloads", () => {
     expect(handle.stopTracking(60)).toEqual({
       deleted: true,
       lineText: "- [ ] tracked",
-      projects: [],
     });
     expect(view.state.doc.toString()).toBe("- [ ] first\n- [ ] next\n- [ ] tracked");
   });
@@ -388,17 +380,15 @@ describe("Editor tracking across external reloads", () => {
     expect(handle.stopTracking(60)).toEqual({
       deleted: true,
       lineText: "- [ ] same",
-      projects: [],
     });
     expect(view.state.doc.toString()).toBe("- [ ] same\n- [ ] next");
   });
 
-  it("applySpentToLine adds spent to the requested line and resolves inherited projects", () => {
-    const { handle } = mountEditor(["- [ ] parent +monura", "  - [ ] child", "Memo"].join("\n"));
+  it("applySpentToLine adds spent to the requested line", () => {
+    const { handle } = mountEditor(["- [ ] parent +foo", "  - [ ] child", "Memo"].join("\n"));
 
     expect(handle.applySpentToLine(2, 90)).toEqual({
       lineText: "  - [ ] child spent:1m30s",
-      projects: ["monura"],
     });
     // Additive: the second call adds to the value already written to the doc
     expect(handle.applySpentToLine(2, 90)?.lineText).toBe("  - [ ] child spent:3m");

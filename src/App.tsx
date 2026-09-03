@@ -54,7 +54,6 @@ type ActiveSession = {
   startedAt: number;
   presetMinutes: number;
   lineText: string;
-  projects: string[];
 };
 
 type PendingCommit = {
@@ -215,7 +214,6 @@ function App() {
   const [timerState, setTimerState] = useState<TimerState>(() => createIdleTimer(presetMinutes));
   const [elapsedMs, setElapsedMs] = useState(0);
   const [trackingLabel, setTrackingLabel] = useState<string | null>(null);
-  const [trackingProjects, setTrackingProjects] = useState<string[]>([]);
   const [pendingResolution, setPendingResolution] = useState<PendingResolution | null>(null);
   const [focusedTaskLabel, setFocusedTaskLabel] = useState<string | null>(null);
   const [view, setView] = useState<AppView>("editor");
@@ -572,7 +570,6 @@ function App() {
           presetMinutes: record.presetMinutes,
           elapsedSeconds: record.elapsedSeconds,
           lineText: record.lineText,
-          projects: record.projects,
         });
         setCommitError(null);
       } else {
@@ -645,7 +642,6 @@ function App() {
     timerRunningRef.current = true;
     const label = toTrackingLabel(cursor.text);
 
-    const projects = editorRef.current?.getTrackedProjects() ?? [];
     const currentFile = filesRef.current[activeIndexRef.current];
     if (!currentFile) {
       editorRef.current?.stopTracking(0, false);
@@ -657,11 +653,9 @@ function App() {
       startedAt: Date.now(),
       presetMinutes,
       lineText: cursor.text,
-      projects,
     };
     activeSessionRef.current = session;
     setTrackingLabel(label);
-    setTrackingProjects(projects);
     setTimerState(startTimer(presetMinutes, session.startedAt));
     setElapsedMs(0);
     lastTraySecRef.current = presetMinutes * 60;
@@ -687,7 +681,6 @@ function App() {
         presetMinutes: session.presetMinutes,
         elapsedSeconds,
         lineText: session.lineText,
-        projects: session.projects,
       });
       completed = await commitSession({ record, needsMarkdownSave: true });
     } else if (session) {
@@ -697,7 +690,6 @@ function App() {
         presetMinutes: session.presetMinutes,
         elapsedSeconds,
         lineText: session.lineText,
-        projects: session.projects,
       });
     }
 
@@ -705,7 +697,6 @@ function App() {
     setTimerState(createIdleTimer(presetMinutes));
     setElapsedMs(0);
     setTrackingLabel(null);
-    setTrackingProjects([]);
     lastTraySecRef.current = null;
     trayStop();
     timerDisarm();
@@ -963,7 +954,6 @@ function App() {
                   ? {
                       label: trackingLabel,
                       startedAt: timerState.startedAt,
-                      projects: trackingProjects,
                     }
                   : null
               }

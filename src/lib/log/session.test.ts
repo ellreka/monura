@@ -9,7 +9,6 @@ describe("createSessionRecord", () => {
       presetMinutes: 30,
       elapsedSeconds: 1800,
       lineText: "- [ ] Fix the API error handling spent:20m +backend",
-      projects: ["backend"],
     });
     expect(record).toEqual({
       v: 1,
@@ -19,7 +18,6 @@ describe("createSessionRecord", () => {
       presetMinutes: 30,
       elapsedSeconds: 1800,
       lineText: "- [ ] Fix the API error handling spent:20m +backend",
-      projects: ["backend"],
     });
   });
 });
