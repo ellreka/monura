@@ -16,6 +16,14 @@ afterEach(async () => {
 });
 
 describe("release updater configuration", () => {
+  it("provides an empty updater configuration outside release builds", async () => {
+    const config = JSON.parse(
+      await readFile(path.join(process.cwd(), "src-tauri/tauri.conf.json"), "utf8"),
+    );
+
+    expect(config.plugins.updater).toEqual({ endpoints: [], pubkey: "" });
+  });
+
   it("enables signed updater artifacts and preserves Windows Authenticode settings", () => {
     const config = createReleaseConfig({
       repository: "ellreka/monura",

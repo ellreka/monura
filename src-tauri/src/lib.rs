@@ -52,6 +52,10 @@ pub fn run() {
         .manage(alarm::AlarmState::default())
         .manage(hotkey::HotkeyState::default())
         .setup(|app| {
+            #[cfg(desktop)]
+            app.handle()
+                .plugin(tauri_plugin_updater::Builder::new().build())?;
+
             let handle = app.handle();
 
             let preferences =

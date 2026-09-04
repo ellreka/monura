@@ -86,6 +86,13 @@ vi.mock("./hooks/useAppSettings", () => ({
     setGlobal: vi.fn(),
   }),
 }));
+vi.mock("./hooks/useAppUpdate", () => ({
+  useAppUpdate: () => ({
+    appVersion: "1.2.3",
+    updateState: { phase: "up-to-date" },
+    checkForUpdates: vi.fn(),
+  }),
+}));
 vi.mock("./components/Editor", () => ({
   Editor: ({
     onCursorLineChange,

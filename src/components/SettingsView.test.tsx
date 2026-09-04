@@ -37,6 +37,7 @@ function renderSettings(overrides: Partial<ComponentProps<typeof SettingsView>> 
     onSetToggleCheckboxShortcut: vi.fn(),
     onSetGlobalHotkey: vi.fn(),
     onPickDataDir: vi.fn(),
+    onCheckForUpdates: vi.fn(),
   };
 
   act(() => {
@@ -48,6 +49,8 @@ function renderSettings(overrides: Partial<ComponentProps<typeof SettingsView>> 
         globalHotkey={null}
         dataDir="/Users/example/Documents/monura"
         settingsFilePath="/Users/example/Library/Application Support/net.ellreka.monura/settings.json"
+        appVersion="1.2.3"
+        updateState={{ phase: "idle" }}
         {...handlers}
         {...overrides}
         toggleCheckboxShortcut={
@@ -112,6 +115,67 @@ describe("SettingsView", () => {
       "/Users/example/Library/Application Support/net.ellreka.monura/settings.json",
     );
     expect(container.querySelector('[aria-label="Open settings file"]')).toBeNull();
+  });
+
+  it("shows the application version and checks for updates", async () => {
+    const { container, onCheckForUpdates } = renderSettings();
+
+    expect(container.textContent).toContain("v1.2.3");
+    expect(container.textContent).toContain("Not checked yet.");
+    await act(async () => {
+      Array.from(container.querySelectorAll("button"))
+        .find((button) => button.textContent === "Check now")!
+        .click();
+    });
+
+    expect(onCheckForUpdates).toHaveBeenCalledOnce();
+  });
+
+  it("shows when an update is available", () => {
+    const { container } = renderSettings({
+      updateState: { phase: "available", version: "2.0.0" },
+    });
+
+    expect(container.textContent).toContain("v2.0.0 is available.");
+    expect(container.textContent).toContain("Check again");
+  });
+
+  it("shows that Monura is up to date", () => {
+    const { container } = renderSettings({ updateState: { phase: "up-to-date" } });
+
+    expect(container.textContent).toContain("Monura is up to date.");
+  });
+
+  it("disables update checks while checking or when unavailable", () => {
+    const checking = renderSettings({ updateState: { phase: "checking" } });
+    expect(
+      Array.from(checking.container.querySelectorAll<HTMLButtonElement>("button")).find(
+        (button) => button.textContent === "Checking…",
+      )?.disabled,
+    ).toBe(true);
+
+    act(() => mounted?.root.unmount());
+    mounted?.container.remove();
+    mounted = null;
+
+    const unavailable = renderSettings({ updateState: { phase: "unavailable" } });
+    expect(
+      Array.from(unavailable.container.querySelectorAll<HTMLButtonElement>("button")).find(
+        (button) => button.textContent === "Unavailable",
+      )?.disabled,
+    ).toBe(true);
+  });
+
+  it("shows an inline error and allows retrying", async () => {
+    const { container, onCheckForUpdates } = renderSettings({ updateState: { phase: "error" } });
+
+    expect(container.textContent).toContain("Could not check for updates.");
+    await act(async () => {
+      Array.from(container.querySelectorAll("button"))
+        .find((button) => button.textContent === "Retry")!
+        .click();
+    });
+    expect(onCheckForUpdates).toHaveBeenCalledOnce();
   });
 
   it("toggles vim mode", async () => {

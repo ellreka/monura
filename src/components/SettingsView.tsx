@@ -1,4 +1,5 @@
 import { type ReactNode } from "react";
+import type { AppUpdateState } from "../hooks/useAppUpdate";
 import { cn } from "../lib/cn";
 import { MAX_PRESETS, type TimerPreset } from "../lib/timer";
 import { PresetCard } from "./settings/PresetCard";
@@ -25,6 +26,9 @@ type SettingsViewProps = {
   dataDirDisabled?: boolean;
   onPickDataDir?: () => void;
   settingsFilePath?: string;
+  appVersion: string;
+  updateState: AppUpdateState;
+  onCheckForUpdates: () => void | Promise<void>;
 };
 
 type SectionProps = { title: string; children: ReactNode };
@@ -40,7 +44,7 @@ function Section({ title, children }: SectionProps) {
   );
 }
 
-type RowProps = { label: string; description?: string; children: ReactNode };
+type RowProps = { label: string; description?: ReactNode; children: ReactNode };
 
 function Row({ label, description, children }: RowProps) {
   return (
@@ -52,6 +56,43 @@ function Row({ label, description, children }: RowProps) {
       {children}
     </div>
   );
+}
+
+function formatVersion(version: string): string {
+  return version.startsWith("v") ? version : `v${version}`;
+}
+
+function updateDescription(state: AppUpdateState): string {
+  switch (state.phase) {
+    case "unavailable":
+      return "Update checks are available in installed release builds.";
+    case "idle":
+      return "Not checked yet.";
+    case "checking":
+      return "Checking for updates…";
+    case "up-to-date":
+      return "Monura is up to date.";
+    case "available":
+      return `${formatVersion(state.version)} is available.`;
+    case "error":
+      return "Could not check for updates. Check your connection and try again.";
+  }
+}
+
+function updateButtonLabel(state: AppUpdateState): string {
+  switch (state.phase) {
+    case "unavailable":
+      return "Unavailable";
+    case "idle":
+      return "Check now";
+    case "checking":
+      return "Checking…";
+    case "up-to-date":
+    case "available":
+      return "Check again";
+    case "error":
+      return "Retry";
+  }
 }
 
 export function SettingsView({
@@ -75,6 +116,9 @@ export function SettingsView({
   dataDirDisabled = false,
   onPickDataDir,
   settingsFilePath,
+  appVersion,
+  updateState,
+  onCheckForUpdates,
 }: SettingsViewProps) {
   return (
     <div className="h-full overflow-y-auto px-7 py-5">
@@ -193,6 +237,34 @@ export function SettingsView({
               aria-label="Vim key bindings"
             >
               <span className="h-[18px] w-[18px] rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,0.2)]" />
+            </button>
+          </Row>
+        </Section>
+        <Section title="About">
+          <Row label="Version">
+            <span className="text-xs text-muted">{formatVersion(appVersion)}</span>
+          </Row>
+          <Row
+            label="Software update"
+            description={
+              <span
+                aria-live="polite"
+                className={cn(
+                  updateState.phase === "available" && "text-accent",
+                  updateState.phase === "error" && "text-danger",
+                )}
+              >
+                {updateDescription(updateState)}
+              </span>
+            }
+          >
+            <button
+              type="button"
+              className="flex-none cursor-pointer rounded-md border border-border bg-pill px-3 py-[5px] text-xs text-ink enabled:hover:border-accent disabled:cursor-default disabled:opacity-50"
+              onClick={onCheckForUpdates}
+              disabled={updateState.phase === "unavailable" || updateState.phase === "checking"}
+            >
+              {updateButtonLabel(updateState)}
             </button>
           </Row>
         </Section>
