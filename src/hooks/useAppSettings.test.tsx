@@ -12,7 +12,6 @@ const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),
   loadSettings: vi.fn(),
   saveSettings: vi.fn(),
-  getSettingsFilePath: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -22,7 +21,6 @@ vi.mock("@tauri-apps/api/core", () => ({
 vi.mock("../lib/settings", () => ({
   loadSettings: mocks.loadSettings,
   saveSettings: mocks.saveSettings,
-  getSettingsFilePath: mocks.getSettingsFilePath,
 }));
 
 const stored = (globalHotkey: string | null = null) => ({
@@ -61,11 +59,9 @@ beforeEach(() => {
   mocks.invoke.mockReset();
   mocks.loadSettings.mockReset();
   mocks.saveSettings.mockReset();
-  mocks.getSettingsFilePath.mockReset();
   mocks.invoke.mockResolvedValue(undefined);
   mocks.loadSettings.mockResolvedValue(stored());
   mocks.saveSettings.mockResolvedValue(undefined);
-  mocks.getSettingsFilePath.mockResolvedValue("settings.json");
   container = null;
   result = { current: undefined as never };
 });
@@ -154,7 +150,6 @@ describe("useAppSettings global hotkey", () => {
     await settle();
     expect(result.current.globalHotkey).toBeNull();
     expect(result.current.globalHotkeyError).toContain("reset save failed");
-    expect(mocks.getSettingsFilePath).toHaveBeenCalled();
   });
 
   it("ignores a second update while the first update is busy", async () => {

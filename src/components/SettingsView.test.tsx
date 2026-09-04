@@ -48,7 +48,6 @@ function renderSettings(overrides: Partial<ComponentProps<typeof SettingsView>> 
         startStopShortcut="Meta-Enter"
         globalHotkey={null}
         dataDir="/Users/example/Documents/monura"
-        settingsFilePath="/Users/example/Library/Application Support/net.ellreka.monura/settings.json"
         appVersion="1.2.3"
         updateState={{ phase: "idle" }}
         {...handlers}
@@ -106,15 +105,6 @@ describe("SettingsView", () => {
     });
 
     expect(onPickDataDir).toHaveBeenCalled();
-  });
-
-  it("shows the settings file path without an open control", () => {
-    const { container } = renderSettings();
-
-    expect(container.textContent).toContain(
-      "/Users/example/Library/Application Support/net.ellreka.monura/settings.json",
-    );
-    expect(container.querySelector('[aria-label="Open settings file"]')).toBeNull();
   });
 
   it("shows the application version and checks for updates", async () => {

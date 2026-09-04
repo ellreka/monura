@@ -196,7 +196,6 @@ function App() {
   const editorRef = useRef<EditorHandle>(null);
   const {
     dataDir,
-    settingsFilePath,
     settingsReady,
     vimMode,
     presetMinutes,
@@ -1055,7 +1054,6 @@ function App() {
                 const dir = await pickDataDir();
                 if (dir) await applyDataDir(dir);
               }}
-              settingsFilePath={settingsFilePath ?? undefined}
               appVersion={appVersion}
               updateState={updateState}
               onCheckForUpdates={checkForUpdates}

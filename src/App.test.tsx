@@ -67,7 +67,6 @@ vi.mock("./hooks/useAppEffects", () => ({
 vi.mock("./hooks/useAppSettings", () => ({
   useAppSettings: () => ({
     dataDir: mocks.initialDataDir,
-    settingsFilePath: null,
     settingsReady: true,
     vimMode: false,
     presetMinutes: 10,

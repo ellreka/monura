@@ -1,17 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  appDataDir: vi.fn(),
-  join: vi.fn(),
   save: vi.fn(),
   set: vi.fn(),
   get: vi.fn(),
   has: vi.fn(),
-}));
-
-vi.mock("@tauri-apps/api/path", () => ({
-  appDataDir: mocks.appDataDir,
-  join: mocks.join,
 }));
 
 vi.mock("@tauri-apps/plugin-store", () => ({
@@ -23,7 +16,7 @@ vi.mock("@tauri-apps/plugin-store", () => ({
   },
 }));
 
-import { getSettingsFilePath, loadSettings, saveSettings, validateAppSettings } from "./settings";
+import { loadSettings, saveSettings, validateAppSettings } from "./settings";
 
 const settings = {
   dataDir: "/Users/example/Documents/monura",
@@ -181,23 +174,5 @@ describe("settings persistence shape", () => {
       startStop: null,
       toggleCheckbox: "Meta-T",
     });
-  });
-});
-
-describe("getSettingsFilePath", () => {
-  it("returns settings.json in the app data directory", async () => {
-    mocks.appDataDir.mockResolvedValue("/Users/example/Library/Application Support/dev.monura.app");
-    mocks.join.mockResolvedValue(
-      "/Users/example/Library/Application Support/dev.monura.app/settings.json",
-    );
-
-    await expect(getSettingsFilePath()).resolves.toBe(
-      "/Users/example/Library/Application Support/dev.monura.app/settings.json",
-    );
-
-    expect(mocks.join).toHaveBeenCalledWith(
-      "/Users/example/Library/Application Support/dev.monura.app",
-      "settings.json",
-    );
   });
 });

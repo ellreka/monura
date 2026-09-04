@@ -25,7 +25,6 @@ type SettingsViewProps = {
   dataDir?: string | null;
   dataDirDisabled?: boolean;
   onPickDataDir?: () => void;
-  settingsFilePath?: string;
   appVersion: string;
   updateState: AppUpdateState;
   onCheckForUpdates: () => void | Promise<void>;
@@ -115,7 +114,6 @@ export function SettingsView({
   dataDir,
   dataDirDisabled = false,
   onPickDataDir,
-  settingsFilePath,
   appVersion,
   updateState,
   onCheckForUpdates,
@@ -139,11 +137,6 @@ export function SettingsView({
                 </button>
                 {dataDir && (
                   <span className="max-w-[280px] truncate text-[11px] text-muted">{dataDir}</span>
-                )}
-                {settingsFilePath && (
-                  <span className="max-w-[280px] truncate text-[11px] text-muted">
-                    {settingsFilePath}
-                  </span>
                 )}
               </div>
             </Row>

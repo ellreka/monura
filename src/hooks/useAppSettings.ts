@@ -2,7 +2,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import type { EditorHandle } from "../components/Editor";
 import { toAccelerator } from "../lib/keybinding";
-import { getSettingsFilePath, loadSettings, saveSettings, type AppSettings } from "../lib/settings";
+import { loadSettings, saveSettings, type AppSettings } from "../lib/settings";
 import {
   DEFAULT_PRESET_MINUTES,
   DEFAULT_PRESETS,
@@ -14,7 +14,6 @@ import {
 
 export function useAppSettings(editorRef: RefObject<EditorHandle | null>) {
   const [dataDir, setDataDirState] = useState<string | null>(null);
-  const [settingsFilePath, setSettingsFilePath] = useState<string | null>(null);
   const [settingsReady, setSettingsReady] = useState(() => !isTauri());
   const [vimMode, setVimMode] = useState(false);
   const [presetMinutes, setPresetMinutes] = useState(
@@ -83,9 +82,6 @@ export function useAppSettings(editorRef: RefObject<EditorHandle | null>) {
             );
           }
         }
-        void getSettingsFilePath()
-          .then((path) => !cancelled && setSettingsFilePath(path))
-          .catch((error) => console.error("settings path load failed:", error));
       })
       .catch((error) => console.error("settings load failed:", error))
       .finally(() => !cancelled && setSettingsReady(true));
@@ -218,7 +214,6 @@ export function useAppSettings(editorRef: RefObject<EditorHandle | null>) {
 
   return {
     dataDir,
-    settingsFilePath,
     settingsReady,
     vimMode,
     presetMinutes,
