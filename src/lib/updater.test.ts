@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { version } from "../../package.json";
 
 const mocks = vi.hoisted(() => ({
   tauri: false,
@@ -22,7 +23,7 @@ beforeEach(() => {
 
 describe("getAppVersion", () => {
   it("uses the package version in a browser", async () => {
-    await expect(getAppVersion()).resolves.toBe("0.0.1");
+    await expect(getAppVersion()).resolves.toBe(version);
     expect(mocks.getVersion).not.toHaveBeenCalled();
   });
 
