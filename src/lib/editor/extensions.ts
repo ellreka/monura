@@ -7,6 +7,7 @@ import { indentWithTab } from "@codemirror/commands";
 import { editorBaseSetup } from "./baseSetup";
 import { Vim, vim } from "@replit/codemirror-vim";
 import { activeLineField, taskDecorationsField } from "./taskDecorations";
+import { taskGuidesField } from "./taskGuides";
 import { uiStateField } from "./uiState";
 import { editorTheme, markdownHighlighting } from "./theme";
 import { listContinuationKeymap } from "./listContinuation";
@@ -67,6 +68,7 @@ export function createMonuraExtensions(options: CreateMonuraExtensionsOptions = 
     markdown({ addKeymap: false, extensions: [Autolink] }),
     uiStateField,
     taskDecorationsField,
+    taskGuidesField,
     activeLineField,
     [editorTheme(), markdownHighlighting()],
     EditorView.lineWrapping,
