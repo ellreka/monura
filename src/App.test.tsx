@@ -67,7 +67,6 @@ vi.mock("./hooks/useAppEffects", () => ({
 vi.mock("./hooks/useAppSettings", () => ({
   useAppSettings: () => ({
     dataDir: mocks.initialDataDir,
-    settingsFilePath: null,
     settingsReady: true,
     vimMode: false,
     presetMinutes: 10,
@@ -84,6 +83,13 @@ vi.mock("./hooks/useAppSettings", () => ({
     removePreset: vi.fn(),
     setStartStop: vi.fn(),
     setGlobal: vi.fn(),
+  }),
+}));
+vi.mock("./hooks/useAppUpdate", () => ({
+  useAppUpdate: () => ({
+    appVersion: "1.2.3",
+    updateState: { phase: "up-to-date" },
+    checkForUpdates: vi.fn(),
   }),
 }));
 vi.mock("./components/Editor", () => ({

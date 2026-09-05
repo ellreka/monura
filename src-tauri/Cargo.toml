@@ -32,3 +32,6 @@ tauri-plugin-store = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-window-state = "2"
 parking_lot = "0.12"
+
+[target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
+tauri-plugin-updater = "2"

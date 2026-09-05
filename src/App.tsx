@@ -53,6 +53,7 @@ import {
 import { cn } from "./lib/cn";
 import { useAppEffects } from "./hooks/useAppEffects";
 import { useAppSettings } from "./hooks/useAppSettings";
+import { useAppUpdate } from "./hooks/useAppUpdate";
 
 type PendingResolution = CreateSessionRecordInput;
 
@@ -195,7 +196,6 @@ function App() {
   const editorRef = useRef<EditorHandle>(null);
   const {
     dataDir,
-    settingsFilePath,
     settingsReady,
     vimMode,
     presetMinutes,
@@ -216,6 +216,7 @@ function App() {
     setToggleCheckbox: handleSetToggleCheckboxShortcut,
     setGlobal: handleSetGlobalHotkey,
   } = useAppSettings(editorRef);
+  const { appVersion, updateState, checkForUpdates } = useAppUpdate();
   const [files, setFiles] = useState<MdFile[]>(() =>
     isTauri() ? [] : SAMPLE_FILES.map((f) => ({ ...f, raw: f.content })),
   );
@@ -1053,7 +1054,9 @@ function App() {
                 const dir = await pickDataDir();
                 if (dir) await applyDataDir(dir);
               }}
-              settingsFilePath={settingsFilePath ?? undefined}
+              appVersion={appVersion}
+              updateState={updateState}
+              onCheckForUpdates={checkForUpdates}
             />
           )}
         </div>

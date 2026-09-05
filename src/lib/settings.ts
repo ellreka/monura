@@ -1,4 +1,3 @@
-import { appDataDir, join } from "@tauri-apps/api/path";
 import { LazyStore } from "@tauri-apps/plugin-store";
 import * as v from "valibot";
 import {
@@ -123,10 +122,6 @@ export async function saveSettings(settings: AppSettings): Promise<void> {
     store.set("shortcuts", settings.shortcuts),
     store.set("globalHotkey", settings.globalHotkey),
   ]);
-}
-
-export async function getSettingsFilePath(): Promise<string> {
-  return join(await appDataDir(), SETTINGS_FILE_NAME);
 }
 
 export async function getLastFileFor(dir: string): Promise<string | null> {
