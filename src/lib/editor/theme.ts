@@ -82,6 +82,16 @@ export function editorTheme(): Extension {
         padding: "1px 20px",
         lineHeight: "1.9",
       },
+      ".cm-task-guide": {
+        "--task-guide-color": "color-mix(in srgb, var(--muted) 40%, transparent)",
+        background: "var(--task-guide-background)",
+      },
+      ".cm-task-guide.cm-activeLine": {
+        backgroundColor: p.activeLineWash,
+      },
+      ".cm-task-guide.cm-active-timer-line": {
+        backgroundColor: p.accentSoft,
+      },
       ".cm-task-checkbox": {
         display: "inline-block",
         width: "13px",
