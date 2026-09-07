@@ -14,6 +14,7 @@
     "windows": [
       {
         "title": "Monura",
+        "theme": "Dark",
         "width": 480,
         "height": 640,
         "minWidth": 480,
