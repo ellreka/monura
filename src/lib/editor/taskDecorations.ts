@@ -1,4 +1,4 @@
-import { EditorState, RangeSetBuilder, StateField } from "@codemirror/state";
+import { countColumn, EditorState, RangeSetBuilder, StateField } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView } from "@codemirror/view";
 import { computeTaskMeta, fencedCodeLineNumbers, matchSpentTokens, parseLines } from "../parser";
 import { collectLinkMatches } from "./links";
@@ -26,15 +26,30 @@ function buildDecorations(state: EditorState): DecorationSet {
   for (const line of lines) {
     if (fenced.has(line.lineNumber)) continue;
     const lineInfo = doc.line(line.lineNumber);
+    const isFocusedLine = line.lineNumber === cursorLine;
 
     if (line.isTask) {
+      const prefix = lineInfo.text.slice(0, lineInfo.text.length - line.text.length);
+      const prefixColumns = countColumn(prefix, state.tabSize);
+      const wrapIndent = isFocusedLine
+        ? `${prefixColumns}ch`
+        : `calc(${prefixColumns - 3}ch + var(--task-checkbox-size) + var(--task-checkbox-gap))`;
+      items.push({
+        from: lineInfo.from,
+        to: lineInfo.from,
+        side: 0,
+        deco: Decoration.line({
+          class: "cm-task-line",
+          attributes: { style: `--task-wrap-indent: ${wrapIndent};` },
+        }),
+      });
       const checkboxMatch = /\[( |x|X)\]/.exec(lineInfo.text);
       const checkboxEnd =
         checkboxMatch && checkboxMatch.index !== undefined
           ? lineInfo.from + checkboxMatch.index + checkboxMatch[0].length
           : lineInfo.from;
 
-      if (checkboxMatch && checkboxMatch.index !== undefined && line.lineNumber !== cursorLine) {
+      if (checkboxMatch && checkboxMatch.index !== undefined && !isFocusedLine) {
         const from = lineInfo.from + checkboxMatch.index;
         const to = from + checkboxMatch[0].length;
         items.push({
@@ -55,7 +70,6 @@ function buildDecorations(state: EditorState): DecorationSet {
       }
     }
 
-    const isFocusedLine = line.lineNumber === cursorLine;
     for (const m of matchSpentTokens(lineInfo.text)) {
       const from = lineInfo.from + m.index;
       const to = from + m.length;
@@ -101,7 +115,12 @@ export const taskDecorationsField = StateField.define<DecorationSet>({
   },
   update(deco, tr) {
     const cursorMoved = tr.startState.selection.main.head !== tr.state.selection.main.head;
-    if (!tr.docChanged && !cursorMoved && !tr.effects.some((e) => e.is(setUiStateEffect))) {
+    if (
+      !tr.docChanged &&
+      !cursorMoved &&
+      tr.startState.tabSize === tr.state.tabSize &&
+      !tr.effects.some((e) => e.is(setUiStateEffect))
+    ) {
       return deco;
     }
     return buildDecorations(tr.state);

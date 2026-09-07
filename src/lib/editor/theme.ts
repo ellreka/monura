@@ -9,7 +9,7 @@ import { tags } from "@lezer/highlight";
  * on the dusty-rose `accent` fill — soft by WCAG text standards, but this is a 3px glyph mark,
  * not body text, and the requested look.
  */
-const checkmarkColor = "#ffffff";
+const checkmarkColor = "var(--accent)";
 
 interface EditorPalette {
   ink: string;
@@ -40,6 +40,8 @@ export function editorTheme(): Extension {
   return EditorView.theme(
     {
       "&": {
+        "--task-checkbox-size": "14px",
+        "--task-checkbox-gap": "6px",
         backgroundColor: p.bg,
         color: p.ink,
         height: "100%",
@@ -82,6 +84,10 @@ export function editorTheme(): Extension {
         padding: "1px 20px",
         lineHeight: "1.9",
       },
+      ".cm-task-line": {
+        paddingLeft: "calc(20px + var(--task-wrap-indent))",
+        textIndent: "calc(-1 * var(--task-wrap-indent))",
+      },
       ".cm-task-guide": {
         "--task-guide-color": "color-mix(in srgb, var(--muted) 40%, transparent)",
         background: "var(--task-guide-background)",
@@ -94,30 +100,35 @@ export function editorTheme(): Extension {
       },
       ".cm-task-checkbox": {
         display: "inline-block",
-        width: "13px",
-        height: "13px",
-        marginRight: "6px",
-        border: `1.5px solid ${p.muted}`,
+        boxSizing: "border-box",
+        width: "var(--task-checkbox-size)",
+        height: "var(--task-checkbox-size)",
+        marginRight: "var(--task-checkbox-gap)",
+        border: "1.25px solid #918b9d",
         borderRadius: "3px",
         verticalAlign: "middle",
         position: "relative",
         top: "-1px",
         cursor: "pointer",
       },
+      ".cm-task-checkbox:not(.is-checked):hover": {
+        backgroundColor: "rgba(var(--accent-rgb), 0.07)",
+        borderColor: p.accent,
+      },
       ".cm-task-checkbox.is-checked": {
-        backgroundColor: p.accent,
+        backgroundColor: "rgba(var(--accent-rgb), 0.07)",
         borderColor: p.accent,
       },
       ".cm-task-checkbox.is-checked::after": {
         content: '""',
         position: "absolute",
-        left: "3px",
-        top: "0px",
-        width: "3px",
-        height: "6px",
+        left: "50%",
+        top: "47%",
+        width: "31%",
+        height: "56%",
         border: `solid ${checkmarkColor}`,
-        borderWidth: "0 1.5px 1.5px 0",
-        transform: "rotate(45deg)",
+        borderWidth: "0 1.6px 1.6px 0",
+        transform: "translate(-50%, -60%) rotate(45deg)",
       },
       ".cm-task-checked": {
         textDecoration: "line-through",
