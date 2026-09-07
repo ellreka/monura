@@ -33,5 +33,10 @@ tauri-plugin-global-shortcut = "2"
 tauri-plugin-window-state = "2"
 parking_lot = "0.12"
 
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSAlert", "NSAppearance", "NSApplication", "NSButton", "NSControl", "NSProgressIndicator", "NSResponder", "NSView", "NSWindow"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString", "NSGeometry", "NSObject"] }
+
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
 tauri-plugin-updater = "2"

@@ -2,6 +2,7 @@ mod alarm;
 mod commands;
 mod hotkey;
 mod tray;
+mod update_dialog;
 mod watch;
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -43,6 +44,10 @@ pub fn run() {
             alarm::timer_arm,
             alarm::timer_disarm,
             hotkey::set_global_hotkey,
+            update_dialog::show_update_dialog,
+            update_dialog::close_update_dialog,
+            update_dialog::focus_update_dialog,
+            update_dialog::restart_app,
         ])
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
@@ -60,10 +65,18 @@ pub fn run() {
 
             let preferences =
                 MenuItem::with_id(handle, "preferences", "Preferences...", true, Some("Cmd+,"))?;
+            let check_updates = MenuItem::with_id(
+                handle,
+                "check-for-updates",
+                "Check for Updates…",
+                true,
+                None::<&str>,
+            )?;
             let quit = MenuItem::with_id(handle, "app-quit", "Quit monura", true, Some("Cmd+Q"))?;
 
             let app_menu = SubmenuBuilder::new(handle, "monura")
                 .about(None)
+                .item(&check_updates)
                 .separator()
                 .item(&preferences)
                 .separator()
@@ -102,6 +115,9 @@ pub fn run() {
                     let _ = app_handle.emit("open-settings", ());
                 } else if event.id() == "app-quit" {
                     let _ = app_handle.emit("quit-requested", ());
+                } else if event.id() == "check-for-updates" {
+                    tray::show_main_window(app_handle);
+                    let _ = app_handle.emit("check-for-updates", ());
                 }
             });
 

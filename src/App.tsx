@@ -216,7 +216,6 @@ function App() {
     setToggleCheckbox: handleSetToggleCheckboxShortcut,
     setGlobal: handleSetGlobalHotkey,
   } = useAppSettings(editorRef);
-  const { appVersion, updateState, checkForUpdates } = useAppUpdate();
   const [files, setFiles] = useState<MdFile[]>(() =>
     isTauri() ? [] : SAMPLE_FILES.map((f) => ({ ...f, raw: f.content })),
   );
@@ -239,6 +238,8 @@ function App() {
   const [isCommitting, setIsCommitting] = useState(false);
   const [isSavingBoundary, setIsSavingBoundary] = useState(false);
   const [isWorkspaceLoading, setIsWorkspaceLoading] = useState(false);
+  const [isInstallingUpdate, setIsInstallingUpdate] = useState(false);
+  const installingUpdateRef = useRef(false);
   const [workspaceReloadKey, setWorkspaceReloadKey] = useState(0);
   const sessionLogRef = useRef(createInitialSessionLog());
   const saveTimerRef = useRef<number | undefined>(undefined);
@@ -323,6 +324,7 @@ function App() {
   const isCursorOnTask = focusedTaskLabel !== null;
   const presetMinutesList = presets.map((preset) => preset.minutes);
   const isFileOperationBlocked =
+    isInstallingUpdate ||
     isRunning ||
     pendingCommit !== null ||
     isCommitting ||
@@ -331,6 +333,7 @@ function App() {
     saveError !== null ||
     commitError !== null;
   const isEditorReadOnly =
+    isInstallingUpdate ||
     pendingCommit !== null ||
     isCommitting ||
     isSavingBoundary ||
@@ -428,8 +431,34 @@ function App() {
     [dataDir, flushSaveBestEffort],
   );
 
+  const { appVersion, updateState, checkForUpdates } = useAppUpdate({
+    prepareForUpdate: async () => {
+      const blocked = () =>
+        timerRunningRef.current ||
+        activeSessionRef.current !== null ||
+        pendingCommitRef.current !== null ||
+        pendingResolutionRef.current !== null ||
+        commitInFlightRef.current ||
+        saveBoundaryRef.current ||
+        workspaceLoadingRef.current ||
+        saveErrorRef.current !== null ||
+        commitErrorRef.current !== null ||
+        isCommittingRef.current;
+      if (installingUpdateRef.current || blocked()) return false;
+      installingUpdateRef.current = true;
+      setIsInstallingUpdate(true);
+      await fileOperationRef.current.catch(() => undefined);
+      return !blocked() && (await flushSaveAtBoundary()) && !blocked();
+    },
+    finishUpdate: () => {
+      installingUpdateRef.current = false;
+      setIsInstallingUpdate(false);
+    },
+  });
+
   const applyDataDir = async (dir: string) => {
     const blockedNow = (ignoreBoundary = false) =>
+      installingUpdateRef.current ||
       timerRunningRef.current ||
       activeSessionRef.current !== null ||
       pendingCommitRef.current !== null ||
@@ -498,6 +527,7 @@ function App() {
       saveErrorRef.current === null &&
       commitErrorRef.current === null &&
       !isCommittingRef.current &&
+      !installingUpdateRef.current &&
       filesRef.current[activeIndexRef.current] &&
       editorRef.current
     )
@@ -520,6 +550,7 @@ function App() {
   };
 
   const runFileOperation = (operation: () => Promise<void>) => {
+    if (installingUpdateRef.current) return Promise.resolve();
     const next = fileOperationRef.current.catch(() => undefined).then(operation);
     fileOperationRef.current = next;
     return next;
@@ -668,6 +699,7 @@ function App() {
 
   const handleStart = () => {
     if (
+      installingUpdateRef.current ||
       timerRunningRef.current ||
       activeSessionRef.current !== null ||
       pendingResolutionRef.current !== null ||
@@ -753,6 +785,7 @@ function App() {
 
   const handleQuit = async (): Promise<boolean> => {
     if (
+      installingUpdateRef.current ||
       pendingCommitRef.current ||
       pendingResolutionRef.current ||
       commitInFlightRef.current ||
@@ -977,7 +1010,10 @@ function App() {
   }
 
   return (
-    <div className="noise-overlay relative isolate flex h-screen flex-col overflow-hidden bg-bg">
+    <div
+      className="noise-overlay relative isolate flex h-screen flex-col overflow-hidden bg-bg"
+      inert={isInstallingUpdate}
+    >
       {mainTitlebar}
       <div className="relative z-[1] flex flex-1 min-h-0">
         <div className="flex flex-1 min-w-0 flex-col overflow-hidden bg-main-bg">

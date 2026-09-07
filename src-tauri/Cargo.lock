@@ -2263,6 +2263,9 @@ version = "0.0.2"
 dependencies = [
  "chrono",
  "notify",
+ "objc2",
+ "objc2-app-kit",
+ "objc2-foundation",
  "parking_lot",
  "serde",
  "serde_json",

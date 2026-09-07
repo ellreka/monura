@@ -61,39 +61,6 @@ function formatVersion(version: string): string {
   return version.startsWith("v") ? version : `v${version}`;
 }
 
-function updateDescription(state: AppUpdateState): string {
-  switch (state.phase) {
-    case "unavailable":
-      return "Update checks are available in installed release builds.";
-    case "idle":
-      return "Not checked yet.";
-    case "checking":
-      return "Checking for updates…";
-    case "up-to-date":
-      return "Monura is up to date.";
-    case "available":
-      return `${formatVersion(state.version)} is available.`;
-    case "error":
-      return "Could not check for updates. Check your connection and try again.";
-  }
-}
-
-function updateButtonLabel(state: AppUpdateState): string {
-  switch (state.phase) {
-    case "unavailable":
-      return "Unavailable";
-    case "idle":
-      return "Check now";
-    case "checking":
-      return "Checking…";
-    case "up-to-date":
-    case "available":
-      return "Check again";
-    case "error":
-      return "Retry";
-  }
-}
-
 export function SettingsView({
   vimMode,
   onToggleVimMode,
@@ -237,27 +204,14 @@ export function SettingsView({
           <Row label="Version">
             <span className="text-xs text-muted">{formatVersion(appVersion)}</span>
           </Row>
-          <Row
-            label="Software update"
-            description={
-              <span
-                aria-live="polite"
-                className={cn(
-                  updateState.phase === "available" && "text-accent",
-                  updateState.phase === "error" && "text-danger",
-                )}
-              >
-                {updateDescription(updateState)}
-              </span>
-            }
-          >
+          <Row label="Software update">
             <button
               type="button"
               className="flex-none cursor-pointer rounded-md border border-border bg-pill px-3 py-[5px] text-xs text-ink enabled:hover:border-accent disabled:cursor-default disabled:opacity-50"
               onClick={onCheckForUpdates}
-              disabled={updateState.phase === "unavailable" || updateState.phase === "checking"}
+              disabled={updateState.phase === "unavailable" || updateState.phase === "installing"}
             >
-              {updateButtonLabel(updateState)}
+              Check for Updates
             </button>
           </Row>
         </Section>

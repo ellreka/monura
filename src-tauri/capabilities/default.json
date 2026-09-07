@@ -12,6 +12,8 @@
     "fs:default",
     "store:default",
     "updater:allow-check",
+    "updater:allow-download",
+    "updater:allow-install",
     "core:window:allow-start-dragging"
   ]
 }
