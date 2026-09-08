@@ -87,6 +87,10 @@ export class SpentWidget extends WidgetType {
     el.textContent = `spent:${formatDurationMinutes(this.seconds)}`;
     return el;
   }
+
+  ignoreEvent(): boolean {
+    return false;
+  }
 }
 
 export class LinkWidget extends WidgetType {

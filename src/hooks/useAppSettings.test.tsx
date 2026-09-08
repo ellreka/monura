@@ -12,20 +12,27 @@ const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),
   loadSettings: vi.fn(),
   saveSettings: vi.fn(),
+  saveAlwaysOnTop: vi.fn(),
+  setAlwaysOnTop: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: mocks.invoke,
   isTauri: () => mocks.tauri,
 }));
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: () => ({ setAlwaysOnTop: mocks.setAlwaysOnTop }),
+}));
 vi.mock("../lib/settings", () => ({
   loadSettings: mocks.loadSettings,
   saveSettings: mocks.saveSettings,
+  saveAlwaysOnTop: mocks.saveAlwaysOnTop,
 }));
 
 const stored = (globalHotkey: string | null = null) => ({
   dataDir: null,
   vimMode: false,
+  alwaysOnTop: true,
   presets: [{ minutes: 10, shortcut: "Meta-1" }],
   shortcuts: { startStop: null, toggleCheckbox: null },
   globalHotkey,
@@ -59,6 +66,10 @@ beforeEach(() => {
   mocks.invoke.mockReset();
   mocks.loadSettings.mockReset();
   mocks.saveSettings.mockReset();
+  mocks.saveAlwaysOnTop.mockReset();
+  mocks.saveAlwaysOnTop.mockResolvedValue(undefined);
+  mocks.setAlwaysOnTop.mockReset();
+  mocks.setAlwaysOnTop.mockResolvedValue(undefined);
   mocks.invoke.mockResolvedValue(undefined);
   mocks.loadSettings.mockResolvedValue(stored());
   mocks.saveSettings.mockResolvedValue(undefined);
@@ -83,6 +94,7 @@ describe("useAppSettings shortcuts", () => {
     expect(mocks.saveSettings).toHaveBeenLastCalledWith({
       dataDir: null,
       vimMode: false,
+      alwaysOnTop: true,
       presets: [{ minutes: 10, shortcut: null }],
       shortcuts: { startStop: null, toggleCheckbox: "Meta-1" },
       globalHotkey: null,

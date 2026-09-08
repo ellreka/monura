@@ -69,6 +69,8 @@ vi.mock("./hooks/useAppSettings", () => ({
     dataDir: mocks.initialDataDir,
     settingsReady: true,
     vimMode: false,
+    alwaysOnTop: true,
+    toggleAlwaysOnTop: vi.fn(),
     presetMinutes: 10,
     presets: [{ minutes: 10, shortcut: null }],
     startStopShortcut: null,

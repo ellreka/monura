@@ -21,6 +21,7 @@ import { loadSettings, saveSettings, validateAppSettings } from "./settings";
 const settings = {
   dataDir: "/Users/example/Documents/monura",
   vimMode: false,
+  alwaysOnTop: true,
   presets: [
     { minutes: 10, shortcut: "Meta-1" },
     { minutes: 30, shortcut: "Meta-2" },

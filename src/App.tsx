@@ -198,6 +198,9 @@ function App() {
     dataDir,
     settingsReady,
     vimMode,
+    alwaysOnTop,
+    alwaysOnTopError,
+    alwaysOnTopBusy,
     presetMinutes,
     presets,
     startStopShortcut,
@@ -208,6 +211,7 @@ function App() {
     setDataDir: persistDataDir,
     setPresetMinutes,
     toggleVimMode: handleToggleVimMode,
+    toggleAlwaysOnTop: handleToggleAlwaysOnTop,
     addPreset: handleAddPreset,
     setPresetDuration: handleSetPresetMinutes,
     setPresetShortcut: handleSetPresetShortcut,
@@ -1070,6 +1074,10 @@ function App() {
             <SettingsView
               vimMode={vimMode}
               onToggleVimMode={handleToggleVimMode}
+              alwaysOnTop={alwaysOnTop}
+              alwaysOnTopError={alwaysOnTopError}
+              alwaysOnTopBusy={alwaysOnTopBusy}
+              onToggleAlwaysOnTop={handleToggleAlwaysOnTop}
               presets={presets}
               onAddPreset={handleAddPreset}
               onSetPresetMinutes={handleSetPresetMinutes}

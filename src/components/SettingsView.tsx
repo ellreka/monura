@@ -8,6 +8,10 @@ import { ShortcutCaptureButton } from "./settings/ShortcutCaptureButton";
 type SettingsViewProps = {
   vimMode: boolean;
   onToggleVimMode: () => void;
+  alwaysOnTop: boolean;
+  onToggleAlwaysOnTop: () => void | Promise<void>;
+  alwaysOnTopError?: string | null;
+  alwaysOnTopBusy?: boolean;
   presets: readonly TimerPreset[];
   onAddPreset: () => void;
   onSetPresetMinutes: (index: number, minutes: number) => void;
@@ -64,6 +68,10 @@ function formatVersion(version: string): string {
 export function SettingsView({
   vimMode,
   onToggleVimMode,
+  alwaysOnTop,
+  onToggleAlwaysOnTop,
+  alwaysOnTopError,
+  alwaysOnTopBusy = false,
   presets,
   onAddPreset,
   onSetPresetMinutes,
@@ -109,6 +117,31 @@ export function SettingsView({
             </Row>
           </Section>
         )}
+        <Section title="Window">
+          <Row label="Always on top" description="Keep this window above other windows.">
+            <div className="flex flex-col items-end gap-1">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={alwaysOnTop}
+                aria-label="Always on top"
+                disabled={alwaysOnTopBusy}
+                className={cn(
+                  "flex h-[22px] w-[38px] flex-none items-center rounded-full p-0.5 disabled:cursor-default disabled:opacity-50",
+                  alwaysOnTop ? "justify-end bg-accent" : "justify-start bg-border",
+                )}
+                onClick={onToggleAlwaysOnTop}
+              >
+                <span className="h-[18px] w-[18px] rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,0.2)]" />
+              </button>
+              {alwaysOnTopError && (
+                <span role="status" className="max-w-[220px] text-right text-[10px] text-danger">
+                  {alwaysOnTopError}
+                </span>
+              )}
+            </div>
+          </Row>
+        </Section>
         <Section title="Timer">
           <div className="py-3 first:pt-0 last:pb-0">
             <div className="mb-2 flex flex-col gap-0.5">

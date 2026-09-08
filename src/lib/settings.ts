@@ -23,6 +23,7 @@ const presetList = v.pipe(
 export const AppSettingsSchema = v.strictObject({
   dataDir: v.nullable(v.string()),
   vimMode: v.boolean(),
+  alwaysOnTop: v.boolean(),
   presets: presetList,
   shortcuts: v.strictObject({
     startStop: nullableShortcut,
@@ -95,6 +96,7 @@ export async function loadSettings(): Promise<AppSettings> {
   const defaults: AppSettings = {
     dataDir: null,
     vimMode: false,
+    alwaysOnTop: true,
     presets: DEFAULT_PRESETS.map((preset) => ({ ...preset })),
     shortcuts: {
       startStop: DEFAULT_START_STOP_SHORTCUT,
@@ -105,6 +107,7 @@ export async function loadSettings(): Promise<AppSettings> {
   const candidate = {
     dataDir: (await store.get<string>("dataDir")) ?? defaults.dataDir,
     vimMode: (await store.get<boolean>("vimMode")) ?? defaults.vimMode,
+    alwaysOnTop: (await store.get<boolean>("alwaysOnTop")) ?? defaults.alwaysOnTop,
     presets: (await store.get<AppSettings["presets"]>("presets")) ?? defaults.presets,
     shortcuts: (await store.get<AppSettings["shortcuts"]>("shortcuts")) ?? defaults.shortcuts,
     globalHotkey: (await store.get<string | null>("globalHotkey")) ?? defaults.globalHotkey,
@@ -118,10 +121,16 @@ export async function saveSettings(settings: AppSettings): Promise<void> {
   await Promise.all([
     store.set("dataDir", settings.dataDir),
     store.set("vimMode", settings.vimMode),
+    store.set("alwaysOnTop", settings.alwaysOnTop),
     store.set("presets", settings.presets),
     store.set("shortcuts", settings.shortcuts),
     store.set("globalHotkey", settings.globalHotkey),
   ]);
+}
+
+export async function saveAlwaysOnTop(alwaysOnTop: boolean): Promise<void> {
+  await store.set("alwaysOnTop", alwaysOnTop);
+  await store.save();
 }
 
 export async function getLastFileFor(dir: string): Promise<string | null> {

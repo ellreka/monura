@@ -63,19 +63,21 @@ describe("checkForUpdates", () => {
     expect(mocks.check).toHaveBeenCalledWith({ timeout: 30_000 });
   });
 
-  it("returns plain update data and closes the native resource", async () => {
+  it("returns the update resource for installation and leaves cleanup to the caller", async () => {
     const close = vi.fn().mockResolvedValue(undefined);
+    const update = { version: "2.0.0", close };
     mocks.tauri = true;
-    mocks.check.mockResolvedValue({ version: "2.0.0", close });
+    mocks.check.mockResolvedValue(update);
     vi.stubEnv("PROD", true);
     vi.stubEnv("VITE_UPDATER_ENABLED", "true");
 
     await expect(checkForAppUpdate()).resolves.toEqual({
       phase: "available",
       version: "2.0.0",
+      update,
     });
     expect(mocks.check).toHaveBeenCalledWith({ timeout: 30_000 });
-    expect(close).toHaveBeenCalledOnce();
+    expect(close).not.toHaveBeenCalled();
   });
 
   it("propagates update check failures", async () => {

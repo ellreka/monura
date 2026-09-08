@@ -1,8 +1,9 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import type { EditorHandle } from "../components/Editor";
 import { toAccelerator } from "../lib/keybinding";
-import { loadSettings, saveSettings, type AppSettings } from "../lib/settings";
+import { loadSettings, saveAlwaysOnTop, saveSettings, type AppSettings } from "../lib/settings";
 import {
   DEFAULT_PRESET_MINUTES,
   DEFAULT_PRESETS,
@@ -16,6 +17,10 @@ export function useAppSettings(editorRef: RefObject<EditorHandle | null>) {
   const [dataDir, setDataDirState] = useState<string | null>(null);
   const [settingsReady, setSettingsReady] = useState(() => !isTauri());
   const [vimMode, setVimMode] = useState(false);
+  const [alwaysOnTop, setAlwaysOnTop] = useState(true);
+  const [alwaysOnTopError, setAlwaysOnTopError] = useState<string | null>(null);
+  const [alwaysOnTopBusy, setAlwaysOnTopBusy] = useState(false);
+  const alwaysOnTopBusyRef = useRef(false);
   const [presetMinutes, setPresetMinutes] = useState(
     DEFAULT_PRESETS[0]?.minutes ?? DEFAULT_PRESET_MINUTES,
   );
@@ -36,6 +41,7 @@ export function useAppSettings(editorRef: RefObject<EditorHandle | null>) {
   const settings = (): AppSettings => ({
     dataDir,
     vimMode,
+    alwaysOnTop,
     presets,
     shortcuts: { startStop: startStopShortcut, toggleCheckbox: toggleCheckboxShortcut },
     globalHotkey,
@@ -63,6 +69,13 @@ export function useAppSettings(editorRef: RefObject<EditorHandle | null>) {
           next.shortcuts.startStop,
           next.shortcuts.toggleCheckbox,
         );
+        try {
+          await getCurrentWindow().setAlwaysOnTop(next.alwaysOnTop);
+          if (cancelled) return;
+          setAlwaysOnTop(next.alwaysOnTop);
+        } catch (error) {
+          setAlwaysOnTopError(error instanceof Error ? error.message : String(error));
+        }
         try {
           await invoke("set_global_hotkey", {
             accelerator: next.globalHotkey ? toAccelerator(next.globalHotkey) : null,
@@ -100,6 +113,24 @@ export function useAppSettings(editorRef: RefObject<EditorHandle | null>) {
     setVimMode(next);
     editorRef.current?.setVimMode(next);
     persist({ ...settings(), vimMode: next });
+  };
+
+  const toggleAlwaysOnTop = async () => {
+    if (alwaysOnTopBusyRef.current) return;
+    alwaysOnTopBusyRef.current = true;
+    setAlwaysOnTopBusy(true);
+    const next = !alwaysOnTop;
+    try {
+      if (isTauri()) await getCurrentWindow().setAlwaysOnTop(next);
+      setAlwaysOnTop(next);
+      setAlwaysOnTopError(null);
+      if (isTauri()) await saveAlwaysOnTop(next);
+    } catch (error) {
+      setAlwaysOnTopError(error instanceof Error ? error.message : String(error));
+    } finally {
+      alwaysOnTopBusyRef.current = false;
+      setAlwaysOnTopBusy(false);
+    }
   };
 
   const addPreset = () => {
@@ -216,6 +247,9 @@ export function useAppSettings(editorRef: RefObject<EditorHandle | null>) {
     dataDir,
     settingsReady,
     vimMode,
+    alwaysOnTop,
+    alwaysOnTopError,
+    alwaysOnTopBusy,
     presetMinutes,
     presets,
     startStopShortcut,
@@ -226,6 +260,7 @@ export function useAppSettings(editorRef: RefObject<EditorHandle | null>) {
     setDataDir,
     setPresetMinutes,
     toggleVimMode,
+    toggleAlwaysOnTop,
     addPreset,
     setPresetDuration,
     setPresetShortcut,
