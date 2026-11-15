@@ -61,11 +61,11 @@ describe("toggleCheckboxAtLine", () => {
 describe("LinkWidget", () => {
   it("opens mailto links", async () => {
     let href = "";
-    const click = vi
-      .spyOn(HTMLAnchorElement.prototype, "click")
-      .mockImplementation(function (this: HTMLAnchorElement) {
-        href = this.href;
-      });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      href = this.href;
+    });
     const widget = new LinkWidget("test@example.com", "mailto:test@example.com");
     const element = widget.toDOM();
 
