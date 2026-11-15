@@ -564,6 +564,103 @@ describe("rendered App write conflict resolution", () => {
   });
 });
 
+describe("page navigation", () => {
+  const button = (label: string) =>
+    container?.querySelector<HTMLButtonElement>(`[aria-label='${label}']`);
+  const setFiles = (names: string[]) =>
+    act(() =>
+      (mocks.effects.current?.setFiles as (files: unknown[]) => void)(
+        names.map((name) => ({ name, content: "", raw: "" })),
+      ),
+    );
+  const click = async (label: string) => {
+    await act(async () => {
+      button(label)?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  };
+  const activeName = () => mocks.effects.current?.files as Array<{ name: string }>;
+  const activeIndex = () => mocks.effects.current?.activeIndex as number;
+
+  it("moves to older pages with previous and newer pages with next", async () => {
+    setFiles(["c.md", "b.md", "a.md"]);
+    expect(button("Next page")?.disabled).toBe(true);
+    await click("Previous page");
+    expect(activeIndex()).toBe(1);
+    await click("Previous page");
+    expect(activeIndex()).toBe(2);
+    expect(button("Previous page")?.disabled).toBe(true);
+    await click("Next page");
+    expect(activeIndex()).toBe(1);
+  });
+
+  it("returns to the editor when a page button is used from another view", async () => {
+    setFiles(["b.md", "a.md"]);
+    await openLog();
+    await click("Previous page");
+    expect(activeIndex()).toBe(1);
+    expect(button("Editor")?.className).toContain("text-accent");
+  });
+
+  it("disables page buttons while the timer is running", async () => {
+    setFiles(["b.md", "a.md"]);
+    start();
+    expect(button("Previous page")?.disabled).toBe(true);
+    expect(button("New page")?.disabled).toBe(true);
+    await click("Previous page");
+    expect(activeIndex()).toBe(0);
+  });
+
+  it("creates a page named after today and numbers same-day pages", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 10, 16, 9, 0));
+    try {
+      setFiles(["notes.md"]);
+      await click("New page");
+      expect(activeName().map((file) => file.name)).toEqual(["2026-11-16.md", "notes.md"]);
+      expect(activeIndex()).toBe(0);
+      await click("New page");
+      expect(activeName().map((file) => file.name)).toEqual([
+        "2026-11-16-2.md",
+        "2026-11-16.md",
+        "notes.md",
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("creates the dated .md file on disk and reports backend failures", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 10, 16, 9, 0));
+    try {
+      mocks.tauri = true;
+      mocks.initialDataDir = "dir";
+      mocks.invoke.mockImplementation(() => Promise.resolve([]));
+      act(() => root?.unmount());
+      root = createRoot(container!);
+      act(() => root?.render(createElement(App)));
+      setFiles(["2026-11-16.md"]);
+      await click("New page");
+      expect(mocks.invoke).toHaveBeenCalledWith("create_md_file", {
+        dir: "dir",
+        name: "2026-11-16-2.md",
+      });
+      mocks.invoke.mockImplementation((command: string) =>
+        command === "create_md_file"
+          ? Promise.reject(new Error("create failed"))
+          : Promise.resolve([]),
+      );
+      await click("New page");
+      expect(container?.textContent).toContain("Could not create page: create failed");
+      expect(activeName()).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe("launcher file operation failures", () => {
   it("keeps App on the editor and shows backend create errors in the Launcher", async () => {
     mocks.tauri = true;

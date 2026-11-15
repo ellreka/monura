@@ -146,6 +146,8 @@ type Options = {
   launcherOpenRef: MutableRef<boolean>;
   launcherOpenerRef: MutableRef<HTMLElement | null>;
   onEditorFocusRequest: () => void;
+  onPreviousPage: () => void;
+  onNextPage: () => void;
   timerState: TimerState;
   setElapsedMs: Dispatch<SetStateAction<number>>;
   lastTraySecRef: MutableRef<number | null>;
@@ -181,6 +183,8 @@ export function useAppEffects({
   launcherOpenRef,
   launcherOpenerRef,
   onEditorFocusRequest,
+  onPreviousPage,
+  onNextPage,
   timerState,
   setElapsedMs,
   lastTraySecRef,
@@ -194,6 +198,8 @@ export function useAppEffects({
   const workspaceLoaded = useEffectEvent(onWorkspaceLoaded);
   const filesReplaced = useEffectEvent(onFilesReplaced);
   const editorFocusRequest = useEffectEvent(onEditorFocusRequest);
+  const previousPage = useEffectEvent(onPreviousPage);
+  const nextPage = useEffectEvent(onNextPage);
   const applyDiskFiles = useEffectEvent((diskFiles: MdFile[]) => {
     if (activeWritesRef.current > 0) {
       window.setTimeout(() => setDiskRefreshKey((key) => key + 1), 300);
@@ -378,6 +384,16 @@ export function useAppEffects({
         if (!launcherOpenRef.current && document.activeElement instanceof HTMLElement)
           launcherOpenerRef.current = document.activeElement;
         setLauncherOpen((open) => !open);
+      } else if (
+        (event.metaKey || event.ctrlKey) &&
+        event.shiftKey &&
+        !event.altKey &&
+        (event.code === "BracketLeft" || event.code === "BracketRight")
+      ) {
+        event.preventDefault();
+        if (launcherOpenRef.current) return;
+        if (event.code === "BracketLeft") previousPage();
+        else nextPage();
       }
     };
     window.addEventListener("keydown", handleKeyDown);

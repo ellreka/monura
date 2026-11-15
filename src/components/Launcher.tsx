@@ -1,6 +1,6 @@
 import { Command } from "cmdk";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { nextUntitledName, normalizeMdName, stripMdSuffix } from "../lib/files/names";
+import { nextDatedName, normalizeMdName, stripMdSuffix } from "../lib/files/names";
 import { cn } from "../lib/cn";
 
 interface LauncherFile {
@@ -83,7 +83,12 @@ export function Launcher({
   }, [query, files]);
 
   const startCreate = () => {
-    setDraft(nextUntitledName(files.map((f) => f.name)));
+    setDraft(
+      nextDatedName(
+        files.map((f) => f.name),
+        new Date(),
+      ),
+    );
     setError(null);
     setEditing("create");
   };

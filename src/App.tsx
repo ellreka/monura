@@ -10,6 +10,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import "./App.css";
 import { Editor, type EditorHandle, type EditorSelection } from "./components/Editor";
 import { Launcher } from "./components/Launcher";
+import { PageNavigator } from "./components/PageNavigator";
 import { LogView } from "./components/LogView";
 import { SettingsView } from "./components/SettingsView";
 import { TimerBar } from "./components/TimerBar";
@@ -32,6 +33,8 @@ import {
   type ExpectedRevision,
   isWriteConflict,
 } from "./lib/files";
+import { nextDatedName, normalizeMdName } from "./lib/files/names";
+import { getPageNavigation } from "./lib/files/pages";
 import { baseTitle, parseSessionLines } from "./lib/log/analytics";
 import {
   createSessionRecord,
@@ -253,6 +256,7 @@ function App() {
   const lastTraySecRef = useRef<number | null>(null);
   const stoppingRef = useRef(false);
   const fileOperationRef = useRef(Promise.resolve());
+  const creatingPageRef = useRef(false);
   const activeSessionRef = useRef<ActiveSession | null>(null);
   const lastSavedContentsRef = useRef(new Map<string, string | null>());
   const commitInFlightRef = useRef(false);
@@ -569,6 +573,42 @@ function App() {
       setFiles((prev) => [{ name, content: "", raw: "" }, ...prev]);
       setActiveIndex(0);
     });
+  };
+
+  const pageNavigation = getPageNavigation(files.length, activeIndex);
+
+  const handleSelectPage = (index: number | null) => {
+    if (index === null || isFileOperationBlocked) return;
+    handleSelectFile(index).then(
+      () => setView("editor"),
+      () => undefined,
+    );
+  };
+
+  const handlePreviousPage = () => handleSelectPage(pageNavigation?.previousIndex ?? null);
+  const handleNextPage = () => handleSelectPage(pageNavigation?.nextIndex ?? null);
+
+  const handleNewPage = () => {
+    if (isFileOperationBlocked || creatingPageRef.current) return;
+    const name = normalizeMdName(
+      nextDatedName(
+        files.map((file) => file.name),
+        new Date(),
+      ),
+    );
+    if (name === null) return;
+    creatingPageRef.current = true;
+    handleCreateFile(name)
+      .then(
+        () => {
+          setRefreshError(null);
+          setView("editor");
+        },
+        (error: unknown) => setRefreshError(`Could not create page: ${errorMessage(error)}`),
+      )
+      .finally(() => {
+        creatingPageRef.current = false;
+      });
   };
 
   const handleRenameFile = (from: string, to: string) => {
@@ -898,6 +938,8 @@ function App() {
     stopTracking,
     onQuit: handleQuit,
     onEditorFocusRequest: requestEditorFocus,
+    onPreviousPage: handlePreviousPage,
+    onNextPage: handleNextPage,
   });
 
   const showNativeTitlebar = isTauri() && navigator.userAgent.includes("Macintosh");
@@ -920,9 +962,15 @@ function App() {
       )}
       data-tauri-drag-region={showNativeTitlebar || undefined}
     >
-      <span className="pointer-events-none flex-1 min-w-0 truncate text-center text-xs font-semibold">
-        {activeFile?.name ?? "Monura"}
-      </span>
+      <PageNavigator
+        title={activeFile?.name ?? "Monura"}
+        navigation={pageNavigation}
+        disabled={isFileOperationBlocked}
+        dragRegion={showNativeTitlebar}
+        onPrevious={handlePreviousPage}
+        onNext={handleNextPage}
+        onCreate={handleNewPage}
+      />
       <div className="flex flex-none items-center gap-[2px]">
         <NavigationButton
           active={launcherOpen}

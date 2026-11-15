@@ -75,6 +75,8 @@ describe("quit request handling", () => {
       launcherOpenRef: { current: false },
       launcherOpenerRef: { current: null },
       onEditorFocusRequest: vi.fn(),
+      onPreviousPage: vi.fn(),
+      onNextPage: vi.fn(),
       timerState: { status: "idle", presetMinutes: 10, startedAt: null, durationSeconds: 600 },
       setElapsedMs: vi.fn(),
       lastTraySecRef: { current: null },
@@ -152,6 +154,8 @@ function makeKeyboardOptions(launcherOpen: boolean) {
     launcherOpenRef: { current: launcherOpen },
     launcherOpenerRef: { current: null },
     onEditorFocusRequest: vi.fn(),
+    onPreviousPage: vi.fn(),
+    onNextPage: vi.fn(),
     timerState: { status: "idle", presetMinutes: 10, startedAt: null, durationSeconds: 600 },
     setElapsedMs: vi.fn(),
     lastTraySecRef: { current: null },
@@ -162,6 +166,56 @@ function makeKeyboardOptions(launcherOpen: boolean) {
 }
 
 describe("global keyboard handling", () => {
+  it.each([
+    ["BracketLeft", "{", 1, 0],
+    ["BracketRight", "}", 0, 1],
+  ])("moves between pages with Shift-Cmd/Ctrl-%s", (code, key, previous, next) => {
+    const options = makeKeyboardOptions(false);
+    const root = createRoot(document.createElement("div"));
+    act(() => root.render(createElement(() => (useAppEffects(options), null))));
+    const event = new KeyboardEvent("keydown", {
+      key,
+      code,
+      metaKey: true,
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    act(() => window.dispatchEvent(event));
+    expect(event.defaultPrevented).toBe(true);
+    expect(options.onPreviousPage).toHaveBeenCalledTimes(previous);
+    expect(options.onNextPage).toHaveBeenCalledTimes(next);
+    act(() => root.unmount());
+  });
+
+  it("leaves unshifted brackets to the editor and ignores page keys while the launcher is open", () => {
+    const options = makeKeyboardOptions(false);
+    const root = createRoot(document.createElement("div"));
+    act(() => root.render(createElement(() => (useAppEffects(options), null))));
+    act(() =>
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "[", code: "BracketLeft", metaKey: true }),
+      ),
+    );
+    act(() => root.unmount());
+    const openOptions = makeKeyboardOptions(true);
+    const openRoot = createRoot(document.createElement("div"));
+    act(() => openRoot.render(createElement(() => (useAppEffects(openOptions), null))));
+    act(() =>
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "{",
+          code: "BracketLeft",
+          metaKey: true,
+          shiftKey: true,
+        }),
+      ),
+    );
+    act(() => openRoot.unmount());
+    expect(options.onPreviousPage).not.toHaveBeenCalled();
+    expect(openOptions.onPreviousPage).not.toHaveBeenCalled();
+  });
+
   it.each([
     [true, false],
     [false, true],
@@ -381,6 +435,8 @@ describe("mounted watcher disk handling", () => {
       launcherOpenRef: { current: false },
       launcherOpenerRef: { current: null },
       onEditorFocusRequest: vi.fn(),
+      onPreviousPage: vi.fn(),
+      onNextPage: vi.fn(),
       timerState: { status: "idle", presetMinutes: 10, startedAt: null, durationSeconds: 600 },
       setElapsedMs: vi.fn(),
       lastTraySecRef: { current: null },
