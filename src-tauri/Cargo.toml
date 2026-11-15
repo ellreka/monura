@@ -1,6 +1,6 @@
 [package]
 name = "monura"
-version = "0.0.3"
+version = "0.0.4"
 description = "Markdown-first task management desktop app"
 authors = ["ellreka"]
 license = "MIT"
