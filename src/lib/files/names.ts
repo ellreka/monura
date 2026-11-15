@@ -15,6 +15,7 @@ export function stripMdSuffix(name: string): string {
   return name.endsWith(".md") ? name.slice(0, -".md".length) : name;
 }
 
+/** Determines the next page name (extensionless base name) from the existing YYYY-MM-DD(-N).md files. */
 export function nextDatedName(existing: readonly string[], date: Date): string {
   const base = format(date, "yyyy-MM-dd");
   const taken = new Set(existing);
