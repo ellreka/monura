@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nextUntitledName, normalizeMdName, stripMdSuffix } from "./names";
+import { nextDatedName, normalizeMdName, stripMdSuffix } from "./names";
 
 describe("stripMdSuffix", () => {
   it("strips .md", () => {
@@ -23,16 +23,24 @@ describe("normalizeMdName", () => {
   });
 });
 
-describe("nextUntitledName", () => {
-  it("returns untitled-1 when empty", () => {
-    expect(nextUntitledName([])).toBe("untitled-1");
+describe("nextDatedName", () => {
+  const date = new Date(2026, 10, 16, 23, 30);
+
+  it("returns the local date when no page exists for that day", () => {
+    expect(nextDatedName([], date)).toBe("2026-11-16");
+    expect(nextDatedName(["2026-11-15.md", "notes.md"], date)).toBe("2026-11-16");
   });
 
-  it("returns the max existing value + 1 (extensionless base name)", () => {
-    expect(nextUntitledName(["untitled-1.md", "untitled-3.md"])).toBe("untitled-4");
+  it("numbers additional pages created on the same day from 2", () => {
+    expect(nextDatedName(["2026-11-16.md"], date)).toBe("2026-11-16-2");
+    expect(nextDatedName(["2026-11-16.md", "2026-11-16-2.md"], date)).toBe("2026-11-16-3");
   });
 
-  it("ignores names that are not untitled-N", () => {
-    expect(nextUntitledName(["notes.md"])).toBe("untitled-1");
+  it("fills the first free number", () => {
+    expect(nextDatedName(["2026-11-16.md", "2026-11-16-3.md"], date)).toBe("2026-11-16-2");
+  });
+
+  it("pads single-digit months and days", () => {
+    expect(nextDatedName([], new Date(2026, 0, 5))).toBe("2026-01-05");
   });
 });
