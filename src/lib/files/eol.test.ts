@@ -55,4 +55,26 @@ describe("applyEditorChanges", () => {
     expect(result).toContain("item 29999");
     expect(result.match(/\r\n/g)?.length).toBe(15000);
   });
+
+  it("applies changes directly to an LF-only document", () => {
+    expect(
+      applyEditorChanges(
+        "a\nb\nc",
+        [
+          { from: 4, to: 5, insert: "C\nD" },
+          { from: 0, to: 1, insert: "A" },
+        ],
+        "\n",
+      ),
+    ).toBe("A\nb\nC\nD");
+  });
+
+  it("matches the line-mapped result for LF-only documents", () => {
+    const raw = "- [ ] task\n\nmemo\n";
+    const changes = [
+      { from: 10, to: 10, insert: " spent:5m" },
+      { from: 12, to: 16, insert: "メモ" },
+    ];
+    expect(applyEditorChanges(raw, changes, "\n")).toBe("- [ ] task spent:5m\n\nメモ\n");
+  });
 });

@@ -1,9 +1,9 @@
 import { countColumn, EditorState, RangeSetBuilder, StateField } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView } from "@codemirror/view";
-import { computeTaskMeta, fencedCodeLineNumbers, matchSpentTokens, parseLines } from "../parser";
 import { collectLinkMatches } from "./links";
 import { CheckboxWidget, LinkWidget, SpentWidget, SumBadgeWidget } from "./widgets";
 import { setUiStateEffect, uiStateField } from "./uiState";
+import { taskParseOf } from "./taskParse";
 
 interface Item {
   from: number;
@@ -14,10 +14,7 @@ interface Item {
 
 function buildDecorations(state: EditorState): DecorationSet {
   const doc = state.doc;
-  const text = doc.toString();
-  const lines = parseLines(text);
-  const meta = computeTaskMeta(text);
-  const fenced = fencedCodeLineNumbers(text);
+  const { lines, meta, fenced, spentTokens } = taskParseOf(state);
 
   const cursorLine = doc.lineAt(state.selection.main.head).number;
 
@@ -70,7 +67,7 @@ function buildDecorations(state: EditorState): DecorationSet {
       }
     }
 
-    for (const m of matchSpentTokens(lineInfo.text)) {
+    for (const m of spentTokens.get(line.lineNumber) ?? []) {
       const from = lineInfo.from + m.index;
       const to = from + m.length;
       items.push(

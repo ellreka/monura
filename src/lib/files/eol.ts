@@ -24,6 +24,8 @@ export function applyEditorChanges(
   changes: readonly EditorChange[],
   fallbackEol: Eol,
 ): string {
+  if (!previousRaw.includes("\r") && fallbackEol === "\n")
+    return applyLfChanges(previousRaw, changes);
   const raw = splitRaw(previousRaw);
   const docStarts: number[] = [];
   const rawStarts: number[] = [];
@@ -61,6 +63,18 @@ export function applyEditorChanges(
     cursor = change.to;
   }
   chunks.push(previousRaw.slice(cursor));
+  return chunks.join("");
+}
+
+function applyLfChanges(previous: string, changes: readonly EditorChange[]): string {
+  const ordered = [...changes].sort((a, b) => a.from - b.from || a.to - b.to);
+  const chunks: string[] = [];
+  let cursor = 0;
+  for (const change of ordered) {
+    chunks.push(previous.slice(cursor, change.from), change.insert);
+    cursor = change.to;
+  }
+  chunks.push(previous.slice(cursor));
   return chunks.join("");
 }
 
