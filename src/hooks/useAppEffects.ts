@@ -98,6 +98,18 @@ export async function handleQuitRequested(requestQuit: () => Promise<boolean>): 
   else void invoke("show_main_window_command");
 }
 
+function sameFiles(a: readonly MdFile[], b: readonly MdFile[]): boolean {
+  return (
+    a.length === b.length &&
+    a.every(
+      (file, index) =>
+        file.name === b[index].name &&
+        file.content === b[index].content &&
+        file.raw === b[index].raw,
+    )
+  );
+}
+
 export async function readMdFilesTolerant(dataDir: string): Promise<MdFile[]> {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const names = await listMdFiles(dataDir);
@@ -201,6 +213,13 @@ export function useAppEffects({
   const previousPage = useEffectEvent(onPreviousPage);
   const nextPage = useEffectEvent(onNextPage);
   const applyDiskFiles = useEffectEvent((diskFiles: MdFile[]) => {
+    const replaceFiles = (nextFiles: MdFile[], nextIndex: number) => {
+      if (!sameFiles(filesRef.current, nextFiles)) {
+        filesReplaced(nextFiles);
+        setFiles(nextFiles);
+      }
+      setActiveIndex(nextIndex);
+    };
     if (activeWritesRef.current > 0) {
       window.setTimeout(() => setDiskRefreshKey((key) => key + 1), 300);
       return;
@@ -226,13 +245,19 @@ export function useAppEffects({
       discardPendingSave();
     }
     if (changed && pending && expected === active.raw) {
-      window.setTimeout(() => setDiskRefreshKey((key) => key + 1), 300);
+      if (pendingFile?.name !== active.name) {
+        window.setTimeout(() => setDiskRefreshKey((key) => key + 1), 300);
+        return;
+      }
+      for (const file of diskFiles) lastSavedContentsRef.current.set(file.name, file.raw);
+      replaceFiles(
+        diskFiles.map((file, index) => (index === nextIndex ? current : file)),
+        nextIndex,
+      );
       return;
     }
     for (const file of diskFiles) lastSavedContentsRef.current.set(file.name, file.raw);
-    filesReplaced(diskFiles);
-    setFiles(diskFiles);
-    setActiveIndex(nextIndex >= 0 ? nextIndex : 0);
+    replaceFiles(diskFiles, nextIndex >= 0 ? nextIndex : 0);
     if (!active && activeName) discardPendingSave();
     if (changed) {
       discardPendingSave();
@@ -328,13 +353,13 @@ export function useAppEffects({
     coordinator,
   ]);
 
+  const activeName = files[activeIndex]?.name;
   useEffect(() => {
-    const name = files[activeIndex]?.name;
-    if (!isTauri() || !dataDir || loadedDataDirRef.current !== dataDir || !name) return;
-    void saveLastFileFor(dataDir, name).catch((error) =>
+    if (!isTauri() || !dataDir || loadedDataDirRef.current !== dataDir || !activeName) return;
+    void saveLastFileFor(dataDir, activeName).catch((error) =>
       console.error("save last file failed:", error),
     );
-  }, [dataDir, files, activeIndex]);
+  }, [dataDir, activeName]);
 
   useEffect(() => {
     if (!isTauri() || !dataDir || diskRefreshKey === 0) return;
@@ -372,6 +397,7 @@ export function useAppEffects({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.isComposing || event.keyCode === 229) return;
       if (event.key === "Escape") {
         const wasOpen = launcherOpenRef.current;
         setLauncherOpen(false);

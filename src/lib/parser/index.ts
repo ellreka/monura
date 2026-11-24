@@ -14,5 +14,6 @@ export {
   aggregateSpent,
   isSubtreeComplete,
   computeTaskMeta,
+  computeTaskMetaFromTree,
 } from "./tree";
 export type { TaskLine, TaskNode, TaskMeta } from "./tree";

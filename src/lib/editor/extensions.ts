@@ -9,6 +9,7 @@ import { Vim, vim } from "@replit/codemirror-vim";
 import { activeLineField, taskDecorationsField } from "./taskDecorations";
 import { taskGuidesField } from "./taskGuides";
 import { uiStateField } from "./uiState";
+import { taskParseField } from "./taskParse";
 import { editorTheme, markdownHighlighting } from "./theme";
 import { listContinuationKeymap } from "./listContinuation";
 import { vimNormalModeGuardKeymap } from "./vimGuard";
@@ -67,6 +68,7 @@ export function createMonuraExtensions(options: CreateMonuraExtensionsOptions = 
     ),
     markdown({ addKeymap: false, extensions: [Autolink] }),
     uiStateField,
+    taskParseField,
     taskDecorationsField,
     taskGuidesField,
     activeLineField,

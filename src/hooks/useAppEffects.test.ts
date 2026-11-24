@@ -230,6 +230,19 @@ describe("global keyboard handling", () => {
     act(() => root.unmount());
   });
 
+  it("ignores Escape while an IME composition is active", () => {
+    const options = makeKeyboardOptions(false);
+    const root = createRoot(document.createElement("div"));
+    act(() => root.render(createElement(() => (useAppEffects(options), null))));
+    act(() =>
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", isComposing: true })),
+    );
+    expect(options.setLauncherOpen).not.toHaveBeenCalled();
+    expect(options.setView).not.toHaveBeenCalled();
+    expect(options.onEditorFocusRequest).not.toHaveBeenCalled();
+    act(() => root.unmount());
+  });
+
   it("captures the opener and toggles the launcher with Cmd/Ctrl-K", () => {
     const options = makeKeyboardOptions(false);
     const opener = document.createElement("button");
@@ -477,6 +490,64 @@ describe("mounted watcher disk handling", () => {
     });
     act(() => vi.advanceTimersByTime(300));
     expect(options.setDiskRefreshKey).toHaveBeenCalledTimes(1);
+    act(() => root.unmount());
+    vi.useRealTimers();
+  });
+
+  it("keeps local edits without polling when the disk still holds the app's last save", async () => {
+    vi.useFakeTimers();
+    const typedFile = { name: "work.md", content: "typed", raw: "typed" };
+    const otherFile = { name: "other.md", content: "other", raw: "other" };
+    vi.mocked(listMdFiles).mockResolvedValue(["work.md", "other.md"]);
+    vi.mocked(readMdFile).mockImplementation((_dir, name) =>
+      Promise.resolve(name === "work.md" ? oldFile : otherFile),
+    );
+    const options = makeOptions(0, typedFile);
+    options.files = [typedFile];
+    options.filesRef.current = [typedFile];
+    function Harness() {
+      useAppEffects(options);
+      return null;
+    }
+    const root = createRoot(document.createElement("div"));
+    act(() => root.render(createElement(Harness)));
+    await act(async () => await Promise.resolve());
+    vi.clearAllMocks();
+    act(() => tauri.watch?.());
+    act(() => vi.advanceTimersByTime(300));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(options.setFiles).toHaveBeenCalledWith([typedFile, otherFile]);
+    expect(options.onExternalFileAdopted).not.toHaveBeenCalled();
+    expect(options.discardPendingSave).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(1000));
+    expect(options.setDiskRefreshKey).not.toHaveBeenCalled();
+    act(() => root.unmount());
+    vi.useRealTimers();
+  });
+
+  it("does not replace files when the disk snapshot matches the current files", async () => {
+    vi.useFakeTimers();
+    const options = makeOptions(0, null);
+    function Harness() {
+      useAppEffects(options);
+      return null;
+    }
+    const root = createRoot(document.createElement("div"));
+    act(() => root.render(createElement(Harness)));
+    await act(async () => await Promise.resolve());
+    vi.clearAllMocks();
+    act(() => tauri.watch?.());
+    act(() => vi.advanceTimersByTime(300));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(readMdFile).toHaveBeenCalled();
+    expect(options.setFiles).not.toHaveBeenCalled();
+    expect(options.onFilesReplaced).not.toHaveBeenCalled();
     act(() => root.unmount());
     vi.useRealTimers();
   });

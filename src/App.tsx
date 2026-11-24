@@ -504,9 +504,10 @@ function App() {
   };
 
   const handleDocChange = (text: string, raw: string) => {
-    setFiles((prev) =>
-      prev.map((file, index) => (index === activeIndex ? { ...file, content: text, raw } : file)),
-    );
+    const update = (prev: MdFile[]) =>
+      prev.map((file, index) => (index === activeIndex ? { ...file, content: text, raw } : file));
+    filesRef.current = update(filesRef.current);
+    setFiles(update);
     const current = files[activeIndex];
     if (current) scheduleSave({ ...current, content: text, raw });
   };

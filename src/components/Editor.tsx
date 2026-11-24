@@ -9,6 +9,7 @@ import { EditorView } from "@codemirror/view";
 import { getCM, vim } from "@replit/codemirror-vim";
 import {
   createMonuraExtensions,
+  isTaskLineAt,
   readOnlyCompartment,
   editorKeymapCompartment,
   setUiStateEffect,
@@ -18,7 +19,7 @@ import {
 } from "../lib/editor";
 import { createLocalKeymap } from "../lib/editor/localKeymap";
 import type { TimerPreset } from "../lib/timer";
-import { addSpentToLine, parseLines } from "../lib/parser";
+import { addSpentToLine } from "../lib/parser";
 import { findLineByText } from "../lib/editor/lineMatch";
 import { applyEditorChanges, detectEol } from "../lib/files";
 
@@ -140,11 +141,10 @@ export function Editor({
 
   function notifyCursorLine(view: EditorView): void {
     const line = view.state.doc.lineAt(view.state.selection.main.head);
-    const lines = parseLines(view.state.doc.toString());
     latest.current.onCursorLineChange?.({
       lineNumber: line.number,
       text: line.text,
-      isTask: lines[line.number - 1]?.isTask ?? false,
+      isTask: isTaskLineAt(view.state, line.number),
     });
   }
 
@@ -277,7 +277,7 @@ export function Editor({
               }
               if (nextLine !== null) {
                 const trackedLine = update.state.doc.line(nextLine);
-                if (!parseLines(update.state.doc.toString())[nextLine - 1]?.isTask) {
+                if (!isTaskLineAt(update.state, nextLine)) {
                   trackedAnchorRef.current = null;
                   trackedTextRef.current = null;
                   update.view.dispatch({ effects: setUiStateEffect.of({ activeLine: null }) });
@@ -367,7 +367,7 @@ export function Editor({
             : lineNumber > view.state.doc.lines
               ? null
               : view.state.doc.line(lineNumber);
-        if (!line || !parseLines(view.state.doc.toString())[line.number - 1]?.isTask) return null;
+        if (!line || !isTaskLineAt(view.state, line.number)) return null;
         trackedAnchorRef.current = line.from;
         trackedTextRef.current = line.text;
         trackedSnapshotRef.current = { text: line.text };
@@ -392,7 +392,7 @@ export function Editor({
         }
 
         const line = view.state.doc.lineAt(anchor);
-        if (!parseLines(view.state.doc.toString())[line.number - 1]?.isTask) {
+        if (!isTaskLineAt(view.state, line.number)) {
           view.dispatch({ effects: setUiStateEffect.of({ activeLine: null }) });
           return {
             deleted: true,
@@ -460,7 +460,7 @@ export function Editor({
         if (!view || view.state.readOnly || lineNumber < 1 || lineNumber > view.state.doc.lines)
           return null;
         const line = view.state.doc.line(lineNumber);
-        if (!parseLines(view.state.doc.toString())[lineNumber - 1]?.isTask) return null;
+        if (!isTaskLineAt(view.state, lineNumber)) return null;
         const updatedText =
           elapsedSeconds > 0 ? addSpentToLine(line.text, elapsedSeconds) : line.text;
         if (updatedText !== line.text) {

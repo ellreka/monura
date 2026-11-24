@@ -56,8 +56,10 @@ export function parseLine(raw: string, lineNumber: number): TaskLine {
 
 /** Parses the full markdown text line by line. Lines inside a fenced code block are
  * never task syntax, even if they happen to match the checklist pattern. */
-export function parseLines(content: string): TaskLine[] {
-  const fenced = fencedCodeLineNumbers(content);
+export function parseLines(
+  content: string,
+  fenced: ReadonlySet<number> = fencedCodeLineNumbers(content),
+): TaskLine[] {
   return content.split("\n").map((raw, i) => {
     const lineNumber = i + 1;
     return fenced.has(lineNumber) ? nonTaskLine(raw, lineNumber) : parseLine(raw, lineNumber);
@@ -98,8 +100,12 @@ export function isSubtreeComplete(node: TaskNode): boolean {
 }
 
 export function computeTaskMeta(content: string): Map<number, TaskMeta> {
+  return computeTaskMetaFromTree(buildTaskTree(parseLines(content)));
+}
+
+export function computeTaskMetaFromTree(roots: readonly TaskNode[]): Map<number, TaskMeta> {
   const meta = new Map<number, TaskMeta>();
-  for (const node of buildTaskTree(parseLines(content))) {
+  for (const node of roots) {
     const visit = (current: TaskNode) => {
       meta.set(current.lineNumber, {
         aggregateSeconds: aggregateSpent(current),

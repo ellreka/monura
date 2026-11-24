@@ -1,7 +1,8 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { EditorView, WidgetType } from "@codemirror/view";
-import { formatDurationMinutes, parseLines } from "../parser";
+import { formatDurationMinutes } from "../parser";
+import { isTaskLineAt } from "./taskParse";
 
 /** Clickable checkbox that replaces the checklist's `[ ]` / `[x]`. */
 export class CheckboxWidget extends WidgetType {
@@ -35,8 +36,7 @@ export class CheckboxWidget extends WidgetType {
 
 export function toggleCheckboxAtLine(view: EditorView, lineNumber: number): boolean {
   if (view.state.readOnly || lineNumber < 1 || lineNumber > view.state.doc.lines) return false;
-  const lines = parseLines(view.state.doc.toString());
-  if (!lines[lineNumber - 1]?.isTask) return false;
+  if (!isTaskLineAt(view.state, lineNumber)) return false;
   const line = view.state.doc.line(lineNumber);
   const match = /\[( |x|X)\]/.exec(line.text);
   if (!match || match.index === undefined) return false;

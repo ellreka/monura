@@ -1,6 +1,7 @@
 import { countColumn, EditorState, RangeSetBuilder, StateField } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView } from "@codemirror/view";
-import { buildTaskTree, parseLines, type TaskNode } from "../parser";
+import type { TaskNode } from "../parser";
+import { taskParseOf } from "./taskParse";
 
 function buildGuides(state: EditorState): DecorationSet {
   const layers = new Map<number, string[]>();
@@ -29,7 +30,7 @@ function buildGuides(state: EditorState): DecorationSet {
       visit(child);
     }
   };
-  buildTaskTree(parseLines(state.doc.toString())).forEach(visit);
+  taskParseOf(state).tree.forEach(visit);
   const builder = new RangeSetBuilder<Decoration>();
   for (const [line, backgrounds] of [...layers].sort(([a], [b]) => a - b)) {
     const from = state.doc.line(line).from;
